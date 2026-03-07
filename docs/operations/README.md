@@ -107,13 +107,13 @@ When using the in-memory backend in multi-process deployments, also apply rate l
 
 ### Webhook signature errors (403)
 
-If a webhook has a `secret` configured, inbound payloads must include a valid HMAC-SHA256 signature in one of these headers:
+If a webhook has a `secret` configured, inbound payloads must include a valid HMAC-SHA256 signature. If the webhook also sets `signature_header`, that exact header name must be used. Otherwise the backend checks these defaults:
 
 - `X-Hub-Signature-256: sha256=<hex-digest>` (GitHub-style)
 - `X-Webhook-Signature: sha256=<hex-digest>`
 
-Missing or invalid signatures return `403 Forbidden`. If you see unexpected 403s on webhook ingest, verify that the sending service is computing the HMAC correctly using the webhook's secret.
+Missing or invalid signatures return `403 Forbidden`. If you see unexpected 403s on webhook ingest, verify that the sending service is computing the HMAC correctly using the webhook's secret and sending it in the configured header.
 
 ### Webhook payload too large (413)
 
-Webhook ingest enforces a **1 MB** payload size limit. Payloads exceeding this return `413 Content Too Large`. If you need to send larger payloads, consider sending a URL reference instead of inline content.
+Webhook ingest enforces a **1 MB** payload size limit by default. Payloads exceeding this return `413 Content Too Large`. If you need to raise the limit, set `WEBHOOK_MAX_PAYLOAD_BYTES`; otherwise consider sending a URL reference instead of inline content.

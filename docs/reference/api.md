@@ -45,7 +45,7 @@ Some endpoints are designed for autonomous agents and use an agent token header:
 X-Agent-Token: <agent-token>
 ```
 
-In the backend, these are enforced via the “agent auth” context. When in doubt, consult the route’s dependencies (e.g., `require_user_or_agent`).
+On shared user/agent routes, the backend also accepts `Authorization: Bearer <agent-token>` after user auth does not resolve. When in doubt, consult the route’s dependencies (e.g., `require_user_or_agent`).
 
 Agent authentication is rate-limited to **20 requests per 60 seconds per IP**. Exceeding this limit returns `429 Too Many Requests`.
 
@@ -83,7 +83,7 @@ The following per-IP rate limits are enforced on sensitive endpoints:
 
 | Endpoint | Limit | Window |
 | --- | --- | --- |
-| Agent authentication (`X-Agent-Token`) | 20 requests | 60 seconds |
+| Agent authentication (`X-Agent-Token` or agent bearer fallback on shared routes) | 20 requests | 60 seconds |
 | Webhook ingest (`POST .../webhooks/{id}`) | 60 requests | 60 seconds |
 
 When a rate limit is exceeded, the API returns `429 Too Many Requests`.

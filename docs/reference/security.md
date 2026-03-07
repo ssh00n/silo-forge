@@ -21,7 +21,7 @@ Per-IP rate limits are enforced on sensitive endpoints:
 
 | Endpoint | Limit | Window | Status on exceed |
 | --- | --- | --- | --- |
-| Agent authentication (`X-Agent-Token`) | 20 requests | 60 seconds | `429` |
+| Agent authentication (`X-Agent-Token` or agent bearer fallback on shared routes) | 20 requests | 60 seconds | `429` |
 | Webhook ingest (`POST .../webhooks/{id}`) | 60 requests | 60 seconds | `429` |
 
 Two backends are supported, selected via `RATE_LIMIT_BACKEND`:
@@ -35,7 +35,7 @@ The Redis backend fails open — if Redis becomes unreachable during a request, 
 
 ## Webhook HMAC verification
 
-Webhooks may optionally have a `secret` configured. When a secret is set, inbound payloads must include a valid HMAC-SHA256 signature in one of these headers:
+Webhooks may optionally have a `secret` configured. When a secret is set, inbound payloads must include a valid HMAC-SHA256 signature. If `signature_header` is configured on the webhook, that exact header is required. Otherwise the backend falls back to these default headers:
 
 - `X-Hub-Signature-256: sha256=<hex-digest>` (GitHub-style)
 - `X-Webhook-Signature: sha256=<hex-digest>`
@@ -72,7 +72,7 @@ This boundary helps LLM-based agents distinguish trusted instructions from untru
 
 ## Agent token logging
 
-On authentication failure, only a short prefix of the presented token is logged to aid debugging. Full tokens are never written to logs.
+On authentication failure, logs include request context only. Token values and token prefixes are not written to logs.
 
 ## Cross-tenant isolation
 

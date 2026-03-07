@@ -309,6 +309,50 @@ class TestWebhookHmacVerification:
         finally:
             await engine.dispose()
 
+    @pytest.mark.asyncio
+    async def test_webhook_accepts_configured_signature_header(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A configured signature_header should override the default header names."""
+        engine = await _make_engine()
+        session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        app = _build_webhook_test_app(session_maker)
+
+        monkeypatch.setattr(board_webhooks, "enqueue_webhook_delivery", lambda p: True)
+        monkeypatch.setattr(
+            board_webhooks,
+            "webhook_ingest_limiter",
+            InMemoryRateLimiter(max_requests=1000, window_seconds=60.0),
+        )
+
+        secret = "my-secret-key"
+        async with session_maker() as session:
+            board, webhook = await _seed_webhook_with_secret(session, secret=secret)
+            webhook.signature_header = "X-Custom-Signature"
+            session.add(webhook)
+            await session.commit()
+
+        body = b'{"event": "test"}'
+        sig = hmac_mod.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://testserver",
+            ) as client:
+                response = await client.post(
+                    f"/api/v1/boards/{board.id}/webhooks/{webhook.id}",
+                    content=body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Custom-Signature": f"sha256={sig}",
+                    },
+                )
+            assert response.status_code == 202
+        finally:
+            await engine.dispose()
+
 
 # ---------------------------------------------------------------------------
 # Task 10: Prompt injection sanitization
@@ -495,8 +539,3 @@ class TestWebhookPayloadSizeLimit:
             assert response.status_code == 413
         finally:
             await engine.dispose()
-
-
-# ---------------------------------------------------------------------------
-# Task 12: Gateway token redaction
-# ---------------------------------------------------------------------------

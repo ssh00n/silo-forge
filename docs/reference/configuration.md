@@ -18,6 +18,30 @@ See `.env.example` for defaults and required values.
 - **When required:** `AUTH_MODE=local`
 - **Policy:** Must be non-placeholder and at least 50 characters.
 
+### `WEBHOOK_MAX_PAYLOAD_BYTES`
+
+- **Default:** `1048576` (1 MiB)
+- **Purpose:** Maximum accepted inbound webhook payload size before the API returns `413 Content Too Large`.
+
+### `RATE_LIMIT_BACKEND`
+
+- **Default:** `memory`
+- **Allowed values:** `memory`, `redis`
+- **Purpose:** Selects whether rate limits are tracked per-process in memory or shared through Redis.
+
+### `RATE_LIMIT_REDIS_URL`
+
+- **Default:** _(blank)_
+- **When required:** `RATE_LIMIT_BACKEND=redis` and `RQ_REDIS_URL` is not set
+- **Purpose:** Redis connection string used for shared rate limits.
+- **Fallback:** If blank and Redis rate limiting is enabled, the backend falls back to `RQ_REDIS_URL`.
+
+### `TRUSTED_PROXIES`
+
+- **Default:** _(blank)_
+- **Purpose:** Comma-separated list of trusted reverse-proxy IPs or CIDRs used to honor `Forwarded` / `X-Forwarded-For` client IP headers.
+- **Gotcha:** Leave this blank unless the direct peer is a proxy you control.
+
 ## Security response headers
 
 These environment variables control security headers added to every API response. Set any variable to blank (`""`) to disable the corresponding header.

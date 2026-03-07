@@ -133,9 +133,8 @@ async def get_agent_auth_context(
     agent = await _find_agent_for_token(session, resolved)
     if agent is None:
         logger.warning(
-            "agent auth invalid token path=%s token_prefix=%s",
+            "agent auth invalid token path=%s",
             request.url.path,
-            resolved[:6],
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     await _touch_agent_presence(request, session, agent)
@@ -171,21 +170,17 @@ async def get_agent_auth_context_optional(
                 bool(authorization),
             )
         return None
-    # Rate-limit when an agent token header is presented to prevent brute-force
-    # guessing via the optional auth path. Scoped to X-Agent-Token so that
-    # normal user Authorization headers are not throttled.
-    if agent_token:
-        client_ip = get_client_ip(request)
-        if not await agent_auth_limiter.is_allowed(client_ip):
-            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+    # Rate-limit any request that is actually attempting agent auth on the
+    # optional path. Shared user/agent dependencies resolve user auth first.
+    client_ip = get_client_ip(request)
+    if not await agent_auth_limiter.is_allowed(client_ip):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS)
     agent = await _find_agent_for_token(session, resolved)
     if agent is None:
-        if agent_token:
-            logger.warning(
-                "agent auth optional invalid token path=%s token_prefix=%s",
-                request.url.path,
-                resolved[:6],
-            )
+        logger.warning(
+            "agent auth optional invalid token path=%s",
+            request.url.path,
+        )
         return None
     await _touch_agent_presence(request, session, agent)
     return AgentAuthContext(actor_type="agent", agent=agent)

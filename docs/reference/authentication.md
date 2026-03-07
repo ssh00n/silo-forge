@@ -31,9 +31,9 @@ Frontend:
 
 ## Agent authentication
 
-Autonomous agents authenticate via an `X-Agent-Token` header (not the bearer token used by human users). See [API reference](api.md) for details.
+Autonomous agents primarily authenticate via an `X-Agent-Token` header. On shared user/agent routes, the backend also accepts `Authorization: Bearer <agent-token>` after user auth does not resolve. See [API reference](api.md) for details.
 
 Security notes:
 
 - Agent auth is rate-limited to **20 requests per 60 seconds per IP**. Exceeding this returns `429 Too Many Requests`.
-- On authentication failure, only a short prefix of the presented token is logged to aid debugging. Full tokens are never written to logs.
+- Authentication failure logs never include token material.

@@ -22,9 +22,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 
-from app.core.agent_auth import AgentAuthContext, get_agent_auth_context_optional
+from app.core.agent_auth import get_agent_auth_context_optional
 from app.core.auth import AuthContext, get_auth_context, get_auth_context_optional
 from app.db.session import get_session
 from app.models.boards import Board
@@ -46,8 +46,6 @@ if TYPE_CHECKING:
     from app.models.users import User
 
 AUTH_DEP = Depends(get_auth_context)
-AUTH_OPTIONAL_DEP = Depends(get_auth_context_optional)
-AGENT_AUTH_OPTIONAL_DEP = Depends(get_agent_auth_context_optional)
 SESSION_DEP = Depends(get_session)
 
 
@@ -66,14 +64,29 @@ class ActorContext:
     agent: Agent | None = None
 
 
-def require_user_or_agent(
-    auth: AuthContext | None = AUTH_OPTIONAL_DEP,
-    agent_auth: AgentAuthContext | None = AGENT_AUTH_OPTIONAL_DEP,
+async def require_user_or_agent(
+    request: Request,
+    session: AsyncSession = SESSION_DEP,
 ) -> ActorContext:
-    """Authorize either a human user or an authenticated agent."""
+    """Authorize either a human user or an authenticated agent.
+
+    User auth is resolved first so normal bearer-token user traffic does not
+    also trigger agent-token verification on mixed user/agent routes.
+    """
+    auth = await get_auth_context_optional(
+        request=request,
+        credentials=None,
+        session=session,
+    )
     if auth is not None:
         require_user_actor(auth)
         return ActorContext(actor_type="user", user=auth.user)
+    agent_auth = await get_agent_auth_context_optional(
+        request=request,
+        agent_token=request.headers.get("X-Agent-Token"),
+        authorization=request.headers.get("Authorization"),
+        session=session,
+    )
     if agent_auth is not None:
         return ActorContext(actor_type="agent", agent=agent_auth.agent)
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)

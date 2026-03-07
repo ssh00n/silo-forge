@@ -101,8 +101,7 @@ def test_base_url_field_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     text = str(exc_info.value)
-    assert "base_url" in text
-    assert "Field required" in text
+    assert "BASE_URL must be set and non-empty" in text
 
 
 @pytest.mark.parametrize(
