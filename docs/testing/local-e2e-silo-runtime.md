@@ -92,9 +92,12 @@ Goal: verify the control-plane loop closes on one task.
 6. Confirm global `/activity?category=runs` shows the same run lifecycle.
 7. If the run fails, use `Retry`.
 
-When no real Symphony bridge is configured in local `dev`, the worker can close
-the loop with synthetic stub callbacks. That means local E2E should still move
-from `dispatching` into `running` and `succeeded`.
+When a real local Symphony bridge is available through `scripts/local_dev_stack.sh`,
+task execution runs should flow through the HTTP bridge and callback endpoint.
+
+When no real Symphony bridge is configured in local `dev`, the worker can still
+close the loop with synthetic stub callbacks. That means local E2E should still
+move from `dispatching` into `running` and `succeeded`.
 
 Expected result:
 

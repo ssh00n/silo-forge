@@ -7,6 +7,7 @@ It covers:
 - local Postgres in Docker
 - local Redis in Docker
 - backend API
+- optional local Symphony bridge from `../symphony`
 - queue worker
 - frontend dev server
 
@@ -43,12 +44,13 @@ bash scripts/local_dev_stack.sh reset
 - reuse existing Postgres and Redis containers if they already exist
 - create them if they do not exist
 - wait for both to become healthy
-- start backend, worker, and frontend as background processes
+- start backend, optional symphony bridge, worker, and frontend as background processes
 - store PID files and logs under `.tmp/local-dev/`
 
 ## Runtime files
 
 - backend log: `.tmp/local-dev/logs/backend.log`
+- symphony log: `.tmp/local-dev/logs/symphony.log`
 - worker log: `.tmp/local-dev/logs/worker.log`
 - frontend log: `.tmp/local-dev/logs/frontend.log`
 
@@ -62,6 +64,9 @@ bash scripts/local_dev_stack.sh reset
 
 - `reset` removes the local Postgres volume, so it clears seeded data too.
 - The script does not overwrite your env files. It assumes `backend/.env` and `frontend/.env` are already valid for local development.
+- Symphony auto-start is enabled when `../symphony` exists and has `node_modules/`.
+- Override with `SYMPHONY_ENABLE=true` or `SYMPHONY_ENABLE=false`.
+- When Symphony is enabled, backend dispatch uses the real HTTP bridge and disables the local stub callback loop.
 - After `up`, continue with:
 
 ```bash

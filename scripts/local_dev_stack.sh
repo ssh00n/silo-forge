@@ -21,14 +21,22 @@ REDIS_PORT="${REDIS_PORT:-6379}"
 
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
+SYMPHONY_PORT="${SYMPHONY_PORT:-8787}"
+SYMPHONY_DIR="${SYMPHONY_DIR:-${ROOT_DIR}/../symphony}"
+SYMPHONY_ENABLE="${SYMPHONY_ENABLE:-auto}"
+SYMPHONY_BRIDGE_TOKEN="${SYMPHONY_BRIDGE_TOKEN:-local-symphony-bridge-token}"
+SYMPHONY_CALLBACK_TOKEN="${SYMPHONY_CALLBACK_TOKEN:-local-symphony-callback-token}"
+SYMPHONY_WORKFLOW_FILE="${RUNTIME_DIR}/symphony/WORKFLOW.local.md"
 
 BACKEND_PID_FILE="${PID_DIR}/backend.pid"
 FRONTEND_PID_FILE="${PID_DIR}/frontend.pid"
 WORKER_PID_FILE="${PID_DIR}/worker.pid"
+SYMPHONY_PID_FILE="${PID_DIR}/symphony.pid"
 
 BACKEND_LOG_FILE="${LOG_DIR}/backend.log"
 FRONTEND_LOG_FILE="${LOG_DIR}/frontend.log"
 WORKER_LOG_FILE="${LOG_DIR}/worker.log"
+SYMPHONY_LOG_FILE="${LOG_DIR}/symphony.log"
 
 usage() {
   cat <<'EOF'
@@ -39,7 +47,7 @@ Usage:
   bash scripts/local_dev_stack.sh reset
 
 Actions:
-  up      Ensure local Postgres/Redis exist, then start backend/frontend/worker.
+  up      Ensure local Postgres/Redis exist, then start backend/frontend/worker and optional symphony bridge.
   status  Show container, process, and HTTP health status.
   down    Stop backend/frontend/worker and stop Docker services.
   reset   Down + remove Redis container + Postgres container/volume for a clean slate.
@@ -61,6 +69,7 @@ print_log_tail() {
 
 ensure_runtime_dirs() {
   mkdir -p "$PID_DIR" "$LOG_DIR"
+  mkdir -p "$(dirname "$SYMPHONY_WORKFLOW_FILE")"
 }
 
 command_exists() {
@@ -218,13 +227,17 @@ start_process() {
 
 start_backend() {
   print_section "Backend"
+  local bridge_env=""
+  if should_enable_symphony; then
+    bridge_env="SYMPHONY_BRIDGE_BASE_URL=http://127.0.0.1:${SYMPHONY_PORT} SYMPHONY_BRIDGE_TOKEN=${SYMPHONY_BRIDGE_TOKEN} SYMPHONY_CALLBACK_TOKEN=${SYMPHONY_CALLBACK_TOKEN} SYMPHONY_STUB_AUTO_CALLBACK=false"
+  fi
   start_process \
     "backend" \
     "$BACKEND_PID_FILE" \
     "$BACKEND_LOG_FILE" \
     "bash" \
     "-lc" \
-    "cd '${ROOT_DIR}/backend' && ./.venv/bin/uvicorn app.main:app --port '${BACKEND_PORT}'"
+    "cd '${ROOT_DIR}/backend' && ${bridge_env} ./.venv/bin/uvicorn app.main:app --port '${BACKEND_PORT}'"
   if ! wait_for_http "http://localhost:${BACKEND_PORT}/healthz" "Backend"; then
     print_log_tail "Backend" "$BACKEND_LOG_FILE"
     exit 1
@@ -233,13 +246,17 @@ start_backend() {
 
 start_worker() {
   print_section "Worker"
+  local bridge_env=""
+  if should_enable_symphony; then
+    bridge_env="SYMPHONY_BRIDGE_BASE_URL=http://127.0.0.1:${SYMPHONY_PORT} SYMPHONY_BRIDGE_TOKEN=${SYMPHONY_BRIDGE_TOKEN} SYMPHONY_CALLBACK_TOKEN=${SYMPHONY_CALLBACK_TOKEN} SYMPHONY_STUB_AUTO_CALLBACK=false"
+  fi
   start_process \
     "worker" \
     "$WORKER_PID_FILE" \
     "$WORKER_LOG_FILE" \
     "bash" \
     "-lc" \
-    "cd '${ROOT_DIR}/backend' && ./.venv/bin/python -c \"from app.services.queue_worker import run_worker; run_worker()\""
+    "cd '${ROOT_DIR}/backend' && ${bridge_env} ./.venv/bin/python -c \"from app.services.queue_worker import run_worker; run_worker()\""
 }
 
 start_frontend() {
@@ -257,6 +274,127 @@ start_frontend() {
     "dev"
   if ! wait_for_http "http://localhost:${FRONTEND_PORT}" "Frontend"; then
     print_log_tail "Frontend" "$FRONTEND_LOG_FILE"
+    exit 1
+  fi
+}
+
+should_enable_symphony() {
+  case "$SYMPHONY_ENABLE" in
+    1|true|TRUE|yes|YES) return 0 ;;
+    0|false|FALSE|no|NO) return 1 ;;
+    auto|AUTO|"")
+      [[ -d "$SYMPHONY_DIR" && -f "$SYMPHONY_DIR/package.json" ]] || return 1
+      [[ -d "$SYMPHONY_DIR/node_modules" ]] || return 1
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+render_symphony_workflow() {
+  cat >"$SYMPHONY_WORKFLOW_FILE" <<EOF
+---
+tracker:
+  kind: linear
+  endpoint: http://127.0.0.1:9/graphql
+  api_key: local-dev-token
+  project_slug: local-dev
+  active_states:
+    - Todo
+    - In Progress
+  terminal_states:
+    - Done
+    - Closed
+    - Cancelled
+    - Canceled
+    - Duplicate
+
+polling:
+  interval_ms: 600000
+
+workspace:
+  root: ${ROOT_DIR}/.tmp/local-dev/symphony/workspaces
+
+hooks:
+  timeout_ms: 1000
+
+shared_memory:
+  enabled: false
+
+agent:
+  max_concurrent_agents: 1
+  max_turns: 1
+  max_retry_backoff_ms: 300000
+
+codex:
+  command: codex
+  fallback_command:
+  turn_timeout_ms: 3600000
+  read_timeout_ms: 10000
+  stall_timeout_ms: 300000
+---
+
+You are a runtime worker executing a Mission Control-dispatched task.
+
+## Task
+
+**{{ issue.identifier }}**: {{ issue.title }}
+
+{% if issue.description %}
+{{ issue.description }}
+{% endif %}
+
+{% if issue.branch_name %}
+Branch: {{ issue.branch_name }}
+{% endif %}
+
+{% if issue.url %}
+Task URL: {{ issue.url }}
+{% endif %}
+
+Complete the task and report progress through the runtime callback channel.
+EOF
+}
+
+start_symphony() {
+  if ! should_enable_symphony; then
+    print_section "Symphony"
+    printf 'Skipping symphony bridge startup (SYMPHONY_ENABLE=%s)\n' "$SYMPHONY_ENABLE"
+    if [[ ! -d "$SYMPHONY_DIR/node_modules" && -d "$SYMPHONY_DIR" ]]; then
+      printf 'Hint: install dependencies in %s to enable local bridge mode.\n' "$SYMPHONY_DIR"
+    fi
+    return 0
+  fi
+
+  print_section "Symphony"
+  render_symphony_workflow
+  start_process \
+    "symphony" \
+    "$SYMPHONY_PID_FILE" \
+    "$SYMPHONY_LOG_FILE" \
+    "bash" \
+    "${ROOT_DIR}/scripts/with_node.sh" \
+    "--cwd" \
+    "${SYMPHONY_DIR}" \
+    "env" \
+    "MISSION_CONTROL_BASE_URL=http://127.0.0.1:${BACKEND_PORT}" \
+    "MISSION_CONTROL_BRIDGE_TOKEN=${SYMPHONY_BRIDGE_TOKEN}" \
+    "MISSION_CONTROL_CALLBACK_TOKEN=${SYMPHONY_CALLBACK_TOKEN}" \
+    "SYMPHONY_HTTP_BIND=127.0.0.1" \
+    "SYMPHONY_HTTP_PORT=${SYMPHONY_PORT}" \
+    "npm" \
+    "run" \
+    "dev" \
+    "--" \
+    "${SYMPHONY_WORKFLOW_FILE}" \
+    "--port" \
+    "${SYMPHONY_PORT}" \
+    "--runner" \
+    "codex"
+  if ! wait_for_http "http://localhost:${SYMPHONY_PORT}/health" "Symphony bridge"; then
+    print_log_tail "Symphony" "$SYMPHONY_LOG_FILE"
     exit 1
   fi
 }
@@ -314,6 +452,7 @@ status() {
   show_process_status "backend" "$BACKEND_PID_FILE"
   show_process_status "worker" "$WORKER_PID_FILE"
   show_process_status "frontend" "$FRONTEND_PID_FILE"
+  show_process_status "symphony" "$SYMPHONY_PID_FILE"
 
   print_section "HTTP"
   if curl -fsS "http://localhost:${BACKEND_PORT}/healthz" >/dev/null 2>&1; then
@@ -326,15 +465,22 @@ status() {
   else
     printf 'Frontend: unavailable\n'
   fi
+  if should_enable_symphony && curl -fsS "http://localhost:${SYMPHONY_PORT}/health" >/dev/null 2>&1; then
+    printf 'Symphony bridge: healthy\n'
+  elif should_enable_symphony; then
+    printf 'Symphony bridge: unavailable\n'
+  fi
 
   print_section "Logs"
   printf 'Backend log: %s\n' "$BACKEND_LOG_FILE"
   printf 'Worker log: %s\n' "$WORKER_LOG_FILE"
   printf 'Frontend log: %s\n' "$FRONTEND_LOG_FILE"
+  printf 'Symphony log: %s\n' "$SYMPHONY_LOG_FILE"
 }
 
 down() {
   print_section "Stopping local processes"
+  stop_process "symphony" "$SYMPHONY_PID_FILE"
   stop_process "frontend" "$FRONTEND_PID_FILE"
   stop_process "worker" "$WORKER_PID_FILE"
   stop_process "backend" "$BACKEND_PID_FILE"
@@ -375,12 +521,16 @@ up() {
   ensure_postgres
   ensure_redis
   start_backend
+  start_symphony
   start_worker
   start_frontend
   print_section "Ready"
   printf 'Local dev stack is up.\n'
   printf 'Backend:  http://localhost:%s\n' "$BACKEND_PORT"
   printf 'Frontend: http://localhost:%s\n' "$FRONTEND_PORT"
+  if should_enable_symphony; then
+    printf 'Symphony: http://localhost:%s\n' "$SYMPHONY_PORT"
+  fi
   printf 'Next: bash scripts/local_e2e_preflight.sh\n'
 }
 
