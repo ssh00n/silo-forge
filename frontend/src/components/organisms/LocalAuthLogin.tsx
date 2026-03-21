@@ -97,10 +97,10 @@ export function LocalAuthLogin({ onAuthenticated }: LocalAuthLoginProps) {
           </div>
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-strong">
-              Local Authentication
+              Sign in to Silo Forge
             </h1>
             <p className="text-sm text-muted">
-              Enter your access token to unlock Mission Control.
+              Enter your access token to unlock the control plane.
             </p>
           </div>
         </CardHeader>

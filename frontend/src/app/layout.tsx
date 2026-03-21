@@ -11,8 +11,8 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { GlobalLoader } from "@/components/ui/global-loader";
 
 export const metadata: Metadata = {
-  title: "OpenClaw Mission Control",
-  description: "A calm command center for every task.",
+  title: "Silo Forge",
+  description: "A control plane for building and operating agent silos.",
 };
 
 const bodyFont = IBM_Plex_Sans({

@@ -85,6 +85,8 @@ class Settings(BaseSettings):
     symphony_bridge_base_url: str = ""
     symphony_bridge_token: str = ""
     symphony_callback_token: str = ""
+    symphony_stub_auto_callback: bool = False
+    symphony_stub_callback_delay_seconds: float = 0.0
 
     # OpenClaw gateway runtime compatibility
     gateway_min_version: str = "2026.02.9"
@@ -126,6 +128,8 @@ class Settings(BaseSettings):
         self.symphony_bridge_base_url = self.symphony_bridge_base_url.strip().rstrip("/")
         self.symphony_bridge_token = self.symphony_bridge_token.strip()
         self.symphony_callback_token = self.symphony_callback_token.strip()
+        if "symphony_stub_auto_callback" not in self.model_fields_set and self.environment == "dev":
+            self.symphony_stub_auto_callback = True
 
         # Rate-limit: fall back to rq_redis_url if using redis backend
         # with no explicit rate-limit URL. If both are blank, fail fast

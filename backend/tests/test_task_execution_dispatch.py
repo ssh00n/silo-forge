@@ -28,6 +28,7 @@ from app.models.silos import Silo
 from app.models.tasks import Task
 from app.models.users import User
 from app.services.organizations import OrganizationContext
+from app.services.task_execution_worker import _maybe_simulate_stub_callback_loop
 from app.services.task_execution_runs import TaskExecutionRunService
 from app.schemas.task_execution_runs import TaskExecutionRunCreate
 
@@ -263,6 +264,56 @@ async def test_dispatch_run_posts_to_configured_http_bridge(
         assert dispatched.result_payload is not None
         assert dispatched.result_payload["dispatch_acceptance"]["adapter_mode"] == "http"
     finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_stub_dispatch_can_auto_close_local_callback_loop() -> None:
+    engine, session_maker = await _make_engine()
+    original_auto_callback = settings.symphony_stub_auto_callback
+    original_delay = settings.symphony_stub_callback_delay_seconds
+    settings.symphony_stub_auto_callback = True
+    settings.symphony_stub_callback_delay_seconds = 0.0
+    async with session_maker() as session:
+        _ctx, board, task, silo, lead = await _seed_context(session)
+        service = TaskExecutionRunService(session)
+        created = await service.create_run(
+            board=board,
+            task=task,
+            payload=TaskExecutionRunCreate(silo_slug=silo.slug),
+        )
+        dispatched = await service.dispatch_run(
+            organization_id=board.organization_id,
+            board_id=board.id,
+            task_id=task.id,
+            run_id=created.id,
+        )
+        await _maybe_simulate_stub_callback_loop(
+            dispatched_run=dispatched,
+            session_factory=session_maker,
+        )
+
+    try:
+        async with session_maker() as session:
+            refreshed_task = await session.get(Task, task.id)
+            assert refreshed_task is not None
+            assert refreshed_task.status == "review"
+            assert refreshed_task.assigned_agent_id == lead.id
+            final_run = (
+                await session.exec(
+                    select(ActivityEvent)
+                    .where(col(ActivityEvent.task_id) == task.id)
+                    .where(col(ActivityEvent.event_type) == "task.execution_run.report")
+                    .order_by(col(ActivityEvent.created_at).desc())
+                )
+            ).first()
+            assert final_run is not None
+            assert final_run.payload is not None
+            assert final_run.payload["status"] == "succeeded"
+            assert final_run.payload["total_tokens"] == 144
+    finally:
+        settings.symphony_stub_auto_callback = original_auto_callback
+        settings.symphony_stub_callback_delay_seconds = original_delay
         await engine.dispose()
 
 

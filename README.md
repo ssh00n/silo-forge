@@ -1,13 +1,13 @@
-# OpenClaw Mission Control
+# Silo Forge
 
 [![CI](https://github.com/abhi1693/openclaw-mission-control/actions/workflows/ci.yml/badge.svg)](https://github.com/abhi1693/openclaw-mission-control/actions/workflows/ci.yml) ![Static Badge](https://img.shields.io/badge/Join-Slack-active?style=flat&color=blue&link=https%3A%2F%2Fjoin.slack.com%2Ft%2Foc-mission-control%2Fshared_invite%2Fzt-3qpcm57xh-AI9C~smc3MDBVzEhvwf7gg)
 
-Fork transition note: this working tree includes upstream code from `abhi1693/openclaw-mission-control`. See [`NOTICE`](./NOTICE) and [`docs/architecture/product-transition-pre-e2e.md`](./docs/architecture/product-transition-pre-e2e.md).
+Forked from `abhi1693/openclaw-mission-control`. This working tree keeps the upstream MIT license and attribution. See [`NOTICE`](./NOTICE) and [`docs/architecture/product-transition-pre-e2e.md`](./docs/architecture/product-transition-pre-e2e.md).
 
-OpenClaw Mission Control is the centralized operations and governance platform for running OpenClaw across teams and organizations, with unified visibility, approval controls, and gateway-aware orchestration.
-It gives operators a single interface for work orchestration, agent and gateway management, approval-driven governance, and API-backed automation.
+Silo Forge is a control plane for building and operating agent silos, with unified visibility, approval controls, and gateway-aware orchestration.
+It gives operators a single interface for silo provisioning, work orchestration, agent and gateway management, approval-driven governance, and API-backed automation.
 
-<img width="1896" height="869" alt="Mission Control dashboard" src="https://github.com/user-attachments/assets/49a3c823-6aaf-4c56-8328-fb1485ee940f" />
+<img width="1896" height="869" alt="Silo Forge dashboard" src="https://github.com/user-attachments/assets/49a3c823-6aaf-4c56-8328-fb1485ee940f" />
 <img width="1896" height="858" alt="image" src="https://github.com/user-attachments/assets/2bfee13a-3dab-4f4a-9135-e47bb6949dcf" />
 <img width="1890" height="865" alt="image" src="https://github.com/user-attachments/assets/84c2e867-5dc7-4a36-9290-e29179d2a659" />
 <img width="1912" height="881" alt="image" src="https://github.com/user-attachments/assets/3bbd825c-9969-4bbf-bf31-987f9168f370" />
@@ -15,12 +15,12 @@ It gives operators a single interface for work orchestration, agent and gateway 
 
 ## Platform overview
 
-Mission Control is designed to be the day-to-day operations surface for OpenClaw.
-Instead of splitting work across multiple tools, teams can plan, execute, review, and audit activity in one system.
+Silo Forge is designed to be the day-to-day control surface for small execution organizations.
+Instead of splitting work across multiple tools, teams can provision silos, plan, execute, review, and audit activity in one system.
 
 Core operational areas:
 
-- Work orchestration: manage organizations, board groups, boards, tasks, and tags.
+- Silo orchestration: manage organizations, silos, board groups, boards, tasks, and tags.
 - Agent operations: create, inspect, and manage agent lifecycle from a unified control surface.
 - Governance and approvals: route sensitive actions through explicit approval flows.
 - Gateway management: connect and operate gateway integrations for distributed environments.
@@ -35,17 +35,17 @@ Core operational areas:
 - Audit and incident review: use activity history to reconstruct what happened, when it happened, and who initiated it.
 - API-backed process integration: connect internal workflows and automation clients to the same operational model used in the UI.
 
-## What makes Mission Control different
+## What makes Silo Forge different
 
 - Operations-first design: built for running agent work reliably, not just creating tasks.
 - Governance built in: approvals, auth modes, and clear control boundaries are first-class.
 - Gateway-aware orchestration: built to operate both local and connected runtime environments.
 - Unified UI and API model: operators and automation act on the same objects and lifecycle.
-- Team-scale structure: organizations, board groups, boards, tasks, tags, and users in one system of record.
+- Team-scale structure: organizations, silos, board groups, boards, tasks, tags, and users in one system of record.
 
 ## Who it is for
 
-- Platform teams running OpenClaw in self-hosted or internal environments.
+- Platform teams running OpenClaw-derived runtime systems in self-hosted or internal environments.
 - Operations and engineering teams that need clear approval and auditability controls.
 - Organizations that want API-accessible operations without losing a usable web UI.
 
@@ -97,7 +97,7 @@ Before startup:
 - `NEXT_PUBLIC_API_URL=auto` (default) resolves to `http(s)://<current-host>:8000`.
   - Set an explicit URL when your API is behind a reverse proxy or non-default port.
 
-### 2. Start Mission Control
+### 2. Start Silo Forge
 
 ```bash
 docker compose -f compose.yml --env-file .env up -d --build
@@ -135,7 +135,7 @@ docker compose -f compose.yml --env-file .env up -d --force-recreate
 
 ### 3. Open the application
 
-- Mission Control UI: http://localhost:3000
+- Silo Forge UI: http://localhost:3000
 - Backend health: http://localhost:8000/healthz
 
 ### 4. Stop the stack
@@ -146,7 +146,7 @@ docker compose -f compose.yml --env-file .env down
 
 ## Authentication
 
-Mission Control supports two authentication modes:
+Silo Forge supports two authentication modes:
 
 - `local`: shared bearer token mode (default for self-hosted use)
 - `clerk`: Clerk JWT mode
@@ -163,7 +163,7 @@ Complete guides for deployment, production, troubleshooting, and testing are in 
 
 ## Project status
 
-Mission Control is under active development.
+Silo Forge is under active development.
 
 - Features and APIs may change between releases.
 - Validate and harden your configuration before production use.

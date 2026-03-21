@@ -3,10 +3,10 @@ import { HeroKicker } from "@/components/atoms/HeroKicker";
 export function HeroCopy() {
   return (
     <div className="space-y-6">
-      <HeroKicker>OpenClaw Mission Control</HeroKicker>
+      <HeroKicker>Silo Forge</HeroKicker>
       <div className="space-y-4">
         <h1 className="font-heading text-4xl font-semibold leading-tight text-strong sm:text-5xl lg:text-6xl">
-          Command autonomous work.
+          Forge agent silos.
           <br />
           <span className="relative inline-flex">
             Keep human oversight.
@@ -17,8 +17,8 @@ export function HeroCopy() {
           </span>
         </h1>
         <p className="max-w-xl text-base text-muted sm:text-lg">
-          Track tasks, approvals, and agent health in one calm surface. Get
-          realtime signals when work changes, without chasing people for status.
+          Provision execution teams, track approvals, and watch runtime health
+          from one calm surface without chasing people for status.
         </p>
       </div>
     </div>

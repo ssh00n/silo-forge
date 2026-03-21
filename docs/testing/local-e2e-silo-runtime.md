@@ -2,7 +2,7 @@
 
 This runbook is the last step before browser-driven local E2E validation.
 
-It focuses on the current Mission Control flow:
+It focuses on the current Silo Forge control-plane flow:
 
 - create or update a silo
 - validate/apply runtime bundles
@@ -91,6 +91,10 @@ Goal: verify the control-plane loop closes on one task.
 5. Confirm board live feed `Runs` filter shows queued/dispatched/report events.
 6. Confirm global `/activity?category=runs` shows the same run lifecycle.
 7. If the run fails, use `Retry`.
+
+When no real Symphony bridge is configured in local `dev`, the worker can close
+the loop with synthetic stub callbacks. That means local E2E should still move
+from `dispatching` into `running` and `succeeded`.
 
 Expected result:
 

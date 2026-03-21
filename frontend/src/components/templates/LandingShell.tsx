@@ -19,13 +19,13 @@ export function LandingShell({ children }: { children: ReactNode }) {
     <div className="landing-enterprise">
       <nav className="landing-nav" aria-label="Primary navigation">
         <div className="nav-container">
-          <Link href="/" className="logo-section" aria-label="OpenClaw home">
+          <Link href="/" className="logo-section" aria-label="Silo Forge home">
             <div className="logo-icon" aria-hidden="true">
-              OC
+              SF
             </div>
             <div className="logo-text">
-              <div className="logo-name">OpenClaw</div>
-              <div className="logo-tagline">Mission Control</div>
+              <div className="logo-name">Silo Forge</div>
+              <div className="logo-tagline">Agent Control Plane</div>
             </div>
           </Link>
 
@@ -89,8 +89,8 @@ export function LandingShell({ children }: { children: ReactNode }) {
       <footer className="landing-footer">
         <div className="footer-content">
           <div className="footer-brand">
-            <h3>OpenClaw</h3>
-            <p>A calm command center for boards, agents, and approvals.</p>
+            <h3>Silo Forge</h3>
+            <p>A calm control plane for silos, agents, approvals, and runtime operations.</p>
             <div className="footer-tagline">Realtime Execution Visibility</div>
           </div>
 
@@ -150,7 +150,7 @@ export function LandingShell({ children }: { children: ReactNode }) {
 
         <div className="footer-bottom">
           <div className="footer-copyright">
-            © {new Date().getFullYear()} OpenClaw. All rights reserved.
+            © {new Date().getFullYear()} Silo Forge. All rights reserved.
           </div>
           <div className="footer-bottom-links">
             <Link href="#capabilities">Capabilities</Link>

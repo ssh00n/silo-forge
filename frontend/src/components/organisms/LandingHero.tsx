@@ -34,16 +34,16 @@ export function LandingHero() {
     <>
       <section className="hero">
         <div className="hero-content">
-          <div className="hero-label">OpenClaw Mission Control</div>
+          <div className="hero-label">Silo Forge</div>
           <h1>
-            Command <span className="hero-highlight">autonomous work.</span>
+            Forge <span className="hero-highlight">agent silos.</span>
             <br />
             Keep human oversight.
           </h1>
           <p>
-            Track tasks, approvals, and agent health in one unified command
-            center. Get real-time signals when work changes, without losing the
-            thread of execution.
+            Stand up small execution organizations on demand, then track tasks,
+            approvals, runtime health, and execution flow from one control
+            plane.
           </p>
 
           <div className="hero-actions">
@@ -92,7 +92,7 @@ export function LandingHero() {
           </div>
 
           <div className="hero-features">
-            {["Agent-First Operations", "Approval Queues", "Live Signals"].map(
+            {["Silo Provisioning", "Approval Queues", "Live Signals"].map(
               (label) => (
                 <div key={label} className="hero-feature">
                   <div className="feature-icon">✓</div>
@@ -112,9 +112,9 @@ export function LandingHero() {
             </div>
           </div>
           <div className="surface-subtitle">
-            <h3>Ship work without losing the thread.</h3>
+            <h3>Launch execution without losing control.</h3>
             <p>
-              Tasks, approvals, and agent status stay synced across the board.
+              Tasks, approvals, runtime state, and agent signals stay aligned.
             </p>
           </div>
           <div className="metrics-row">
@@ -192,7 +192,7 @@ export function LandingHero() {
             {
               title: "Boards as ops maps",
               description:
-                "Keep tasks, priorities, dependencies, and ownership visible at a glance.",
+                "Keep tasks, priorities, dependencies, and ownership visible inside each silo.",
             },
             {
               title: "Approvals that move",
@@ -200,14 +200,14 @@ export function LandingHero() {
                 "Queue, comment, and approve without losing context or slowing execution.",
             },
             {
-              title: "Realtime signals",
+              title: "Realtime runtime signals",
               description:
-                "See work change as it happens: tasks, agent status, and approvals update live.",
+                "See work change as it happens: task execution, agent status, and approvals update live.",
             },
             {
-              title: "Audit trail built in",
+              title: "Silo history built in",
               description:
-                "Every decision leaves a trail, so the board stays explainable and reviewable.",
+                "Every decision leaves a trail, so each silo stays explainable and reviewable.",
             },
           ].map((feature, idx) => (
             <div key={feature.title} className="feature-card">
@@ -223,10 +223,10 @@ export function LandingHero() {
 
       <section className="cta-section">
         <div className="cta-content">
-          <h2>Start with one board. Grow into a control room.</h2>
+          <h2>Start with one silo. Grow into a control plane.</h2>
           <p>
-            Onboard a board, name a lead agent, and keep approvals and signals
-            visible from day one.
+            Stand up a silo, assign runtime roles, and keep approvals and
+            execution signals visible from day one.
           </p>
           <div className="cta-actions">
             <SignedOut>
