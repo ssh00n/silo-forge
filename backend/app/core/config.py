@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     rq_dispatch_retry_base_seconds: float = 10.0
     rq_dispatch_retry_max_seconds: float = 120.0
 
+    # Symphony bridge
+    symphony_bridge_base_url: str = ""
+    symphony_bridge_token: str = ""
+    symphony_callback_token: str = ""
+
     # OpenClaw gateway runtime compatibility
     gateway_min_version: str = "2026.02.9"
 
@@ -118,6 +123,9 @@ class Settings(BaseSettings):
                 "BASE_URL must be an absolute http(s) URL (e.g. http://localhost:8000).",
             )
         self.base_url = base_url.rstrip("/")
+        self.symphony_bridge_base_url = self.symphony_bridge_base_url.strip().rstrip("/")
+        self.symphony_bridge_token = self.symphony_bridge_token.strip()
+        self.symphony_callback_token = self.symphony_callback_token.strip()
 
         # Rate-limit: fall back to rq_redis_url if using redis backend
         # with no explicit rate-limit URL. If both are blank, fail fast

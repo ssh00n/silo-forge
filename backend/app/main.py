@@ -26,9 +26,15 @@ from app.api.gateways import router as gateways_router
 from app.api.metrics import router as metrics_router
 from app.api.organizations import router as organizations_router
 from app.api.skills_marketplace import router as skills_marketplace_router
+from app.api.silo_blueprints import router as silo_blueprints_router
+from app.api.silo_provision_plans import router as silo_provision_plans_router
+from app.api.silo_runtime import router as silo_runtime_router
+from app.api.silos import router as silos_router
 from app.api.souls_directory import router as souls_directory_router
 from app.api.tags import router as tags_router
 from app.api.task_custom_fields import router as task_custom_fields_router
+from app.api.task_execution_callbacks import router as task_execution_callbacks_router
+from app.api.task_execution_runs import router as task_execution_runs_router
 from app.api.tasks import router as tasks_router
 from app.api.users import router as users_router
 from app.core.config import settings
@@ -87,6 +93,18 @@ OPENAPI_TAGS = [
         "description": "Skills marketplace, install, uninstall, and synchronization endpoints.",
     },
     {
+        "name": "silo-blueprints",
+        "description": "Built-in silo blueprint discovery endpoints used by silo provisioning flows.",
+    },
+    {
+        "name": "silos",
+        "description": "Silo desired-state preview and lifecycle endpoints for silo provisioning flows.",
+    },
+    {
+        "name": "silo-provision-plans",
+        "description": "Provision-plan preview endpoints that render PicoClaw bundle targets from silo input.",
+    },
+    {
         "name": "board-groups",
         "description": "Board group CRUD, assignment, and grouping workflow endpoints.",
     },
@@ -117,6 +135,12 @@ OPENAPI_TAGS = [
     {
         "name": "tasks",
         "description": "Task CRUD, dependency management, and task workflow operations.",
+    },
+    {
+        "name": "task-execution",
+        "description": (
+            "Task-backed execution run endpoints used to queue and observe Symphony-style work."
+        ),
     },
     {
         "name": "custom-fields",
@@ -547,6 +571,10 @@ api_v1.include_router(metrics_router)
 api_v1.include_router(organizations_router)
 api_v1.include_router(souls_directory_router)
 api_v1.include_router(skills_marketplace_router)
+api_v1.include_router(silo_blueprints_router)
+api_v1.include_router(silos_router)
+api_v1.include_router(silo_provision_plans_router)
+api_v1.include_router(silo_runtime_router)
 api_v1.include_router(board_groups_router)
 api_v1.include_router(board_group_memory_router)
 api_v1.include_router(boards_router)
@@ -555,6 +583,8 @@ api_v1.include_router(board_webhooks_router)
 api_v1.include_router(board_onboarding_router)
 api_v1.include_router(approvals_router)
 api_v1.include_router(tasks_router)
+api_v1.include_router(task_execution_runs_router)
+api_v1.include_router(task_execution_callbacks_router)
 api_v1.include_router(task_custom_fields_router)
 api_v1.include_router(tags_router)
 api_v1.include_router(users_router)

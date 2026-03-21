@@ -9,6 +9,7 @@ import {
   useRouter,
   useSearchParams,
 } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SignInButton, SignedIn, SignedOut, useAuth } from "@/auth/clerk";
 import {
@@ -57,7 +58,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError } from "@/api/mutator";
+import { ApiError, customFetch } from "@/api/mutator";
 import { streamAgentsApiV1AgentsStreamGet } from "@/api/generated/agents/agents";
 import {
   streamApprovalsApiV1BoardsBoardIdApprovalsStreamGet,
@@ -121,6 +122,7 @@ import {
 import { AGENT_EMOJI_GLYPHS } from "@/lib/agent-emoji";
 import { cn } from "@/lib/utils";
 import { usePageActive } from "@/hooks/usePageActive";
+import { fetchSilos } from "@/lib/silos";
 import {
   boardCustomFieldValues,
   canonicalizeCustomFieldValues,
@@ -159,8 +161,57 @@ type Approval = ApprovalRead & { status: string };
 
 type BoardChatMessage = BoardMemoryRead;
 
+type ExecutionRunStatus =
+  | "queued"
+  | "dispatching"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "blocked";
+
+type TaskExecutionRunSnapshot = {
+  id: string;
+  organization_id: string;
+  board_id: string;
+  task_id: string;
+  silo_id: string;
+  silo_slug: string;
+  requested_by_user_id?: string | null;
+  requested_by_agent_id?: string | null;
+  executor_kind: "symphony";
+  role_slug: string;
+  status: ExecutionRunStatus;
+  task_snapshot?: Record<string, unknown> | null;
+  dispatch_payload?: Record<string, unknown> | null;
+  result_payload?: Record<string, unknown> | null;
+  external_run_id?: string | null;
+  workspace_path?: string | null;
+  branch_name?: string | null;
+  pr_url?: string | null;
+  summary?: string | null;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type TaskExecutionRunsResponse = {
+  data: TaskExecutionRunSnapshot[];
+  status: number;
+  headers: Headers;
+};
+
+type TaskExecutionRunResponse = {
+  data: TaskExecutionRunSnapshot;
+  status: number;
+  headers: Headers;
+};
+
 type LiveFeedEventType =
   | "task.comment"
+  | "task.execution_run.report"
   | "task.created"
   | "task.updated"
   | "task.status_changed"
@@ -188,6 +239,7 @@ type LiveFeedItem = {
 
 const LIVE_FEED_EVENT_TYPES = new Set<LiveFeedEventType>([
   "task.comment",
+  "task.execution_run.report",
   "task.created",
   "task.updated",
   "task.status_changed",
@@ -425,6 +477,7 @@ const toLiveFeedFromApproval = (
 
 const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "task.comment") return "Comment";
+  if (eventType === "task.execution_run.report") return "Run report";
   if (eventType === "task.created") return "Created";
   if (eventType === "task.status_changed") return "Status";
   if (eventType === "board.chat") return "Chat";
@@ -443,6 +496,9 @@ const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
 const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   if (eventType === "task.comment") {
     return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+  if (eventType === "task.execution_run.report") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
   }
   if (eventType === "task.created") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -537,6 +593,30 @@ const formatShortTimestamp = (value: string) => {
   });
 };
 
+const formatTokenCount = (value: number): string =>
+  Number.isFinite(value) ? new Intl.NumberFormat("en-US").format(value) : "0";
+
+const executionRunStatusClass = (status: ExecutionRunStatus): string => {
+  if (status === "succeeded") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "running") return "border-sky-200 bg-sky-50 text-sky-700";
+  if (status === "dispatching") return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  if (status === "queued") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (status === "failed") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (status === "cancelled") return "border-slate-300 bg-slate-100 text-slate-700";
+  if (status === "blocked") return "border-orange-200 bg-orange-50 text-orange-700";
+  return "border-slate-200 bg-slate-100 text-slate-700";
+};
+
+const executionRunTotalTokens = (run: TaskExecutionRunSnapshot): number => {
+  const usage = run.result_payload?.usage;
+  if (!usage || typeof usage !== "object" || Array.isArray(usage)) return 0;
+  const total = (usage as Record<string, unknown>).total_tokens;
+  return typeof total === "number" && Number.isFinite(total) ? total : 0;
+};
+
+const canRetryExecutionRun = (status: ExecutionRunStatus): boolean =>
+  status === "failed" || status === "cancelled" || status === "blocked";
+
 const commentElementId = (id: string): string =>
   `task-comment-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
@@ -619,6 +699,98 @@ const TaskCommentCard = memo(function TaskCommentCard({
 });
 
 TaskCommentCard.displayName = "TaskCommentCard";
+
+const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
+  run,
+  isRetrying,
+  onRetry,
+}: {
+  run: TaskExecutionRunSnapshot;
+  isRetrying: boolean;
+  onRetry?: () => void;
+}) {
+  const totalTokens = executionRunTotalTokens(run);
+  const summary = (run.summary ?? "").trim();
+  const errorMessage = (run.error_message ?? "").trim();
+  const canRetry = canRetryExecutionRun(run.status) && Boolean(onRetry);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                executionRunStatusClass(run.status),
+              )}
+            >
+              {run.status.replace(/_/g, " ")}
+            </span>
+            <span>{run.role_slug}</span>
+            <span className="text-slate-300">·</span>
+            <span>{formatShortTimestamp(run.updated_at)}</span>
+          </div>
+          <div className="text-sm font-semibold text-slate-900">
+            {run.branch_name ?? run.external_run_id ?? `Run ${run.id.slice(0, 8)}`}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {run.pr_url ? (
+            <a
+              href={run.pr_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              PR
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </a>
+          ) : null}
+          {canRetry ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onRetry}
+              disabled={isRetrying}
+              className="h-8 px-2 text-xs"
+            >
+              {isRetrying ? "Retrying…" : "Retry"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      {summary ? (
+        <div className="mt-3 text-sm text-slate-700">
+          <Markdown content={summary} variant="basic" />
+        </div>
+      ) : errorMessage ? (
+        <p className="mt-3 text-sm text-rose-700">{errorMessage}</p>
+      ) : null}
+      <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Tokens
+          </p>
+          <p className="mt-1 text-xs text-slate-700">
+            {formatTokenCount(totalTokens)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Workspace
+          </p>
+          <p className="mt-1 truncate text-xs text-slate-700">
+            {run.workspace_path ?? "—"}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+TaskExecutionRunCard.displayName = "TaskExecutionRunCard";
 
 const ChatMessageCard = memo(function ChatMessageCard({
   message,
@@ -739,6 +911,7 @@ LiveFeedCard.displayName = "LiveFeedCard";
 
 export default function BoardDetailPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useParams();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -843,6 +1016,41 @@ export default function BoardDetailPage() {
     return resolveMemberDisplayName(member, DEFAULT_HUMAN_LABEL);
   }, [membershipQuery.data]);
   const canWrite = boardAccess.canWrite;
+  const silosQuery = useQuery({
+    queryKey: ["silos"],
+    queryFn: fetchSilos,
+    enabled: Boolean(isSignedIn && isOrgAdmin && isDetailOpen),
+    refetchInterval: 30_000,
+    refetchOnMount: "always",
+  });
+  const symphonyEnabledSilos = useMemo(
+    () => (silosQuery.data ?? []).filter((silo) => silo.enable_symphony),
+    [silosQuery.data],
+  );
+  const selectedTaskExecutionRunsQuery = useQuery<
+    TaskExecutionRunSnapshot[],
+    ApiError
+  >({
+    queryKey: [
+      "board",
+      boardId,
+      "task",
+      selectedTask?.id ?? null,
+      "execution-runs",
+    ],
+    enabled: Boolean(isSignedIn && boardId && selectedTask?.id && isDetailOpen),
+    refetchInterval: 15_000,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      if (!boardId || !selectedTask?.id) return [];
+      const response = await customFetch<TaskExecutionRunsResponse>(
+        `/api/v1/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(selectedTask.id)}/execution-runs`,
+        { method: "GET" },
+      );
+      return response.data;
+    },
+  });
+  const selectedTaskExecutionRuns = selectedTaskExecutionRunsQuery.data ?? [];
 
   const [board, setBoard] = useState<Board | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -878,6 +1086,18 @@ export default function BoardDetailPage() {
   const [commentsError, setCommentsError] = useState<string | null>(null);
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [postCommentError, setPostCommentError] = useState<string | null>(null);
+  const [retryingExecutionRunId, setRetryingExecutionRunId] = useState<
+    string | null
+  >(null);
+  const [newExecutionRunSiloSlug, setNewExecutionRunSiloSlug] = useState("");
+  const [newExecutionRunBranchHint, setNewExecutionRunBranchHint] =
+    useState("");
+  const [newExecutionRunPromptOverride, setNewExecutionRunPromptOverride] =
+    useState("");
+  const [isCreatingExecutionRun, setIsCreatingExecutionRun] = useState(false);
+  const [createExecutionRunError, setCreateExecutionRunError] = useState<
+    string | null
+  >(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const tasksRef = useRef<Task[]>([]);
   const approvalsRef = useRef<Approval[]>([]);
@@ -1132,6 +1352,18 @@ export default function BoardDetailPage() {
     isSignedIn,
     tasks,
   ]);
+
+  useEffect(() => {
+    if (!isDetailOpen) return;
+    if (!symphonyEnabledSilos.length) return;
+    if (
+      newExecutionRunSiloSlug &&
+      symphonyEnabledSilos.some((silo) => silo.slug === newExecutionRunSiloSlug)
+    ) {
+      return;
+    }
+    setNewExecutionRunSiloSlug(symphonyEnabledSilos[0]?.slug ?? "");
+  }, [isDetailOpen, newExecutionRunSiloSlug, symphonyEnabledSilos]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -2625,6 +2857,100 @@ export default function BoardDetailPage() {
     }
   };
 
+  const handleRetryExecutionRun = useCallback(
+    async (run: TaskExecutionRunSnapshot) => {
+      if (!selectedTask || !boardId) return;
+      setRetryingExecutionRunId(run.id);
+      try {
+        await customFetch<TaskExecutionRunResponse>(
+          `/api/v1/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(selectedTask.id)}/execution-runs/${encodeURIComponent(run.id)}/retry-dispatch`,
+          { method: "POST" },
+        );
+        await Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: [
+              "board",
+              boardId,
+              "task",
+              selectedTask.id,
+              "execution-runs",
+            ],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ["/api/v1/activity", { limit: 200 }],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ["dashboard", "execution-runtime", "7d"],
+          }),
+        ]);
+        pushToast("Retry queued and dispatched.", "success");
+      } catch (err) {
+        pushToast(formatActionError(err, "Unable to retry execution run."));
+      } finally {
+        setRetryingExecutionRunId(null);
+      }
+    },
+    [boardId, pushToast, queryClient, selectedTask],
+  );
+
+  const handleCreateExecutionRun = useCallback(async () => {
+    if (!selectedTask || !boardId) return;
+    const siloSlug = newExecutionRunSiloSlug.trim();
+    if (!siloSlug) {
+      setCreateExecutionRunError("Select a Symphony-enabled silo.");
+      return;
+    }
+    setIsCreatingExecutionRun(true);
+    setCreateExecutionRunError(null);
+    try {
+      await customFetch<TaskExecutionRunResponse>(
+        `/api/v1/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(selectedTask.id)}/execution-runs/dispatch`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            silo_slug: siloSlug,
+            branch_name_hint: newExecutionRunBranchHint.trim() || undefined,
+            prompt_override: newExecutionRunPromptOverride.trim() || undefined,
+          }),
+        },
+      );
+      setNewExecutionRunBranchHint("");
+      setNewExecutionRunPromptOverride("");
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [
+            "board",
+            boardId,
+            "task",
+            selectedTask.id,
+            "execution-runs",
+          ],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["/api/v1/activity", { limit: 200 }],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["dashboard", "execution-runtime", "7d"],
+        }),
+      ]);
+      pushToast("Execution run queued and dispatched.", "success");
+    } catch (err) {
+      const message = formatActionError(err, "Unable to start execution run.");
+      setCreateExecutionRunError(message);
+      pushToast(message);
+    } finally {
+      setIsCreatingExecutionRun(false);
+    }
+  }, [
+    boardId,
+    newExecutionRunBranchHint,
+    newExecutionRunPromptOverride,
+    newExecutionRunSiloSlug,
+    pushToast,
+    queryClient,
+    selectedTask,
+  ]);
+
   const handleTaskSave = async (closeOnSuccess = false) => {
     if (!selectedTask || !isSignedIn || !boardId) return;
     const trimmedTitle = editTitle.trim();
@@ -3933,6 +4259,137 @@ export default function BoardDetailPage() {
                         </div>
                       ) : null}
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Run with Symphony
+              </p>
+              {!isOrgAdmin ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                  Only organization owners and admins can start runtime runs.
+                </div>
+              ) : silosQuery.isLoading ? (
+                <p className="text-sm text-slate-500">Loading silos…</p>
+              ) : symphonyEnabledSilos.length === 0 ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                  No Symphony-enabled silos are available.
+                </div>
+              ) : (
+                <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Silo
+                      </label>
+                      <Select
+                        value={newExecutionRunSiloSlug}
+                        onValueChange={setNewExecutionRunSiloSlug}
+                        disabled={isCreatingExecutionRun}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select silo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {symphonyEnabledSilos.map((silo) => (
+                            <SelectItem key={silo.slug} value={silo.slug}>
+                              {silo.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Branch hint
+                      </label>
+                      <Input
+                        value={newExecutionRunBranchHint}
+                        onChange={(event) =>
+                          setNewExecutionRunBranchHint(event.target.value)
+                        }
+                        placeholder="feature/task-slug"
+                        disabled={isCreatingExecutionRun}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Prompt override
+                    </label>
+                    <Textarea
+                      value={newExecutionRunPromptOverride}
+                      onChange={(event) =>
+                        setNewExecutionRunPromptOverride(event.target.value)
+                      }
+                      placeholder="Optional extra instruction for Symphony."
+                      className="min-h-[84px] bg-white"
+                      disabled={isCreatingExecutionRun}
+                    />
+                  </div>
+                  {createExecutionRunError ? (
+                    <p className="text-xs text-rose-600">
+                      {createExecutionRunError}
+                    </p>
+                  ) : null}
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      onClick={() => void handleCreateExecutionRun()}
+                      disabled={
+                        isCreatingExecutionRun ||
+                        !newExecutionRunSiloSlug ||
+                        !canWrite
+                      }
+                      title={
+                        canWrite
+                          ? "Queue and dispatch runtime run"
+                          : "Read-only access"
+                      }
+                    >
+                      {isCreatingExecutionRun
+                        ? "Dispatching…"
+                        : "Run with Symphony"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Runtime runs
+                </p>
+                {selectedTaskExecutionRunsQuery.isFetching ? (
+                  <span className="text-xs text-slate-400">Refreshing…</span>
+                ) : null}
+              </div>
+              {selectedTaskExecutionRunsQuery.isLoading ? (
+                <p className="text-sm text-slate-500">Loading runtime runs…</p>
+              ) : selectedTaskExecutionRunsQuery.error ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                  {selectedTaskExecutionRunsQuery.error.message ||
+                    "Unable to load runtime runs."}
+                </div>
+              ) : selectedTaskExecutionRuns.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No runtime runs for this task yet.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {selectedTaskExecutionRuns.map((run) => (
+                    <TaskExecutionRunCard
+                      key={run.id}
+                      run={run}
+                      isRetrying={retryingExecutionRunId === run.id}
+                      onRetry={
+                        canWrite && canRetryExecutionRun(run.status)
+                          ? () => handleRetryExecutionRun(run)
+                          : undefined
+                      }
+                    />
                   ))}
                 </div>
               )}

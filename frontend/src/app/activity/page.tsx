@@ -61,6 +61,7 @@ type Agent = AgentRead & { status: string };
 
 type TaskEventType =
   | "task.comment"
+  | "task.execution_run.report"
   | "task.created"
   | "task.updated"
   | "task.status_changed";
@@ -107,6 +108,7 @@ const ACTIVITY_FEED_PATH = "/activity";
 
 const TASK_EVENT_TYPES = new Set<TaskEventType>([
   "task.comment",
+  "task.execution_run.report",
   "task.created",
   "task.updated",
   "task.status_changed",
@@ -225,6 +227,7 @@ const roleFromAgent = (agent?: Agent | null): string | null => {
 
 const eventLabel = (eventType: FeedEventType): string => {
   if (eventType === "task.comment") return "Comment";
+  if (eventType === "task.execution_run.report") return "Run report";
   if (eventType === "task.created") return "Created";
   if (eventType === "task.status_changed") return "Status";
   if (eventType === "board.chat") return "Chat";
@@ -243,6 +246,9 @@ const eventLabel = (eventType: FeedEventType): string => {
 const eventPillClass = (eventType: FeedEventType): string => {
   if (eventType === "task.comment") {
     return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+  if (eventType === "task.execution_run.report") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
   }
   if (eventType === "task.created") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";

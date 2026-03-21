@@ -92,6 +92,38 @@ class DashboardPendingApprovals(SQLModel):
     items: list[DashboardPendingApproval]
 
 
+class DashboardRuntimeRunRead(SQLModel):
+    """Recent task execution runtime row for dashboard visibility."""
+
+    run_id: UUID
+    board_id: UUID
+    board_name: str
+    task_id: UUID
+    task_title: str
+    status: str
+    updated_at: datetime
+    summary: str | None = None
+    branch_name: str | None = None
+    pr_url: str | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
+class DashboardRuntimeExecutionMetrics(SQLModel):
+    """Execution-runtime snapshot used by the dashboard."""
+
+    generated_at: datetime
+    queued_runs: int
+    active_runs: int
+    failed_runs_7d: int
+    succeeded_runs_7d: int
+    input_tokens_7d: int
+    output_tokens_7d: int
+    total_tokens_7d: int
+    recent_runs: list[DashboardRuntimeRunRead]
+
+
 class DashboardMetrics(SQLModel):
     """Complete dashboard metrics response payload."""
 

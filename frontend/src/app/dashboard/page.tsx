@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 import { type KeyboardEvent, type MouseEvent, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SignedIn, SignedOut, useAuth } from "@/auth/clerk";
 import {
@@ -22,7 +22,7 @@ import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { Markdown } from "@/components/atoms/Markdown";
 import { SignedOutPanel } from "@/components/auth/SignedOutPanel";
-import { ApiError } from "@/api/mutator";
+import { ApiError, customFetch } from "@/api/mutator";
 import {
   type dashboardMetricsApiV1MetricsDashboardGetResponse,
   useDashboardMetricsApiV1MetricsDashboardGet,
@@ -80,6 +80,40 @@ type GatewaySnapshot = GatewayTarget & {
   mainSessionError: string | null;
   error: string | null;
   requestError: string | null;
+};
+
+type RuntimeRunSnapshot = {
+  run_id: string;
+  board_id: string;
+  board_name: string;
+  task_id: string;
+  task_title: string;
+  status: string;
+  updated_at: string;
+  summary?: string | null;
+  branch_name?: string | null;
+  pr_url?: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+};
+
+type RuntimeMetricsSnapshot = {
+  generated_at: string;
+  queued_runs: number;
+  active_runs: number;
+  failed_runs_7d: number;
+  succeeded_runs_7d: number;
+  input_tokens_7d: number;
+  output_tokens_7d: number;
+  total_tokens_7d: number;
+  recent_runs: RuntimeRunSnapshot[];
+};
+
+type RuntimeMetricsResponse = {
+  data: RuntimeMetricsSnapshot;
+  status: number;
+  headers: Headers;
 };
 
 const DASH = "—";
@@ -477,6 +511,7 @@ function InfoBlock({
 
 export default function DashboardPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { isSignedIn } = useAuth();
 
   const boardsQuery = useListBoardsApiV1BoardsGet<listBoardsApiV1BoardsGetResponse, ApiError>(
@@ -518,6 +553,31 @@ export default function DashboardPage() {
       },
     },
   );
+  const runtimeMetricsQuery = useQuery<RuntimeMetricsSnapshot, ApiError>({
+    queryKey: ["dashboard", "execution-runtime", DASHBOARD_RANGE],
+    enabled: Boolean(isSignedIn),
+    refetchInterval: 15_000,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const response = await customFetch<RuntimeMetricsResponse>(
+        `/api/v1/metrics/execution-runtime?range_key=${encodeURIComponent(DASHBOARD_RANGE)}`,
+        { method: "GET" },
+      );
+      return response.data;
+    },
+  });
+
+  const retryRuntimeRun = async (run: RuntimeRunSnapshot): Promise<void> => {
+    await customFetch<{ data: unknown; status: number; headers: Headers }>(
+      `/api/v1/boards/${encodeURIComponent(run.board_id)}/tasks/${encodeURIComponent(run.task_id)}/execution-runs/${encodeURIComponent(run.run_id)}/retry-dispatch`,
+      { method: "POST" },
+    );
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "execution-runtime", DASHBOARD_RANGE] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/metrics/dashboard", { range_key: DASHBOARD_RANGE }] }),
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/activity", { limit: 200 }] }),
+    ]);
+  };
 
   const activityQuery = useListActivityApiV1ActivityGet<listActivityApiV1ActivityGetResponse, ApiError>(
     { limit: 200 },
@@ -547,6 +607,7 @@ export default function DashboardPage() {
   );
 
   const metrics = metricsQuery.data?.status === 200 ? metricsQuery.data.data : null;
+  const runtimeMetrics = runtimeMetricsQuery.data ?? null;
 
   const onlineAgents = useMemo(
     () => agents.filter((agent) => (agent.status ?? "").toLowerCase() === "online").length,
@@ -871,6 +932,11 @@ export default function DashboardPage() {
     router.push(href);
   };
 
+  const buildRuntimeRunHref = (run: RuntimeRunSnapshot): string => {
+    const params = new URLSearchParams({ taskId: run.task_id });
+    return `/boards/${encodeURIComponent(run.board_id)}?${params.toString()}`;
+  };
+
   const handleLogRowClick = (
     event: MouseEvent<HTMLDivElement>,
     href: string,
@@ -1138,6 +1204,120 @@ export default function DashboardPage() {
                       <Shield className="mb-2 h-5 w-5 text-slate-400" />
                       No activity yet
                       <p className="mt-1 text-xs text-slate-500">Activity appears here when events are emitted.</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm md:col-span-2">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-semibold text-slate-900">Runtime Runs</h3>
+                  <span className="text-xs text-slate-500">
+                    {runtimeMetrics
+                      ? `${compactNumber(runtimeMetrics.total_tokens_7d)} tokens / ${DASHBOARD_RANGE_LABEL}`
+                      : "Loading"}
+                  </span>
+                </div>
+                <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Active</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                      {formatCount(runtimeMetrics?.active_runs ?? 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Queued</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                      {formatCount(runtimeMetrics?.queued_runs ?? 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Succeeded</p>
+                    <p className="mt-1 text-lg font-semibold text-emerald-700">
+                      {formatCount(runtimeMetrics?.succeeded_runs_7d ?? 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Failed</p>
+                    <p className="mt-1 text-lg font-semibold text-rose-700">
+                      {formatCount(runtimeMetrics?.failed_runs_7d ?? 0)}
+                    </p>
+                  </div>
+                </div>
+                <div className="max-h-[280px] space-y-2 overflow-x-hidden overflow-y-auto pr-1">
+                  {runtimeMetricsQuery.isLoading ? (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+                      Loading runtime runs...
+                    </div>
+                  ) : runtimeMetrics && runtimeMetrics.recent_runs.length > 0 ? (
+                    runtimeMetrics.recent_runs.map((run) => (
+                      <div
+                        key={run.run_id}
+                        role="link"
+                        tabIndex={0}
+                        aria-label={`Open task ${run.task_title}`}
+                        onClick={(event) => {
+                          if (shouldIgnoreRowNavigation(event.target)) return;
+                          router.push(buildRuntimeRunHref(run));
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") return;
+                          if (shouldIgnoreRowNavigation(event.target)) return;
+                          event.preventDefault();
+                          router.push(buildRuntimeRunHref(run));
+                        }}
+                        className="cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-slate-900">
+                              {run.task_title}
+                            </p>
+                            <p className="truncate text-xs text-slate-500">
+                              {run.board_name} · {run.status.replace(/_/g, " ")}
+                              {run.branch_name ? ` · ${run.branch_name}` : ""}
+                            </p>
+                            <p className="mt-1 line-clamp-2 text-xs text-slate-600">
+                              {run.summary?.trim() || "No runtime summary yet."}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-xs font-medium text-slate-700">
+                              {compactNumber(run.total_tokens)} tokens
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              {formatRelativeTimestamp(run.updated_at)}
+                            </p>
+                            {run.pr_url ? (
+                              <a
+                                href={run.pr_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-1 inline-flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-800"
+                              >
+                                PR
+                                <ArrowUpRight className="h-3 w-3" />
+                              </a>
+                            ) : null}
+                            {["failed", "cancelled", "blocked"].includes(run.status) ? (
+                              <button
+                                type="button"
+                                onClick={async (event) => {
+                                  event.stopPropagation();
+                                  await retryRuntimeRun(run);
+                                }}
+                                className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-800"
+                              >
+                                Retry
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+                      No recent execution runs.
                     </div>
                   )}
                 </div>

@@ -15,6 +15,9 @@ from app.services.openclaw.lifecycle_queue import (
 )
 from app.services.openclaw.lifecycle_reconcile import process_lifecycle_queue_task
 from app.services.queue import QueuedTask, dequeue_task
+from app.services.task_execution_queue import TASK_TYPE as TASK_EXECUTION_DISPATCH_TASK_TYPE
+from app.services.task_execution_queue import requeue_task_execution_dispatch
+from app.services.task_execution_worker import process_task_execution_dispatch_task
 from app.services.webhooks.dispatch import (
     process_webhook_queue_task,
     requeue_webhook_queue_task,
@@ -48,6 +51,14 @@ _TASK_HANDLERS: dict[str, _TaskHandler] = {
             settings.rq_dispatch_retry_max_seconds,
         ),
         requeue=lambda task, delay: requeue_webhook_queue_task(task, delay_seconds=delay),
+    ),
+    TASK_EXECUTION_DISPATCH_TASK_TYPE: _TaskHandler(
+        handler=process_task_execution_dispatch_task,
+        attempts_to_delay=lambda attempts: min(
+            settings.rq_dispatch_retry_base_seconds * (2 ** max(0, attempts)),
+            settings.rq_dispatch_retry_max_seconds,
+        ),
+        requeue=lambda task, delay: requeue_task_execution_dispatch(task, delay_seconds=delay),
     ),
 }
 

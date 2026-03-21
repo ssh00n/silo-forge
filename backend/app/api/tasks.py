@@ -94,6 +94,7 @@ TASK_EVENT_TYPES = {
     "task.updated",
     "task.status_changed",
     "task.comment",
+    "task.execution_run.report",
 }
 SSE_SEEN_MAX = 2000
 TASK_SNIPPET_MAX_LEN = 500

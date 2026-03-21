@@ -20,6 +20,7 @@ from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
 from app.models.approvals import Approval
 from app.models.boards import Board
+from app.models.task_execution_runs import TaskExecutionRun
 from app.models.tasks import Task
 from app.schemas.metrics import (
     DashboardBucketKey,
@@ -29,6 +30,8 @@ from app.schemas.metrics import (
     DashboardPendingApprovals,
     DashboardRangeKey,
     DashboardRangeSeries,
+    DashboardRuntimeExecutionMetrics,
+    DashboardRuntimeRunRead,
     DashboardSeriesPoint,
     DashboardSeriesSet,
     DashboardWipPoint,
@@ -448,6 +451,139 @@ async def _pending_approvals_snapshot(
     return DashboardPendingApprovals(total=total, items=items)
 
 
+def _usage_triplet(payload: dict[str, object] | None) -> tuple[int, int, int]:
+    if not payload:
+        return (0, 0, 0)
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        return (0, 0, 0)
+
+    def _as_int(key: str) -> int:
+        value = usage.get(key)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        return 0
+
+    return (
+        _as_int("input_tokens"),
+        _as_int("output_tokens"),
+        _as_int("total_tokens"),
+    )
+
+
+async def _runtime_execution_metrics(
+    session: AsyncSession,
+    range_spec: RangeSpec,
+    board_ids: list[UUID],
+    *,
+    limit: int = 8,
+) -> DashboardRuntimeExecutionMetrics:
+    generated_at = utcnow()
+    if not board_ids:
+        return DashboardRuntimeExecutionMetrics(
+            generated_at=generated_at,
+            queued_runs=0,
+            active_runs=0,
+            failed_runs_7d=0,
+            succeeded_runs_7d=0,
+            input_tokens_7d=0,
+            output_tokens_7d=0,
+            total_tokens_7d=0,
+            recent_runs=[],
+        )
+
+    queued_runs = int(
+        (
+            await session.exec(
+                select(func.count(col(TaskExecutionRun.id)))
+                .where(col(TaskExecutionRun.board_id).in_(board_ids))
+                .where(col(TaskExecutionRun.status) == "queued")
+            )
+        ).one()
+        or 0
+    )
+    active_runs = int(
+        (
+            await session.exec(
+                select(func.count(col(TaskExecutionRun.id)))
+                .where(col(TaskExecutionRun.board_id).in_(board_ids))
+                .where(col(TaskExecutionRun.status).in_(["dispatching", "running"]))
+            )
+        ).one()
+        or 0
+    )
+
+    recent_rows = (
+        await session.exec(
+            select(TaskExecutionRun, Task, Board)
+            .join(Task, col(Task.id) == col(TaskExecutionRun.task_id))
+            .join(Board, col(Board.id) == col(TaskExecutionRun.board_id))
+            .where(col(TaskExecutionRun.board_id).in_(board_ids))
+            .order_by(col(TaskExecutionRun.updated_at).desc())
+            .limit(limit)
+        )
+    ).all()
+
+    recent_runs: list[DashboardRuntimeRunRead] = []
+    for run, task, board in recent_rows:
+        input_tokens, output_tokens, total_tokens = _usage_triplet(run.result_payload)
+        recent_runs.append(
+            DashboardRuntimeRunRead(
+                run_id=run.id,
+                board_id=board.id,
+                board_name=board.name,
+                task_id=task.id,
+                task_title=task.title,
+                status=run.status,
+                updated_at=run.updated_at,
+                summary=run.summary,
+                branch_name=run.branch_name,
+                pr_url=run.pr_url,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+            )
+        )
+
+    period_rows = (
+        await session.exec(
+            select(TaskExecutionRun)
+            .where(col(TaskExecutionRun.board_id).in_(board_ids))
+            .where(col(TaskExecutionRun.updated_at) >= range_spec.start)
+            .where(col(TaskExecutionRun.updated_at) <= range_spec.end)
+        )
+    ).all()
+
+    failed_runs_7d = 0
+    succeeded_runs_7d = 0
+    input_tokens_7d = 0
+    output_tokens_7d = 0
+    total_tokens_7d = 0
+    for run in period_rows:
+        if run.status == "failed":
+            failed_runs_7d += 1
+        if run.status == "succeeded":
+            succeeded_runs_7d += 1
+        input_tokens, output_tokens, total_tokens = _usage_triplet(run.result_payload)
+        input_tokens_7d += input_tokens
+        output_tokens_7d += output_tokens
+        total_tokens_7d += total_tokens
+
+    return DashboardRuntimeExecutionMetrics(
+        generated_at=generated_at,
+        queued_runs=queued_runs,
+        active_runs=active_runs,
+        failed_runs_7d=failed_runs_7d,
+        succeeded_runs_7d=succeeded_runs_7d,
+        input_tokens_7d=input_tokens_7d,
+        output_tokens_7d=output_tokens_7d,
+        total_tokens_7d=total_tokens_7d,
+        recent_runs=recent_runs,
+    )
+
+
 async def _resolve_dashboard_board_ids(
     session: AsyncSession,
     *,
@@ -549,3 +685,22 @@ async def dashboard_metrics(
         wip=wip,
         pending_approvals=pending_approvals,
     )
+
+
+@router.get("/execution-runtime", response_model=DashboardRuntimeExecutionMetrics)
+async def dashboard_execution_runtime_metrics(
+    range_key: DashboardRangeKey = RANGE_QUERY,
+    board_id: UUID | None = BOARD_ID_QUERY,
+    group_id: UUID | None = GROUP_ID_QUERY,
+    session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_MEMBER_DEP,
+) -> DashboardRuntimeExecutionMetrics:
+    """Return execution-runtime snapshot for accessible boards."""
+    primary = _resolve_range(range_key)
+    board_ids = await _resolve_dashboard_board_ids(
+        session,
+        ctx=ctx,
+        board_id=board_id,
+        group_id=group_id,
+    )
+    return await _runtime_execution_metrics(session, primary, board_ids)
