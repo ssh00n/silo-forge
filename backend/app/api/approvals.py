@@ -264,6 +264,11 @@ async def _notify_lead_on_approval_resolution(
             session,
             event_type="approval.lead_notified",
             message=f"Lead agent notified for {approval.status} approval {approval.id}.",
+            payload=_approval_activity_payload(
+                approval,
+                lead_agent_id=lead.id,
+                notification_status="sent",
+            ),
             agent_id=lead.id,
             task_id=approval.task_id,
             board_id=approval.board_id,
@@ -273,11 +278,39 @@ async def _notify_lead_on_approval_resolution(
             session,
             event_type="approval.lead_notify_failed",
             message=f"Lead notify failed for approval {approval.id}: {error}",
+            payload=_approval_activity_payload(
+                approval,
+                lead_agent_id=lead.id,
+                notification_status="failed",
+                error=error,
+            ),
             agent_id=lead.id,
             task_id=approval.task_id,
             board_id=approval.board_id,
         )
     await session.commit()
+
+
+def _approval_activity_payload(
+    approval: Approval,
+    *,
+    lead_agent_id: UUID | None,
+    notification_status: str,
+    error: str | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "approval_id": str(approval.id),
+        "board_id": str(approval.board_id),
+        "task_id": str(approval.task_id) if approval.task_id else None,
+        "agent_id": str(approval.agent_id) if approval.agent_id else None,
+        "action_type": approval.action_type,
+        "approval_status": approval.status,
+        "notification_status": notification_status,
+        "lead_agent_id": str(lead_agent_id) if lead_agent_id else None,
+    }
+    if error:
+        payload["error"] = error
+    return payload
 
 
 async def _fetch_approval_events(

@@ -161,6 +161,22 @@ docker-watch-only: ## Attach file watch to an already-running stack
 docker-down: ## Stop full Docker stack
 	docker compose -f compose.yml --env-file .env down
 
+.PHONY: local-dev-up
+local-dev-up: ## Start local Postgres/Redis + backend/frontend/worker
+	bash scripts/local_dev_stack.sh up
+
+.PHONY: local-dev-status
+local-dev-status: ## Show local dev stack status
+	bash scripts/local_dev_stack.sh status
+
+.PHONY: local-dev-down
+local-dev-down: ## Stop local Postgres/Redis + backend/frontend/worker
+	bash scripts/local_dev_stack.sh down
+
+.PHONY: local-dev-reset
+local-dev-reset: ## Remove local Postgres/Redis data and stop local processes
+	bash scripts/local_dev_stack.sh reset
+
 .PHONY: rq-worker
 rq-worker: ## Run background queue worker loop
 	cd $(BACKEND_DIR) && uv run python ../scripts/rq worker

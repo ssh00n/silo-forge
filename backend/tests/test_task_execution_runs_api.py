@@ -145,6 +145,11 @@ async def test_create_task_execution_run_queues_symphony_run() -> None:
             assert event.message is not None
             assert "Queued Symphony run" in event.message
             assert f"{silo.slug}/symphony" in event.message
+            assert event.payload is not None
+            assert event.payload["run_id"] == body["id"]
+            assert event.payload["status"] == "queued"
+            assert event.payload["silo_slug"] == silo.slug
+            assert event.payload["role_slug"] == "symphony"
     finally:
         await engine.dispose()
 
@@ -331,6 +336,10 @@ async def test_retry_task_execution_run_clones_failed_run_into_new_queue_entry()
             assert event.message is not None
             assert "Retried Symphony run" in event.message
             assert "feature/retry-me" in event.message
+            assert event.payload is not None
+            assert event.payload["retried_from_run_id"] == run_id
+            assert event.payload["status"] == "queued"
+            assert event.payload["branch_hint"] == "feature/retry-me"
     finally:
         await engine.dispose()
 
@@ -370,5 +379,56 @@ async def test_retry_dispatch_task_execution_run_enqueues_replacement(monkeypatc
         assert str(payload.run_id) == body["id"]
         assert str(payload.board_id) == str(board.id)
         assert str(payload.task_id) == str(task.id)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_create_dispatch_task_execution_run_falls_back_to_immediate_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine, session_maker = await _make_engine()
+    async with session_maker() as session:
+        ctx, board, task, silo = await _seed_context(session)
+    app = _build_test_app(session_maker, ctx)
+
+    monkeypatch.setattr(
+        "app.api.task_execution_runs.enqueue_task_execution_dispatch",
+        lambda payload: False,
+    )
+
+    async def _dispatch_run(self, *, organization_id, board_id, task_id, run_id, adapter=None):
+        run = await self.get_run(
+            organization_id=organization_id,
+            board_id=board_id,
+            task_id=task_id,
+            run_id=run_id,
+        )
+        assert run is not None
+        return TaskExecutionRunRead.model_validate(
+            {
+                **run.model_dump(mode="json"),
+                "status": "dispatching",
+                "summary": "Dispatched immediately without Redis queue.",
+            },
+        )
+
+    monkeypatch.setattr(
+        TaskExecutionRunService,
+        "dispatch_run",
+        _dispatch_run,
+    )
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.post(
+                f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs/dispatch",
+                json={"silo_slug": silo.slug},
+            )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["status"] == "dispatching"
+        assert body["summary"] == "Dispatched immediately without Redis queue."
     finally:
         await engine.dispose()

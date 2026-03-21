@@ -154,6 +154,22 @@ async def test_update_approval_notifies_lead_when_approved(
 
     event_types = [item.event_type for item in session.added if hasattr(item, "event_type")]
     assert "approval.lead_notified" in event_types
+    notification_events = [
+        item
+        for item in session.added
+        if getattr(item, "event_type", None) == "approval.lead_notified"
+    ]
+    assert notification_events
+    assert notification_events[-1].payload == {
+        "approval_id": str(approval.id),
+        "board_id": str(approval.board_id),
+        "task_id": str(approval.task_id) if approval.task_id else None,
+        "agent_id": str(approval.agent_id) if approval.agent_id else None,
+        "action_type": approval.action_type,
+        "approval_status": "approved",
+        "notification_status": "sent",
+        "lead_agent_id": str(lead.id),
+    }
     assert session.commits >= 2
 
 

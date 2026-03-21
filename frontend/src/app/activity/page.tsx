@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { SignedIn, SignedOut, useAuth } from "@/auth/clerk";
 import { Activity as ActivityIcon } from "lucide-react";
@@ -31,11 +31,19 @@ import type {
   TaskRead,
 } from "@/api/generated/model";
 import { Markdown } from "@/components/atoms/Markdown";
+import { RuntimeRunMetaGrid } from "@/components/boards/RuntimeRunMetaGrid";
+import { RuntimeRunStatusChip } from "@/components/boards/RuntimeRunStatusChip";
 import { ActivityFeed } from "@/components/activity/ActivityFeed";
 import { SignedOutPanel } from "@/components/auth/SignedOutPanel";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
+import { Button } from "@/components/ui/button";
 import { createExponentialBackoff } from "@/lib/backoff";
+import {
+  activityCategoryForEvent,
+  type ActivityCategory,
+  resolveActivityFeedContent,
+} from "@/lib/activity-events";
 import {
   DEFAULT_HUMAN_LABEL,
   resolveHumanActorName,
@@ -61,29 +69,31 @@ type Agent = AgentRead & { status: string };
 
 type TaskEventType =
   | "task.comment"
+  | "task.assignee_notified"
+  | "task.assignee_notify_failed"
+  | "task.rework_notified"
+  | "task.rework_notify_failed"
+  | "task.lead_notified"
+  | "task.lead_notify_failed"
+  | "task.lead_unassigned_notified"
+  | "task.lead_unassigned_notify_failed"
+  | "task.execution_run.created"
+  | "task.execution_run.dispatched"
+  | "task.execution_run.retried"
+  | "task.execution_run.updated"
   | "task.execution_run.report"
   | "task.created"
   | "task.updated"
   | "task.status_changed";
 
-type FeedEventType =
-  | TaskEventType
-  | "board.chat"
-  | "board.command"
-  | "agent.created"
-  | "agent.online"
-  | "agent.offline"
-  | "agent.updated"
-  | "approval.created"
-  | "approval.updated"
-  | "approval.approved"
-  | "approval.rejected";
+type FeedEventType = string;
 
 type FeedItem = {
   id: string;
   created_at: string;
   event_type: FeedEventType;
   message: string | null;
+  payload?: Record<string, unknown> | null;
   source_event_id: string | null;
   agent_id: string | null;
   actor_name: string;
@@ -108,6 +118,18 @@ const ACTIVITY_FEED_PATH = "/activity";
 
 const TASK_EVENT_TYPES = new Set<TaskEventType>([
   "task.comment",
+  "task.assignee_notified",
+  "task.assignee_notify_failed",
+  "task.rework_notified",
+  "task.rework_notify_failed",
+  "task.lead_notified",
+  "task.lead_notify_failed",
+  "task.lead_unassigned_notified",
+  "task.lead_unassigned_notify_failed",
+  "task.execution_run.created",
+  "task.execution_run.dispatched",
+  "task.execution_run.retried",
+  "task.execution_run.updated",
   "task.execution_run.report",
   "task.created",
   "task.updated",
@@ -227,6 +249,18 @@ const roleFromAgent = (agent?: Agent | null): string | null => {
 
 const eventLabel = (eventType: FeedEventType): string => {
   if (eventType === "task.comment") return "Comment";
+  if (eventType === "task.assignee_notified") return "Assigned";
+  if (eventType === "task.assignee_notify_failed") return "Assign failed";
+  if (eventType === "task.rework_notified") return "Rework";
+  if (eventType === "task.rework_notify_failed") return "Rework failed";
+  if (eventType === "task.lead_notified") return "Lead notified";
+  if (eventType === "task.lead_notify_failed") return "Lead failed";
+  if (eventType === "task.lead_unassigned_notified") return "Lead inbox";
+  if (eventType === "task.lead_unassigned_notify_failed") return "Lead inbox failed";
+  if (eventType === "task.execution_run.created") return "Run queued";
+  if (eventType === "task.execution_run.dispatched") return "Run sent";
+  if (eventType === "task.execution_run.retried") return "Run retried";
+  if (eventType === "task.execution_run.updated") return "Run update";
   if (eventType === "task.execution_run.report") return "Run report";
   if (eventType === "task.created") return "Created";
   if (eventType === "task.status_changed") return "Status";
@@ -236,16 +270,71 @@ const eventLabel = (eventType: FeedEventType): string => {
   if (eventType === "agent.online") return "Online";
   if (eventType === "agent.offline") return "Offline";
   if (eventType === "agent.updated") return "Agent update";
+  if (eventType === "agent.heartbeat") return "Heartbeat";
+  if (eventType === "agent.wakeup.sent") return "Wakeup";
+  if (eventType === "agent.delete.direct") return "Deleted";
+  if (eventType.startsWith("agent.") && eventType.endsWith(".direct")) return "Lifecycle";
+  if (eventType.startsWith("agent.") && eventType.endsWith(".failed")) return "Lifecycle failed";
   if (eventType === "approval.created") return "Approval";
   if (eventType === "approval.updated") return "Approval update";
   if (eventType === "approval.approved") return "Approved";
   if (eventType === "approval.rejected") return "Rejected";
+  if (eventType === "silo.runtime.validate") return "Runtime validate";
+  if (eventType === "silo.runtime.apply") return "Runtime apply";
+  if (eventType.startsWith("board.group.") && eventType.endsWith(".notified")) return "Group notified";
+  if (eventType.startsWith("board.group.") && eventType.endsWith(".notify_failed")) return "Group failed";
+  if (eventType === "board.lead_notified") return "Board lead";
+  if (eventType === "board.lead_notify_failed") return "Board lead failed";
+  if (eventType === "agent.nudge.sent") return "Nudge";
+  if (eventType === "agent.nudge.failed") return "Nudge failed";
+  if (eventType === "agent.soul.updated") return "SOUL updated";
+  if (eventType === "gateway.lead.ask_user.sent") return "Ask user";
+  if (eventType === "gateway.lead.ask_user.failed") return "Ask user failed";
+  if (eventType === "gateway.main.lead_message.sent") return "Lead message";
+  if (eventType === "gateway.main.lead_message.failed") return "Lead message failed";
+  if (eventType === "gateway.main.lead_broadcast.sent") return "Lead broadcast";
   return "Updated";
 };
 
 const eventPillClass = (eventType: FeedEventType): string => {
   if (eventType === "task.comment") {
     return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+  if (eventType === "task.assignee_notified") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "task.assignee_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "task.rework_notified") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+  if (eventType === "task.rework_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "task.lead_notified") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "task.lead_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "task.lead_unassigned_notified") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType === "task.lead_unassigned_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "task.execution_run.created") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType === "task.execution_run.dispatched") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType === "task.execution_run.retried") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+  if (eventType === "task.execution_run.updated") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
   }
   if (eventType === "task.execution_run.report") {
     return "border-cyan-200 bg-cyan-50 text-cyan-700";
@@ -274,6 +363,21 @@ const eventPillClass = (eventType: FeedEventType): string => {
   if (eventType === "agent.updated") {
     return "border-indigo-200 bg-indigo-50 text-indigo-700";
   }
+  if (eventType === "agent.heartbeat") {
+    return "border-lime-200 bg-lime-50 text-lime-700";
+  }
+  if (eventType === "agent.wakeup.sent") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "agent.delete.direct") {
+    return "border-slate-300 bg-slate-100 text-slate-700";
+  }
+  if (eventType.startsWith("agent.") && eventType.endsWith(".direct")) {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+  if (eventType.startsWith("agent.") && eventType.endsWith(".failed")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
   if (eventType === "approval.created") {
     return "border-cyan-200 bg-cyan-50 text-cyan-700";
   }
@@ -286,7 +390,82 @@ const eventPillClass = (eventType: FeedEventType): string => {
   if (eventType === "approval.rejected") {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
+  if (eventType === "silo.runtime.validate") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.runtime.apply") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType.startsWith("board.group.") && eventType.endsWith(".notified")) {
+    return "border-teal-200 bg-teal-50 text-teal-700";
+  }
+  if (eventType.startsWith("board.group.") && eventType.endsWith(".notify_failed")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "board.lead_notified") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "board.lead_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "agent.nudge.sent") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType === "agent.nudge.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "agent.soul.updated") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+  if (eventType === "gateway.lead.ask_user.sent") {
+    return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
+  }
+  if (eventType === "gateway.lead.ask_user.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "gateway.main.lead_message.sent") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "gateway.main.lead_message.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "gateway.main.lead_broadcast.sent") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
   return "border-slate-200 bg-slate-100 text-slate-700";
+};
+
+const EXECUTION_RUN_EVENTS = new Set<FeedEventType>([
+  "task.execution_run.created",
+  "task.execution_run.dispatched",
+  "task.execution_run.retried",
+  "task.execution_run.updated",
+  "task.execution_run.report",
+]);
+
+const isExecutionRunEvent = (eventType: FeedEventType): boolean =>
+  EXECUTION_RUN_EVENTS.has(eventType);
+
+const ACTIVITY_FILTERS: Array<{ value: ActivityCategory; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "runs", label: "Runs" },
+  { value: "tasks", label: "Tasks" },
+  { value: "approvals", label: "Approvals" },
+  { value: "boards", label: "Boards" },
+  { value: "agents", label: "Agents" },
+  { value: "gateway", label: "Gateway" },
+  { value: "chat", label: "Chat" },
+];
+
+const isActivityCategory = (value: string | null): value is ActivityCategory =>
+  ACTIVITY_FILTERS.some((option) => option.value === value);
+
+const resolveActivityFilter = (
+  params: Pick<URLSearchParams, "get">,
+): ActivityCategory => {
+  const category = params.get("category");
+  if (isActivityCategory(category)) return category;
+  return params.get("feed") === "runs" ? "runs" : "all";
 };
 
 const FeedCard = memo(function FeedCard({
@@ -298,6 +477,10 @@ const FeedCard = memo(function FeedCard({
 }) {
   const message = (item.message ?? "").trim();
   const authorAvatar = (item.actor_name[0] ?? "A").toUpperCase();
+  const content = resolveActivityFeedContent(item.event_type, message, item.payload);
+  const runtimeStatus = isExecutionRunEvent(item.event_type) ? content.runtimeStatus : null;
+  const summaryMessage = content.summary;
+  const detailRows = content.details;
 
   return (
     <div
@@ -343,6 +526,11 @@ const FeedCard = memo(function FeedCard({
               >
                 {eventLabel(item.event_type)}
               </span>
+              {runtimeStatus ? (
+                <span className="inline-flex align-middle">
+                  <RuntimeRunStatusChip status={runtimeStatus} />
+                </span>
+              ) : null}
               {item.board_href && item.board_name ? (
                 <Link
                   href={item.board_href}
@@ -375,9 +563,10 @@ const FeedCard = memo(function FeedCard({
           </div>
         </div>
       </div>
-      {message ? (
+      <RuntimeRunMetaGrid details={detailRows} itemKey={item.id} />
+      {summaryMessage ? (
         <div className="mt-3 select-text cursor-text text-sm leading-relaxed text-slate-900 break-words">
-          <Markdown content={message} variant="basic" />
+          <Markdown content={summaryMessage} variant="basic" />
         </div>
       ) : (
         <p className="mt-3 text-sm text-slate-500">—</p>
@@ -394,6 +583,8 @@ export default function ActivityPage() {
     setIsMounted(true);
   }, []);
 
+  const router = useRouter();
+  const pathname = usePathname();
   const { isSignedIn } = useAuth();
   const searchParams = useSearchParams();
   const isPageActive = usePageActive();
@@ -404,6 +595,33 @@ export default function ActivityPage() {
     return trimmed.length > 0 ? trimmed : null;
   }, [searchParams]);
   const [highlightedFeedItemId, setHighlightedFeedItemId] = useState<string | null>(null);
+  const initialFeedMode = resolveActivityFilter(searchParams);
+  const [feedMode, setFeedMode] = useState<ActivityCategory>(initialFeedMode);
+
+  useEffect(() => {
+    setFeedMode(resolveActivityFilter(searchParams));
+  }, [searchParams]);
+
+  const updateFeedMode = useCallback(
+    (nextMode: ActivityCategory) => {
+      setFeedMode(nextMode);
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextMode === "runs") {
+        params.set("feed", "runs");
+        params.set("category", "runs");
+      } else {
+        params.delete("feed");
+        if (nextMode === "all") {
+          params.delete("category");
+        } else {
+          params.set("category", nextMode);
+        }
+      }
+      const next = params.toString();
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
 
   const membershipQuery = useGetMyMembershipApiV1OrganizationsMeMemberGet<
     getMyMembershipApiV1OrganizationsMeMemberGetResponse,
@@ -528,6 +746,8 @@ export default function ActivityPage() {
         created_at: event.created_at,
         event_type: event.event_type,
         message: event.message ?? null,
+        payload:
+          event.payload && typeof event.payload === "object" ? event.payload : null,
         source_event_id: event.id,
         agent_id: author.id,
         actor_name: author.name,
@@ -539,6 +759,50 @@ export default function ActivityPage() {
         task_title: meta?.title ?? null,
         title:
           meta?.title ?? (taskId ? "Unknown task" : "Task activity"),
+        context_href: buildRouteHref(effectiveRouteName, effectiveRouteParams, {
+          eventId: event.id,
+          eventType: event.event_type,
+          createdAt: event.created_at,
+          taskId,
+        }),
+      };
+    },
+    [boardNameForId, currentUserDisplayName, resolveAuthor],
+  );
+
+  const mapGenericActivity = useCallback(
+    (event: ActivityEventRead): FeedItem => {
+      const routeName = event.route_name ?? null;
+      const routeParams = normalizeRouteParams(event.route_params);
+      const boardId = event.board_id ?? routeParams.boardId ?? null;
+      const taskId = event.task_id ?? routeParams.taskId ?? null;
+      const fallbackRouteParams: ActivityRouteParams = {};
+      if (boardId) fallbackRouteParams.boardId = boardId;
+      if (taskId) fallbackRouteParams.taskId = taskId;
+      const effectiveRouteParams =
+        Object.keys(routeParams).length > 0 ? routeParams : fallbackRouteParams;
+      const effectiveRouteName = routeName ?? (boardId ? "board" : "activity");
+      const author = resolveAuthor(event.agent_id, currentUserDisplayName);
+      return {
+        id: `activity:${event.id}`,
+        created_at: event.created_at,
+        event_type: event.event_type,
+        message: event.message ?? null,
+        payload:
+          event.payload && typeof event.payload === "object" ? event.payload : null,
+        source_event_id: event.id,
+        agent_id: author.id,
+        actor_name: author.name,
+        actor_role: author.role,
+        board_id: boardId,
+        board_name: boardNameForId(boardId),
+        board_href: buildBoardHref(effectiveRouteParams, boardId),
+        task_id: taskId,
+        task_title: taskId ? taskMetaByIdRef.current.get(taskId)?.title ?? null : null,
+        title:
+          taskId
+            ? taskMetaByIdRef.current.get(taskId)?.title ?? "Task activity"
+            : eventLabel(event.event_type),
         context_href: buildRouteHref(effectiveRouteName, effectiveRouteParams, {
           eventId: event.id,
           eventType: event.event_type,
@@ -896,7 +1160,7 @@ export default function ActivityPage() {
           }
           const items = result.data.items ?? [];
           for (const event of items) {
-            const mapped = mapTaskActivity(event);
+            const mapped = mapTaskActivity(event) ?? mapGenericActivity(event);
             if (!mapped || seedSeen.has(mapped.id)) continue;
             seedSeen.add(mapped.id);
             seeded.push(mapped);
@@ -935,6 +1199,7 @@ export default function ActivityPage() {
     mapAgentEvent,
     mapApprovalEvent,
     mapBoardChat,
+    mapGenericActivity,
     mapTaskActivity,
   ]);
 
@@ -1454,6 +1719,13 @@ export default function ActivityPage() {
       return bTime - aTime;
     });
   }, [feedItems]);
+  const visibleFeed = useMemo(
+    () => {
+      if (feedMode === "all") return orderedFeed;
+      return orderedFeed.filter((item) => activityCategoryForEvent(item.event_type) === feedMode);
+    },
+    [feedMode, orderedFeed],
+  );
 
   const selectedFeedItemId = useMemo(() => {
     if (!selectedEventId) return null;
@@ -1528,6 +1800,19 @@ export default function ActivityPage() {
                         across all boards.
                       </p>
                     </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {ACTIVITY_FILTERS.map((filter) => (
+                        <Button
+                          key={filter.value}
+                          type="button"
+                          variant={feedMode === filter.value ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => updateFeedMode(filter.value)}
+                        >
+                          {filter.label}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1541,7 +1826,7 @@ export default function ActivityPage() {
                 <ActivityFeed
                   isLoading={isFeedLoading}
                   errorMessage={feedError}
-                  items={orderedFeed}
+                  items={visibleFeed}
                   renderItem={(item) => (
                     <FeedCard
                       key={item.id}

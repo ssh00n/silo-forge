@@ -8,3 +8,9 @@
 
 > **Note**
 > Add component diagrams and key data flows (auth, task lifecycle, gateway integration) as they solidify.
+
+## Working docs
+
+- [Silo MVP](./silo-mvp.md)
+- [Symphony upstream strategy](./symphony-upstream-strategy.md)
+- [Product transition pre-E2E](./product-transition-pre-e2e.md)

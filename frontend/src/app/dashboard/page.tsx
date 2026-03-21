@@ -2,9 +2,16 @@
 
 export const dynamic = "force-dynamic";
 
-import { type KeyboardEvent, type MouseEvent, useMemo } from "react";
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { SignedIn, SignedOut, useAuth } from "@/auth/clerk";
@@ -18,6 +25,8 @@ import {
   Timer,
 } from "lucide-react";
 
+import { RuntimeRunMetaGrid } from "@/components/boards/RuntimeRunMetaGrid";
+import { RuntimeRunStatusChip } from "@/components/boards/RuntimeRunStatusChip";
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { Markdown } from "@/components/atoms/Markdown";
@@ -45,10 +54,16 @@ import {
 } from "@/api/generated/activity/activity";
 import type { ActivityEventRead } from "@/api/generated/model";
 import {
+  activityCategoryForEvent,
+  type ActivityCategory,
+  resolveActivityFeedContent,
+} from "@/lib/activity-events";
+import {
   formatRelativeTimestamp,
   formatTimestamp,
   parseTimestamp,
 } from "@/lib/formatters";
+import { type RuntimeRunSnapshot, runtimeRunTimingLabel } from "@/lib/runtime-runs";
 
 type SessionSummary = {
   key: string;
@@ -82,17 +97,10 @@ type GatewaySnapshot = GatewayTarget & {
   requestError: string | null;
 };
 
-type RuntimeRunSnapshot = {
+type DashboardRuntimeRunSnapshot = RuntimeRunSnapshot & {
   run_id: string;
-  board_id: string;
   board_name: string;
-  task_id: string;
   task_title: string;
-  status: string;
-  updated_at: string;
-  summary?: string | null;
-  branch_name?: string | null;
-  pr_url?: string | null;
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
@@ -107,7 +115,7 @@ type RuntimeMetricsSnapshot = {
   input_tokens_7d: number;
   output_tokens_7d: number;
   total_tokens_7d: number;
-  recent_runs: RuntimeRunSnapshot[];
+  recent_runs: DashboardRuntimeRunSnapshot[];
 };
 
 type RuntimeMetricsResponse = {
@@ -116,10 +124,33 @@ type RuntimeMetricsResponse = {
   headers: Headers;
 };
 
+type StreamedActivityEvent = ActivityEventRead;
+
 const DASH = "—";
 const DASHBOARD_RANGE = "7d";
 const DASHBOARD_RANGE_DAYS = 7;
 const DASHBOARD_RANGE_LABEL = "7 days";
+const DASHBOARD_ACTIVITY_FILTERS: Array<{
+  value: ActivityCategory | "runtime";
+  label: string;
+}> = [
+  { value: "all", label: "All" },
+  { value: "runtime", label: "Runtime" },
+  { value: "tasks", label: "Tasks" },
+  { value: "approvals", label: "Approvals" },
+  { value: "agents", label: "Agents" },
+  { value: "boards", label: "Boards" },
+  { value: "gateway", label: "Gateway" },
+];
+
+const latestActivityTimestamp = (items: ActivityEventRead[]): string | null => {
+  let latestTime = 0;
+  items.forEach((item) => {
+    const value = parseTimestamp(item.created_at)?.getTime() ?? 0;
+    if (value > latestTime) latestTime = value;
+  });
+  return latestTime ? new Date(latestTime).toISOString() : null;
+};
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 const SESSION_ID_KEYS = ["key", "id", "session_key", "sessionKey", "sessionId"];
@@ -511,8 +542,22 @@ function InfoBlock({
 
 export default function DashboardPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { isSignedIn } = useAuth();
+  const [streamedActivityEvents, setStreamedActivityEvents] = useState<StreamedActivityEvent[]>([]);
+  const streamedActivityEventsRef = useRef<StreamedActivityEvent[]>([]);
+  const activityCategory = useMemo<ActivityCategory | "runtime">(() => {
+    const value = searchParams.get("activity");
+    if (
+      value === "runtime" ||
+      DASHBOARD_ACTIVITY_FILTERS.some((item) => item.value === value)
+    ) {
+      return value as ActivityCategory | "runtime";
+    }
+    return "all";
+  }, [searchParams]);
 
   const boardsQuery = useListBoardsApiV1BoardsGet<listBoardsApiV1BoardsGetResponse, ApiError>(
     { limit: 200 },
@@ -567,7 +612,7 @@ export default function DashboardPage() {
     },
   });
 
-  const retryRuntimeRun = async (run: RuntimeRunSnapshot): Promise<void> => {
+  const retryRuntimeRun = async (run: DashboardRuntimeRunSnapshot): Promise<void> => {
     await customFetch<{ data: unknown; status: number; headers: Headers }>(
       `/api/v1/boards/${encodeURIComponent(run.board_id)}/tasks/${encodeURIComponent(run.task_id)}/execution-runs/${encodeURIComponent(run.run_id)}/retry-dispatch`,
       { method: "POST" },
@@ -710,12 +755,23 @@ export default function DashboardPage() {
   );
 
   const activityEvents = useMemo(
-    () =>
-      activityQuery.data?.status === 200
-        ? [...(activityQuery.data.data.items ?? [])]
-        : [],
-    [activityQuery.data],
+    () => {
+      const seeded =
+        activityQuery.data?.status === 200
+          ? [...(activityQuery.data.data.items ?? [])]
+          : [];
+      const merged = new Map<string, ActivityEventRead>();
+      [...seeded, ...streamedActivityEvents].forEach((event) => {
+        merged.set(event.id, event);
+      });
+      return [...merged.values()];
+    },
+    [activityQuery.data, streamedActivityEvents],
   );
+
+  useEffect(() => {
+    streamedActivityEventsRef.current = streamedActivityEvents;
+  }, [streamedActivityEvents]);
 
   const orderedActivityEvents = useMemo(
     () =>
@@ -727,7 +783,110 @@ export default function DashboardPage() {
     [activityEvents],
   );
 
-  const recentLogs = orderedActivityEvents.slice(0, 8);
+  const recentLogs = useMemo(() => {
+    const filtered =
+      activityCategory === "all"
+        ? orderedActivityEvents
+        : orderedActivityEvents.filter((event) => {
+            const category = activityCategoryForEvent(event.event_type);
+            if (activityCategory === "runtime") {
+              return category === "runs" || category === "gateway";
+            }
+            return category === activityCategory;
+          });
+    return filtered.slice(0, 8);
+  }, [activityCategory, orderedActivityEvents]);
+
+  const updateActivityCategory = (next: ActivityCategory | "runtime") => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "all") {
+      params.delete("activity");
+    } else {
+      params.set("activity", next);
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+
+    let isCancelled = false;
+    const abortController = new AbortController();
+    const connect = async () => {
+      try {
+        const params = new URLSearchParams();
+        const since = latestActivityTimestamp(streamedActivityEventsRef.current);
+        if (since) {
+          params.set("since", since);
+        }
+        const streamResult = await customFetch<{
+          data: Response;
+          status: number;
+          headers: Headers;
+        }>(`/api/v1/activity/stream${params.toString() ? `?${params.toString()}` : ""}`, {
+          method: "GET",
+          headers: { Accept: "text/event-stream" },
+          signal: abortController.signal,
+        });
+        if (streamResult.status !== 200) {
+          throw new Error("Unable to connect activity stream.");
+        }
+        const response = streamResult.data as Response;
+        if (!(response instanceof Response) || !response.body) {
+          throw new Error("Unable to connect activity stream.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (!isCancelled) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          buffer = buffer.replace(/\r\n/g, "\n");
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary !== -1) {
+            const raw = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            const lines = raw.split("\n");
+            let eventType = "message";
+            let data = "";
+            for (const line of lines) {
+              if (line.startsWith("event:")) {
+                eventType = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                data += line.slice(5).trim();
+              }
+            }
+            if (eventType === "activity" && data) {
+              try {
+                const payload = JSON.parse(data) as { activity?: ActivityEventRead };
+                if (payload.activity) {
+                  setStreamedActivityEvents((prev) => {
+                    if (prev.some((item) => item.id === payload.activity?.id)) return prev;
+                    return [payload.activity!, ...prev].slice(0, 200);
+                  });
+                }
+              } catch {
+                continue;
+              }
+            }
+            boundary = buffer.indexOf("\n\n");
+          }
+        }
+      } catch {
+        return;
+      }
+    };
+
+    void connect();
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+    };
+  }, [isSignedIn]);
 
   const latestThroughputPoint =
     metrics?.throughput.primary.points?.[metrics.throughput.primary.points.length - 1] ?? null;
@@ -881,7 +1040,16 @@ export default function DashboardPage() {
   const pendingApprovalItems = metrics?.pending_approvals.items ?? [];
   const pendingApprovalsTotal = metrics?.pending_approvals.total ?? 0;
   const hasPendingApprovals = pendingApprovalItems.length > 0;
-  const activityFeedHref = "/activity";
+  const activityFeedHref = useMemo(() => {
+    if (activityCategory === "all") return "/activity";
+    const params = new URLSearchParams();
+    if (activityCategory === "runtime") {
+      params.set("category", "runs");
+    } else {
+      params.set("category", activityCategory);
+    }
+    return `/activity?${params.toString()}`;
+  }, [activityCategory]);
 
   const shouldIgnoreRowNavigation = (target: EventTarget | null): boolean => {
     if (!(target instanceof HTMLElement)) return false;
@@ -932,7 +1100,7 @@ export default function DashboardPage() {
     router.push(href);
   };
 
-  const buildRuntimeRunHref = (run: RuntimeRunSnapshot): string => {
+  const buildRuntimeRunHref = (run: DashboardRuntimeRunSnapshot): string => {
     const params = new URLSearchParams({ taskId: run.task_id });
     return `/boards/${encodeURIComponent(run.board_id)}?${params.toString()}`;
   };
@@ -1152,7 +1320,25 @@ export default function DashboardPage() {
 
               <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="text-lg font-semibold text-slate-900">Recent Activity</h3>
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-semibold text-slate-900">Recent Activity</h3>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {DASHBOARD_ACTIVITY_FILTERS.map((filter) => (
+                        <button
+                          key={filter.value}
+                          type="button"
+                          onClick={() => updateActivityCategory(filter.value)}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                            activityCategory === filter.value
+                              ? "border-slate-900 bg-slate-900 text-white"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                          }`}
+                        >
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <Link
                     href={activityFeedHref}
                     className="inline-flex items-center gap-1 text-xs text-slate-500 transition hover:text-slate-700"
@@ -1165,6 +1351,11 @@ export default function DashboardPage() {
                   {recentLogs.length > 0 ? (
                     recentLogs.map((event) => {
                       const eventHref = buildActivityEventHref(event);
+                      const content = resolveActivityFeedContent(
+                        event.event_type,
+                        event.message,
+                        event.payload,
+                      );
                       return (
                         <div
                           key={event.id}
@@ -1181,15 +1372,23 @@ export default function DashboardPage() {
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1 overflow-hidden">
+                              <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                <p className="uppercase tracking-wider text-slate-500">
+                                  {event.event_type}
+                                </p>
+                                {content.runtimeStatus ? (
+                                  <span className="inline-flex align-middle">
+                                    <RuntimeRunStatusChip status={content.runtimeStatus} />
+                                  </span>
+                                ) : null}
+                              </div>
                               <div className="break-words text-sm font-medium text-slate-900 [&_ol]:mb-0 [&_p]:mb-0 [&_pre]:my-1 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_ul]:mb-0">
                                 <Markdown
-                                  content={event.message?.trim() || event.event_type}
+                                  content={content.summary}
                                   variant="comment"
                                 />
                               </div>
-                              <p className="mt-0.5 text-xs uppercase tracking-wider text-slate-500">
-                                {event.event_type}
-                              </p>
+                              <RuntimeRunMetaGrid details={content.details} itemKey={event.id} />
                             </div>
                             <div className="shrink-0 text-right text-[11px] text-slate-500">
                               <p>{formatRelativeTimestamp(event.created_at)}</p>
@@ -1251,69 +1450,83 @@ export default function DashboardPage() {
                     </div>
                   ) : runtimeMetrics && runtimeMetrics.recent_runs.length > 0 ? (
                     runtimeMetrics.recent_runs.map((run) => (
-                      <div
-                        key={run.run_id}
-                        role="link"
-                        tabIndex={0}
-                        aria-label={`Open task ${run.task_title}`}
-                        onClick={(event) => {
-                          if (shouldIgnoreRowNavigation(event.target)) return;
-                          router.push(buildRuntimeRunHref(run));
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter" && event.key !== " ") return;
-                          if (shouldIgnoreRowNavigation(event.target)) return;
-                          event.preventDefault();
-                          router.push(buildRuntimeRunHref(run));
-                        }}
-                        className="cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-slate-900">
-                              {run.task_title}
-                            </p>
-                            <p className="truncate text-xs text-slate-500">
-                              {run.board_name} · {run.status.replace(/_/g, " ")}
-                              {run.branch_name ? ` · ${run.branch_name}` : ""}
-                            </p>
-                            <p className="mt-1 line-clamp-2 text-xs text-slate-600">
-                              {run.summary?.trim() || "No runtime summary yet."}
-                            </p>
+                      (() => {
+                        const duration = runtimeRunTimingLabel(run);
+                        return (
+                          <div
+                            key={run.run_id}
+                            role="link"
+                            tabIndex={0}
+                            aria-label={`Open task ${run.task_title}`}
+                            onClick={(event) => {
+                              if (shouldIgnoreRowNavigation(event.target)) return;
+                              router.push(buildRuntimeRunHref(run));
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter" && event.key !== " ") return;
+                              if (shouldIgnoreRowNavigation(event.target)) return;
+                              event.preventDefault();
+                              router.push(buildRuntimeRunHref(run));
+                            }}
+                            className="cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-slate-900">
+                                  {run.task_title}
+                                </p>
+                                <p className="truncate text-xs text-slate-500">
+                                  {run.board_name} ·
+                                  {" "}
+                                  <span className="inline-flex align-middle">
+                                    <RuntimeRunStatusChip status={run.status} />
+                                  </span>
+                                  {run.branch_name ? ` · ${run.branch_name}` : ""}
+                                </p>
+                                <p className="mt-1 line-clamp-2 text-xs text-slate-600">
+                                  {run.summary?.trim() || "No runtime summary yet."}
+                                </p>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <p className="text-xs font-medium text-slate-700">
+                                  {compactNumber(run.total_tokens)} tokens
+                                </p>
+                                {duration ? (
+                                  <p className="text-[11px] text-slate-500">
+                                    {duration.label}: {duration.value}
+                                  </p>
+                                ) : null}
+                                <p className="text-[11px] text-slate-500">
+                                  {formatRelativeTimestamp(run.updated_at)}
+                                </p>
+                                {run.pr_url ? (
+                                  <a
+                                    href={run.pr_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="mt-1 inline-flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-800"
+                                  >
+                                    PR
+                                    <ArrowUpRight className="h-3 w-3" />
+                                  </a>
+                                ) : null}
+                                {["failed", "cancelled", "blocked"].includes(run.status) ? (
+                                  <button
+                                    type="button"
+                                    onClick={async (event) => {
+                                      event.stopPropagation();
+                                      await retryRuntimeRun(run);
+                                    }}
+                                    className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-800"
+                                  >
+                                    Retry
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
                           </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-xs font-medium text-slate-700">
-                              {compactNumber(run.total_tokens)} tokens
-                            </p>
-                            <p className="text-[11px] text-slate-500">
-                              {formatRelativeTimestamp(run.updated_at)}
-                            </p>
-                            {run.pr_url ? (
-                              <a
-                                href={run.pr_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="mt-1 inline-flex items-center gap-1 text-[11px] text-sky-700 hover:text-sky-800"
-                              >
-                                PR
-                                <ArrowUpRight className="h-3 w-3" />
-                              </a>
-                            ) : null}
-                            {["failed", "cancelled", "blocked"].includes(run.status) ? (
-                              <button
-                                type="button"
-                                onClick={async (event) => {
-                                  event.stopPropagation();
-                                  await retryRuntimeRun(run);
-                                }}
-                                className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-800"
-                              >
-                                Retry
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
+                        );
+                      })()
                     ))
                   ) : (
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">

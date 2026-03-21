@@ -4,8 +4,16 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel import SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.activity import _build_activity_route, _coerce_activity_rows, _coerce_task_comment_rows
+from app.api.activity import (
+    _build_activity_route,
+    _coerce_activity_rows,
+    _coerce_task_comment_rows,
+    _fetch_activity_events,
+)
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
 from app.models.boards import Board
@@ -172,3 +180,39 @@ def test_build_activity_route_global_fallback():
     assert route_params["eventId"] == str(event.id)
     assert route_params["eventType"] == event.event_type
     assert route_params["createdAt"] == event.created_at.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_fetch_activity_events_returns_serialized_activity():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+    session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    board = _make_board()
+    task = _make_task(board.id)
+    event = ActivityEvent(
+        event_type="task.status_changed",
+        task_id=task.id,
+        message="changed",
+    )
+    try:
+        async with session_maker() as session:
+            session.add(board)
+            session.add(task)
+            session.add(event)
+            await session.commit()
+
+            rows = await _fetch_activity_events(
+                session,
+                since=event.created_at,
+                board_ids={board.id},
+                board_id=board.id,
+            )
+
+        assert len(rows) == 1
+        assert rows[0].id == event.id
+        assert rows[0].board_id == board.id
+        assert rows[0].route_name == "board"
+    finally:
+        await engine.dispose()

@@ -941,9 +941,48 @@ class AgentLifecycleService(OpenClawDBService):
             session,
             event_type="agent.heartbeat",
             message=f"Heartbeat received from {agent.name}.",
+            payload=AgentLifecycleService._agent_activity_payload(
+                agent,
+                action="heartbeat",
+                delivery_status="received",
+            ),
             agent_id=agent.id,
             board_id=agent.board_id,
         )
+
+    @staticmethod
+    def _agent_activity_payload(
+        agent: Agent,
+        *,
+        action: str,
+        delivery_status: str | None = None,
+        error: str | None = None,
+        gateway: Gateway | None = None,
+        workspace_path: str | None = None,
+        target_kind: str | None = None,
+    ) -> dict[str, str]:
+        payload: dict[str, str] = {
+            "agent_id": str(agent.id),
+            "agent_name": agent.name,
+            "action": action,
+        }
+        session_key = getattr(agent, "openclaw_session_id", None)
+        if isinstance(session_key, str) and session_key.strip():
+            payload["session_key"] = session_key.strip()
+        if agent.board_id is not None:
+            payload["board_id"] = str(agent.board_id)
+        if delivery_status:
+            payload["delivery_status"] = delivery_status
+        if error:
+            payload["error"] = error
+        if gateway is not None:
+            payload["gateway_id"] = str(gateway.id)
+            payload["gateway_name"] = gateway.name
+        if workspace_path:
+            payload["workspace_path"] = workspace_path
+        if target_kind:
+            payload["target_kind"] = target_kind
+        return payload
 
     @staticmethod
     def record_instruction_failure(
@@ -957,6 +996,12 @@ class AgentLifecycleService(OpenClawDBService):
             session,
             event_type=f"agent.{action}.failed",
             message=f"{action_label} message failed: {error}",
+            payload=AgentLifecycleService._agent_activity_payload(
+                agent,
+                action=action,
+                delivery_status="failed",
+                error=error,
+            ),
             agent_id=agent.id,
             board_id=agent.board_id,
         )
@@ -1115,6 +1160,13 @@ class AgentLifecycleService(OpenClawDBService):
                 self.session,
                 event_type=f"agent.{action}.direct",
                 message=f"{action.capitalize()}d directly for {provisioned.name}.",
+                payload=self._agent_activity_payload(
+                    provisioned,
+                    action=action,
+                    delivery_status="sent",
+                    gateway=target.gateway,
+                    target_kind="main_agent" if target.is_main_agent else "board_agent",
+                ),
                 agent_id=provisioned.id,
                 board_id=provisioned.board_id,
             )
@@ -1122,6 +1174,13 @@ class AgentLifecycleService(OpenClawDBService):
                 self.session,
                 event_type="agent.wakeup.sent",
                 message=f"Wakeup message sent to {provisioned.name}.",
+                payload=self._agent_activity_payload(
+                    provisioned,
+                    action="wakeup",
+                    delivery_status="sent",
+                    gateway=target.gateway,
+                    target_kind="main_agent" if target.is_main_agent else "board_agent",
+                ),
                 agent_id=provisioned.id,
                 board_id=provisioned.board_id,
             )
@@ -1821,6 +1880,14 @@ class AgentLifecycleService(OpenClawDBService):
             self.session,
             event_type="agent.delete.direct",
             message=f"Deleted agent {agent.name}.",
+            payload=self._agent_activity_payload(
+                agent,
+                action="delete",
+                delivery_status="sent",
+                gateway=gateway,
+                workspace_path=workspace_path,
+                target_kind="main_agent" if agent.board_id is None else "board_agent",
+            ),
             agent_id=None,
             board_id=agent.board_id,
         )

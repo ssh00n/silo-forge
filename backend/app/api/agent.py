@@ -871,6 +871,10 @@ async def create_task(
         event_type="task.created",
         task_id=task.id,
         message=f"Task created by lead: {task.title}.",
+        payload=tasks_api._task_activity_payload(
+            task,
+            reason="task_created_by_lead",
+        ),
         agent_id=agent_ctx.agent.id,
         board_id=task.board_id,
     )

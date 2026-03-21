@@ -29,6 +29,8 @@ import {
   collectSiloWarnings,
   getAssignedGatewayRoleCount,
   getBlockedProvisionTargetCount,
+  getLatestRuntimeAttemptedCount,
+  getLatestRuntimeBlockedCount,
   getReadyProvisionTargetCount,
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
@@ -70,12 +72,18 @@ export default function SiloDetailPage() {
   const runtimeMutation = useMutation({
     mutationFn: async (mode: "validate" | "apply") => runSiloRuntime(slug, mode),
     onSuccess: (result) => {
-      const successful = result.results.filter(
-        (item) =>
-          (result.mode === "validate" && item.validated?.valid) ||
-          (result.mode === "apply" && item.applied?.applied),
+      const attempted = result.results.filter(
+        (item) => item.supports_picoclaw_bundle_apply,
       ).length;
-      setRuntimeMessage(`${result.mode} completed for ${successful} assigned role(s).`);
+      const blocked = result.results.filter(
+        (item) => !item.supports_picoclaw_bundle_apply,
+      ).length;
+      const noun = attempted === 1 ? "runtime target" : "runtime targets";
+      const blockedSuffix =
+        blocked > 0 ? ` ${blocked} blocked target${blocked === 1 ? "" : "s"} need follow-up.` : "";
+      setRuntimeMessage(
+        `${result.mode} completed for ${attempted} ${noun}.${blockedSuffix}`,
+      );
       void queryClient.invalidateQueries({ queryKey: ["silos", slug, "detail"] });
     },
     onError: (error) => {
@@ -118,6 +126,10 @@ export default function SiloDetailPage() {
   const assignedGatewayRoleCount = detail ? getAssignedGatewayRoleCount(detail) : 0;
   const readyTargetCount = detail ? getReadyProvisionTargetCount(detail) : 0;
   const blockedTargetCount = detail ? getBlockedProvisionTargetCount(detail) : 0;
+  const latestRuntimeAttemptedCount = detail
+    ? getLatestRuntimeAttemptedCount(detail)
+    : 0;
+  const latestRuntimeBlockedCount = detail ? getLatestRuntimeBlockedCount(detail) : 0;
   const canApplyRuntime = detail ? hasActionableProvisionTargets(detail) : false;
   const configDirty = detail
     ? hasSiloConfigChanges({
@@ -205,6 +217,31 @@ export default function SiloDetailPage() {
               </li>
             ))}
           </ul>
+        </div>
+      ) : null}
+
+      {detail?.latest_runtime_operation ? (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Latest runtime operation</p>
+              <p className="mt-1 text-sm text-slate-600">
+                {detail.latest_runtime_operation.mode} recorded at{" "}
+                {new Date(detail.latest_runtime_operation.created_at).toLocaleString()}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-medium">
+              <span className="rounded-full bg-white px-3 py-1 text-slate-700">
+                {latestRuntimeAttemptedCount} attempted
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-slate-700">
+                {latestRuntimeBlockedCount} blocked
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-slate-700">
+                {detail.latest_runtime_operation.results.length} total
+              </span>
+            </div>
+          </div>
         </div>
       ) : null}
 

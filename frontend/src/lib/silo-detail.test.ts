@@ -6,6 +6,8 @@ import {
   collectSiloWarnings,
   getAssignedGatewayRoleCount,
   getBlockedProvisionTargetCount,
+  getLatestRuntimeAttemptedCount,
+  getLatestRuntimeBlockedCount,
   getReadyProvisionTargetCount,
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
@@ -109,6 +111,8 @@ describe("silo-detail helpers", () => {
     expect(getAssignedGatewayRoleCount(detail)).toBe(1);
     expect(getReadyProvisionTargetCount(detail)).toBe(1);
     expect(getBlockedProvisionTargetCount(detail)).toBe(1);
+    expect(getLatestRuntimeAttemptedCount(detail)).toBe(0);
+    expect(getLatestRuntimeBlockedCount(detail)).toBe(1);
     expect(hasActionableProvisionTargets(detail)).toBe(true);
   });
 

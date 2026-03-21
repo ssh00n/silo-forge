@@ -36,6 +36,8 @@ import {
 } from "@/components/molecules/DependencyBanner";
 import { DashboardShell } from "@/components/templates/DashboardShell";
 import { BoardChatComposer } from "@/components/BoardChatComposer";
+import { RuntimeRunMetaGrid } from "@/components/boards/RuntimeRunMetaGrid";
+import { RuntimeRunStatusChip } from "@/components/boards/RuntimeRunStatusChip";
 import { TaskCustomFieldsEditor } from "./TaskCustomFieldsEditor";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,6 +111,11 @@ import type {
 } from "@/api/generated/model";
 import { createExponentialBackoff } from "@/lib/backoff";
 import {
+  activityCategoryForEvent,
+  type ActivityCategory,
+  resolveActivityFeedContent,
+} from "@/lib/activity-events";
+import {
   apiDatetimeToMs,
   localDateInputToUtcIso,
   parseApiDatetime,
@@ -123,6 +130,13 @@ import { AGENT_EMOJI_GLYPHS } from "@/lib/agent-emoji";
 import { cn } from "@/lib/utils";
 import { usePageActive } from "@/hooks/usePageActive";
 import { fetchSilos } from "@/lib/silos";
+import {
+  type TaskExecutionRunResponse,
+  type TaskExecutionRunSnapshot,
+  type TaskExecutionRunsResponse,
+  type RuntimeRunStatus,
+  runtimeRunTimingRows,
+} from "@/lib/runtime-runs";
 import {
   boardCustomFieldValues,
   canonicalizeCustomFieldValues,
@@ -161,75 +175,13 @@ type Approval = ApprovalRead & { status: string };
 
 type BoardChatMessage = BoardMemoryRead;
 
-type ExecutionRunStatus =
-  | "queued"
-  | "dispatching"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "blocked";
-
-type TaskExecutionRunSnapshot = {
-  id: string;
-  organization_id: string;
-  board_id: string;
-  task_id: string;
-  silo_id: string;
-  silo_slug: string;
-  requested_by_user_id?: string | null;
-  requested_by_agent_id?: string | null;
-  executor_kind: "symphony";
-  role_slug: string;
-  status: ExecutionRunStatus;
-  task_snapshot?: Record<string, unknown> | null;
-  dispatch_payload?: Record<string, unknown> | null;
-  result_payload?: Record<string, unknown> | null;
-  external_run_id?: string | null;
-  workspace_path?: string | null;
-  branch_name?: string | null;
-  pr_url?: string | null;
-  summary?: string | null;
-  error_message?: string | null;
-  started_at?: string | null;
-  completed_at?: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type TaskExecutionRunsResponse = {
-  data: TaskExecutionRunSnapshot[];
-  status: number;
-  headers: Headers;
-};
-
-type TaskExecutionRunResponse = {
-  data: TaskExecutionRunSnapshot;
-  status: number;
-  headers: Headers;
-};
-
-type LiveFeedEventType =
-  | "task.comment"
-  | "task.execution_run.report"
-  | "task.created"
-  | "task.updated"
-  | "task.status_changed"
-  | "board.chat"
-  | "board.command"
-  | "agent.created"
-  | "agent.online"
-  | "agent.offline"
-  | "agent.updated"
-  | "approval.created"
-  | "approval.updated"
-  | "approval.approved"
-  | "approval.rejected";
+type LiveFeedEventType = string;
 
 type LiveFeedItem = {
   id: string;
   created_at: string;
   message: string | null;
+  payload?: Record<string, unknown> | null;
   agent_id: string | null;
   actor_name?: string | null;
   task_id: string | null;
@@ -237,8 +189,20 @@ type LiveFeedItem = {
   event_type: LiveFeedEventType;
 };
 
-const LIVE_FEED_EVENT_TYPES = new Set<LiveFeedEventType>([
+const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "task.comment",
+  "task.assignee_notified",
+  "task.assignee_notify_failed",
+  "task.rework_notified",
+  "task.rework_notify_failed",
+  "task.lead_notified",
+  "task.lead_notify_failed",
+  "task.lead_unassigned_notified",
+  "task.lead_unassigned_notify_failed",
+  "task.execution_run.created",
+  "task.execution_run.dispatched",
+  "task.execution_run.retried",
+  "task.execution_run.updated",
   "task.execution_run.report",
   "task.created",
   "task.updated",
@@ -249,14 +213,32 @@ const LIVE_FEED_EVENT_TYPES = new Set<LiveFeedEventType>([
   "agent.online",
   "agent.offline",
   "agent.updated",
+  "agent.heartbeat",
+  "agent.wakeup.sent",
+  "agent.nudge.sent",
+  "agent.nudge.failed",
+  "agent.soul.updated",
   "approval.created",
   "approval.updated",
   "approval.approved",
   "approval.rejected",
+  "board.lead_notified",
+  "board.lead_notify_failed",
+  "gateway.lead.ask_user.sent",
+  "gateway.lead.ask_user.failed",
+  "gateway.main.lead_message.sent",
+  "gateway.main.lead_message.failed",
+  "gateway.main.lead_broadcast.sent",
+  "silo.runtime.validate",
+  "silo.runtime.apply",
 ]);
 
 const isLiveFeedEventType = (value: string): value is LiveFeedEventType =>
-  LIVE_FEED_EVENT_TYPES.has(value as LiveFeedEventType);
+  LIVE_FEED_EVENT_TYPES.has(value) ||
+  (value.startsWith("agent.") &&
+    (value.endsWith(".direct") || value.endsWith(".failed"))) ||
+  (value.startsWith("board.group.") &&
+    (value.endsWith(".notified") || value.endsWith(".notify_failed")));
 
 type BoardTaskCreatePayload = Parameters<
   typeof createTaskApiV1BoardsBoardIdTasksPost
@@ -277,11 +259,67 @@ const toLiveFeedFromActivity = (
     id: event.id,
     created_at: event.created_at,
     message: event.message ?? null,
+    payload:
+      event.payload && typeof event.payload === "object" ? event.payload : null,
     agent_id: event.agent_id ?? null,
     task_id: event.task_id ?? null,
     title: null,
     event_type: event.event_type,
   };
+};
+
+const toPayloadRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || Array.isArray(value) || typeof value !== "object") return null;
+  return value as Record<string, unknown>;
+};
+
+const readPayloadString = (
+  payload: Record<string, unknown> | null,
+  key: string,
+): string | null => {
+  if (!payload) return null;
+  const value = payload[key];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const payloadListIncludes = (
+  payload: Record<string, unknown> | null,
+  key: string,
+  expected: string | null | undefined,
+): boolean => {
+  if (!expected) return false;
+  const value = readPayloadString(payload, key);
+  if (!value) return false;
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .includes(expected);
+};
+
+const isBoardRelevantActivity = (
+  event: ActivityEventRead,
+  {
+    boardId,
+    boardTaskIds,
+    boardGatewayId,
+  }: {
+    boardId: string;
+    boardTaskIds: Set<string>;
+    boardGatewayId: string | null;
+  },
+): boolean => {
+  if (event.task_id && boardTaskIds.has(event.task_id)) return true;
+  if (event.board_id === boardId) return true;
+  const payload = toPayloadRecord(event.payload);
+  if (readPayloadString(payload, "board_id") === boardId) return true;
+  if (boardGatewayId) {
+    if (readPayloadString(payload, "gateway_id") === boardGatewayId) return true;
+    if (payloadListIncludes(payload, "gateway_ids", boardGatewayId)) return true;
+  }
+  return false;
 };
 
 const toLiveFeedFromComment = (comment: TaskCommentRead): LiveFeedItem => ({
@@ -477,6 +515,18 @@ const toLiveFeedFromApproval = (
 
 const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "task.comment") return "Comment";
+  if (eventType === "task.assignee_notified") return "Assigned";
+  if (eventType === "task.assignee_notify_failed") return "Assign failed";
+  if (eventType === "task.rework_notified") return "Rework";
+  if (eventType === "task.rework_notify_failed") return "Rework failed";
+  if (eventType === "task.lead_notified") return "Lead notified";
+  if (eventType === "task.lead_notify_failed") return "Lead failed";
+  if (eventType === "task.lead_unassigned_notified") return "Lead inbox";
+  if (eventType === "task.lead_unassigned_notify_failed") return "Lead inbox failed";
+  if (eventType === "task.execution_run.created") return "Run queued";
+  if (eventType === "task.execution_run.dispatched") return "Run sent";
+  if (eventType === "task.execution_run.retried") return "Run retried";
+  if (eventType === "task.execution_run.updated") return "Run update";
   if (eventType === "task.execution_run.report") return "Run report";
   if (eventType === "task.created") return "Created";
   if (eventType === "task.status_changed") return "Status";
@@ -486,16 +536,70 @@ const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "agent.online") return "Online";
   if (eventType === "agent.offline") return "Offline";
   if (eventType === "agent.updated") return "Agent update";
+  if (eventType === "agent.heartbeat") return "Heartbeat";
+  if (eventType === "agent.wakeup.sent") return "Wakeup";
+  if (eventType === "agent.nudge.sent") return "Nudge";
+  if (eventType === "agent.nudge.failed") return "Nudge failed";
+  if (eventType === "agent.soul.updated") return "SOUL updated";
+  if (eventType.startsWith("agent.") && eventType.endsWith(".direct")) return "Lifecycle";
+  if (eventType.startsWith("agent.") && eventType.endsWith(".failed")) return "Lifecycle failed";
   if (eventType === "approval.created") return "Approval";
   if (eventType === "approval.updated") return "Approval update";
   if (eventType === "approval.approved") return "Approved";
   if (eventType === "approval.rejected") return "Rejected";
+  if (eventType.startsWith("board.group.") && eventType.endsWith(".notified")) return "Group notified";
+  if (eventType.startsWith("board.group.") && eventType.endsWith(".notify_failed")) return "Group failed";
+  if (eventType === "board.lead_notified") return "Board lead";
+  if (eventType === "board.lead_notify_failed") return "Board lead failed";
+  if (eventType === "gateway.lead.ask_user.sent") return "Ask user";
+  if (eventType === "gateway.lead.ask_user.failed") return "Ask user failed";
+  if (eventType === "gateway.main.lead_message.sent") return "Lead message";
+  if (eventType === "gateway.main.lead_message.failed") return "Lead message failed";
+  if (eventType === "gateway.main.lead_broadcast.sent") return "Lead broadcast";
+  if (eventType === "silo.runtime.validate") return "Runtime validate";
+  if (eventType === "silo.runtime.apply") return "Runtime apply";
   return "Updated";
 };
 
 const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   if (eventType === "task.comment") {
     return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+  if (eventType === "task.assignee_notified") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "task.assignee_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "task.rework_notified") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+  if (eventType === "task.rework_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "task.lead_notified") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "task.lead_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "task.lead_unassigned_notified") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType === "task.lead_unassigned_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "task.execution_run.created") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType === "task.execution_run.dispatched") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType === "task.execution_run.retried") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+  if (eventType === "task.execution_run.updated") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
   }
   if (eventType === "task.execution_run.report") {
     return "border-cyan-200 bg-cyan-50 text-cyan-700";
@@ -524,6 +628,27 @@ const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   if (eventType === "agent.updated") {
     return "border-indigo-200 bg-indigo-50 text-indigo-700";
   }
+  if (eventType === "agent.heartbeat") {
+    return "border-lime-200 bg-lime-50 text-lime-700";
+  }
+  if (eventType === "agent.wakeup.sent") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "agent.nudge.sent") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType === "agent.nudge.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "agent.soul.updated") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+  if (eventType.startsWith("agent.") && eventType.endsWith(".direct")) {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+  if (eventType.startsWith("agent.") && eventType.endsWith(".failed")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
   if (eventType === "approval.created") {
     return "border-cyan-200 bg-cyan-50 text-cyan-700";
   }
@@ -536,8 +661,70 @@ const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   if (eventType === "approval.rejected") {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
+  if (eventType.startsWith("board.group.") && eventType.endsWith(".notified")) {
+    return "border-teal-200 bg-teal-50 text-teal-700";
+  }
+  if (eventType.startsWith("board.group.") && eventType.endsWith(".notify_failed")) {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "board.lead_notified") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "board.lead_notify_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "gateway.lead.ask_user.sent") {
+    return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
+  }
+  if (eventType === "gateway.lead.ask_user.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "gateway.main.lead_message.sent") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "gateway.main.lead_message.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "gateway.main.lead_broadcast.sent") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType === "silo.runtime.validate") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.runtime.apply") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
   return "border-slate-200 bg-slate-100 text-slate-700";
 };
+
+const EXECUTION_RUN_LIVE_FEED_EVENTS = new Set<LiveFeedEventType>([
+  "task.execution_run.created",
+  "task.execution_run.dispatched",
+  "task.execution_run.retried",
+  "task.execution_run.updated",
+  "task.execution_run.report",
+]);
+
+const isExecutionRunLiveFeedEvent = (eventType: LiveFeedEventType): boolean =>
+  EXECUTION_RUN_LIVE_FEED_EVENTS.has(eventType);
+
+const BOARD_LIVE_FEED_FILTERS: Array<{
+  value: ActivityCategory | "all";
+  label: string;
+}> = [
+  { value: "all", label: "All" },
+  { value: "runs", label: "Runs" },
+  { value: "tasks", label: "Tasks" },
+  { value: "approvals", label: "Approvals" },
+  { value: "agents", label: "Agents" },
+  { value: "gateway", label: "Gateway" },
+  { value: "chat", label: "Chat" },
+];
+
+const isBoardLiveFeedCategory = (
+  value: string | null,
+): value is ActivityCategory | "all" =>
+  BOARD_LIVE_FEED_FILTERS.some((item) => item.value === value);
 
 const normalizeTask = (task: TaskCardRead): Task => ({
   ...task,
@@ -596,17 +783,6 @@ const formatShortTimestamp = (value: string) => {
 const formatTokenCount = (value: number): string =>
   Number.isFinite(value) ? new Intl.NumberFormat("en-US").format(value) : "0";
 
-const executionRunStatusClass = (status: ExecutionRunStatus): string => {
-  if (status === "succeeded") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "running") return "border-sky-200 bg-sky-50 text-sky-700";
-  if (status === "dispatching") return "border-indigo-200 bg-indigo-50 text-indigo-700";
-  if (status === "queued") return "border-amber-200 bg-amber-50 text-amber-700";
-  if (status === "failed") return "border-rose-200 bg-rose-50 text-rose-700";
-  if (status === "cancelled") return "border-slate-300 bg-slate-100 text-slate-700";
-  if (status === "blocked") return "border-orange-200 bg-orange-50 text-orange-700";
-  return "border-slate-200 bg-slate-100 text-slate-700";
-};
-
 const executionRunTotalTokens = (run: TaskExecutionRunSnapshot): number => {
   const usage = run.result_payload?.usage;
   if (!usage || typeof usage !== "object" || Array.isArray(usage)) return 0;
@@ -614,7 +790,20 @@ const executionRunTotalTokens = (run: TaskExecutionRunSnapshot): number => {
   return typeof total === "number" && Number.isFinite(total) ? total : 0;
 };
 
-const canRetryExecutionRun = (status: ExecutionRunStatus): boolean =>
+const executionRunPullRequestNumber = (
+  run: TaskExecutionRunSnapshot,
+): string | null => {
+  const value = run.result_payload?.pull_request;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(Math.trunc(value));
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  return null;
+};
+
+const canRetryExecutionRun = (status: RuntimeRunStatus): boolean =>
   status === "failed" || status === "cancelled" || status === "blocked";
 
 const commentElementId = (id: string): string =>
@@ -710,23 +899,33 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   onRetry?: () => void;
 }) {
   const totalTokens = executionRunTotalTokens(run);
+  const pullRequestNumber = executionRunPullRequestNumber(run);
   const summary = (run.summary ?? "").trim();
   const errorMessage = (run.error_message ?? "").trim();
   const canRetry = canRetryExecutionRun(run.status) && Boolean(onRetry);
+  const detailRows = [
+    ...runtimeRunTimingRows(run),
+    pullRequestNumber
+      ? { label: "PR #", value: pullRequestNumber }
+      : null,
+    run.pr_url ? { label: "PR", value: run.pr_url } : null,
+    run.branch_name ? { label: "Branch", value: run.branch_name } : null,
+    run.workspace_path ? { label: "Workspace", value: run.workspace_path } : null,
+    run.external_run_id
+      ? { label: "External run", value: run.external_run_id }
+      : null,
+    totalTokens > 0
+      ? { label: "Tokens", value: formatTokenCount(totalTokens) }
+      : null,
+    errorMessage ? { label: "Error", value: errorMessage } : null,
+  ].filter((row): row is { label: string; value: string } => row !== null);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            <span
-              className={cn(
-                "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                executionRunStatusClass(run.status),
-              )}
-            >
-              {run.status.replace(/_/g, " ")}
-            </span>
+            <RuntimeRunStatusChip status={run.status} />
             <span>{run.role_slug}</span>
             <span className="text-slate-300">·</span>
             <span>{formatShortTimestamp(run.updated_at)}</span>
@@ -765,27 +964,8 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
         <div className="mt-3 text-sm text-slate-700">
           <Markdown content={summary} variant="basic" />
         </div>
-      ) : errorMessage ? (
-        <p className="mt-3 text-sm text-rose-700">{errorMessage}</p>
       ) : null}
-      <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Tokens
-          </p>
-          <p className="mt-1 text-xs text-slate-700">
-            {formatTokenCount(totalTokens)}
-          </p>
-        </div>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Workspace
-          </p>
-          <p className="mt-1 truncate text-xs text-slate-700">
-            {run.workspace_path ?? "—"}
-          </p>
-        </div>
-      </div>
+      <RuntimeRunMetaGrid details={detailRows} itemKey={run.id} />
     </div>
   );
 });
@@ -837,6 +1017,12 @@ const LiveFeedCard = memo(function LiveFeedCard({
   const message = (item.message ?? "").trim();
   const eventLabel = liveFeedEventLabel(item.event_type);
   const eventPillClass = liveFeedEventPillClass(item.event_type);
+  const content = resolveActivityFeedContent(item.event_type, message, item.payload);
+  const runtimeStatus = isExecutionRunLiveFeedEvent(item.event_type)
+    ? content.runtimeStatus
+    : null;
+  const summaryMessage = content.summary;
+  const detailRows = content.details;
   return (
     <div
       className={cn(
@@ -882,6 +1068,11 @@ const LiveFeedCard = memo(function LiveFeedCard({
             >
               {eventLabel}
             </span>
+            {runtimeStatus ? (
+              <span className="inline-flex align-middle">
+                <RuntimeRunStatusChip status={runtimeStatus} />
+              </span>
+            ) : null}
             <span className="font-medium text-slate-700">{authorName}</span>
             {authorRole ? (
               <>
@@ -896,9 +1087,10 @@ const LiveFeedCard = memo(function LiveFeedCard({
           </div>
         </div>
       </div>
-      {message ? (
+      <RuntimeRunMetaGrid details={detailRows} itemKey={item.id} />
+      {summaryMessage ? (
         <div className="mt-3 select-text cursor-text text-sm leading-relaxed text-slate-900 break-words">
-          <Markdown content={message} variant="basic" />
+          <Markdown content={summaryMessage} variant="basic" />
         </div>
       ) : (
         <p className="mt-3 text-sm text-slate-500">—</p>
@@ -922,11 +1114,15 @@ export default function BoardDetailPage() {
   const taskIdFromUrl = searchParams.get("taskId");
   const commentIdFromUrl = searchParams.get("commentId");
   const panelFromUrl = searchParams.get("panel");
+  const liveFeedModeFromUrl = isBoardLiveFeedCategory(searchParams.get("feed"))
+    ? (searchParams.get("feed") as ActivityCategory | "all")
+    : "all";
   const buildUrlWithTaskAndComment = useCallback(
     (
       taskId: string | null,
       commentId: string | null,
       panel: "chat" | null = null,
+      feed: ActivityCategory | "all" | null = null,
     ): string => {
       const params = new URLSearchParams(searchParams.toString());
       if (taskId) {
@@ -943,6 +1139,11 @@ export default function BoardDetailPage() {
         params.set("panel", panel);
       } else {
         params.delete("panel");
+      }
+      if (feed && feed !== "all") {
+        params.set("feed", feed);
+      } else if (feed === "all") {
+        params.delete("feed");
       }
       const next = params.toString();
       return next ? `${pathname}?${next}` : pathname;
@@ -1016,6 +1217,11 @@ export default function BoardDetailPage() {
     return resolveMemberDisplayName(member, DEFAULT_HUMAN_LABEL);
   }, [membershipQuery.data]);
   const canWrite = boardAccess.canWrite;
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const selectedTaskIdRef = useRef<string | null>(null);
+  const openedTaskIdFromUrlRef = useRef<string | null>(null);
+  const openedPanelFromUrlRef = useRef<string | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const silosQuery = useQuery({
     queryKey: ["silos"],
     queryFn: fetchSilos,
@@ -1064,10 +1270,6 @@ export default function BoardDetailPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoadedBoardSnapshot, setHasLoadedBoardSnapshot] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const selectedTaskIdRef = useRef<string | null>(null);
-  const openedTaskIdFromUrlRef = useRef<string | null>(null);
-  const openedPanelFromUrlRef = useRef<string | null>(null);
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const [liveFeed, setLiveFeed] = useState<LiveFeedItem[]>([]);
@@ -1098,7 +1300,6 @@ export default function BoardDetailPage() {
   const [createExecutionRunError, setCreateExecutionRunError] = useState<
     string | null
   >(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const tasksRef = useRef<Task[]>([]);
   const approvalsRef = useRef<Approval[]>([]);
   const agentsRef = useRef<Agent[]>([]);
@@ -1130,6 +1331,7 @@ export default function BoardDetailPage() {
   const [deleteTaskError, setDeleteTaskError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
   const [isLiveFeedOpen, setIsLiveFeedOpen] = useState(false);
+  const [liveFeedMode, setLiveFeedMode] = useState<ActivityCategory | "all">(liveFeedModeFromUrl);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const isLiveFeedOpenRef = useRef(false);
   const toastIdRef = useRef(0);
@@ -1195,6 +1397,10 @@ export default function BoardDetailPage() {
   );
 
   useEffect(() => {
+    setLiveFeedMode(liveFeedModeFromUrl);
+  }, [liveFeedModeFromUrl]);
+
+  useEffect(() => {
     liveFeedHistoryLoadedRef.current = false;
     setIsLiveFeedHistoryLoading(false);
     setLiveFeedHistoryError(null);
@@ -1253,6 +1459,7 @@ export default function BoardDetailPage() {
             ? chatMessagesRef.current
             : chatMessages;
         const boardTaskIds = new Set(sourceTasks.map((task) => task.id));
+        const boardGatewayId = board?.gateway_id ?? null;
         const collected: LiveFeedItem[] = [];
         const seen = new Set<string>();
         const limit = 200;
@@ -1303,8 +1510,16 @@ export default function BoardDetailPage() {
           const items = result.data.items ?? [];
           for (const event of items) {
             const mapped = toLiveFeedFromActivity(event);
-            if (!mapped?.task_id) continue;
-            if (!boardTaskIds.has(mapped.task_id)) continue;
+            if (!mapped) continue;
+            if (
+              !isBoardRelevantActivity(event, {
+                boardId,
+                boardTaskIds,
+                boardGatewayId,
+              })
+            ) {
+              continue;
+            }
             if (seen.has(mapped.id)) continue;
             seen.add(mapped.id);
             collected.push(mapped);
@@ -1345,6 +1560,7 @@ export default function BoardDetailPage() {
   }, [
     agents,
     approvals,
+    board?.gateway_id,
     boardId,
     chatMessages,
     isLiveFeedOpen,
@@ -1352,6 +1568,148 @@ export default function BoardDetailPage() {
     isSignedIn,
     tasks,
   ]);
+
+  useEffect(() => {
+    if (!isLiveFeedOpen) return;
+    if (!isSignedIn || !boardId) return;
+    if (isLoading) return;
+
+    let cancelled = false;
+    const limit = 100;
+    const pollGenericActivity = async () => {
+      try {
+        const boardTaskIds = new Set(tasksRef.current.map((task) => task.id));
+        const result = await listActivityApiV1ActivityGet({ limit, offset: 0 });
+        if (cancelled || result.status !== 200) return;
+        const items = result.data.items ?? [];
+        for (const event of items) {
+          const mapped = toLiveFeedFromActivity(event);
+          if (!mapped) continue;
+          if (
+            !isBoardRelevantActivity(event, {
+              boardId,
+              boardTaskIds,
+              boardGatewayId: board?.gateway_id ?? null,
+            })
+          ) {
+            continue;
+          }
+          pushLiveFeed(mapped);
+        }
+      } catch {
+        return;
+      }
+    };
+
+    void pollGenericActivity();
+    const intervalId = window.setInterval(() => {
+      void pollGenericActivity();
+    }, 20_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [board?.gateway_id, boardId, isLiveFeedOpen, isLoading, isSignedIn, pushLiveFeed]);
+
+  useEffect(() => {
+    if (!isPageActive) return;
+    if (!isLiveFeedOpen) return;
+    if (!isSignedIn || !boardId) return;
+    if (isLoading) return;
+
+    let isCancelled = false;
+    const abortController = new AbortController();
+    const backoff = createExponentialBackoff(SSE_RECONNECT_BACKOFF);
+    let reconnectTimeout: number | undefined;
+
+    const connect = async () => {
+      try {
+        const since = latestLiveFeedTimestamp(liveFeedRef.current);
+        const params = new URLSearchParams();
+        params.set("board_id", boardId);
+        if (since) {
+          params.set("since", since);
+        }
+        const streamResult = await customFetch<{
+          data: Response;
+          status: number;
+          headers: Headers;
+        }>(`/api/v1/activity/stream?${params.toString()}`, {
+          method: "GET",
+          headers: { Accept: "text/event-stream" },
+          signal: abortController.signal,
+        });
+        if (streamResult.status !== 200) {
+          throw new Error("Unable to connect activity stream.");
+        }
+        const response = streamResult.data as Response;
+        if (!(response instanceof Response) || !response.body) {
+          throw new Error("Unable to connect activity stream.");
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (!isCancelled) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value && value.length) {
+            backoff.reset();
+          }
+          buffer += decoder.decode(value, { stream: true });
+          buffer = buffer.replace(/\r\n/g, "\n");
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary !== -1) {
+            const raw = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            const lines = raw.split("\n");
+            let eventType = "message";
+            let data = "";
+            for (const line of lines) {
+              if (line.startsWith("event:")) {
+                eventType = line.slice(6).trim();
+              } else if (line.startsWith("data:")) {
+                data += line.slice(5).trim();
+              }
+            }
+            if (eventType === "activity" && data) {
+              try {
+                const payload = JSON.parse(data) as { activity?: ActivityEventRead };
+                if (payload.activity) {
+                  const liveEvent = toLiveFeedFromActivity(payload.activity);
+                  if (liveEvent) {
+                    pushLiveFeed(liveEvent);
+                  }
+                }
+              } catch {
+                continue;
+              }
+            }
+            boundary = buffer.indexOf("\n\n");
+          }
+        }
+      } catch (_error) {
+        if (isCancelled || abortController.signal.aborted) return;
+        const delay = backoff.nextDelay();
+        reconnectTimeout = window.setTimeout(() => {
+          if (!isCancelled) {
+            void connect();
+          }
+        }, delay);
+      }
+    };
+
+    void connect();
+
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+      if (reconnectTimeout !== undefined) {
+        window.clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [boardId, isLiveFeedOpen, isLoading, isPageActive, isSignedIn, pushLiveFeed]);
 
   useEffect(() => {
     if (!isDetailOpen) return;
@@ -1471,6 +1829,17 @@ export default function BoardDetailPage() {
       const value = agent.updated_at ?? agent.last_seen_at;
       if (!value) return;
       const time = apiDatetimeToMs(value);
+      if (time !== null && time > latestTime) {
+        latestTime = time;
+      }
+    });
+    return latestTime ? new Date(latestTime).toISOString() : null;
+  };
+
+  const latestLiveFeedTimestamp = (items: LiveFeedItem[]) => {
+    let latestTime = 0;
+    items.forEach((item) => {
+      const time = apiDatetimeToMs(item.created_at);
       if (time !== null && time > latestTime) {
         latestTime = time;
       }
@@ -2392,6 +2761,18 @@ export default function BoardDetailPage() {
       return bTime - aTime;
     });
   }, [liveFeed]);
+  const visibleLiveFeed = useMemo(
+    () => {
+      if (liveFeedMode === "all") return orderedLiveFeed;
+      return orderedLiveFeed.filter((item) => {
+        if (liveFeedMode === "runs") {
+          return isExecutionRunLiveFeedEvent(item.event_type);
+        }
+        return activityCategoryForEvent(item.event_type) === liveFeedMode;
+      });
+    },
+    [liveFeedMode, orderedLiveFeed],
+  );
 
   const assignableAgents = useMemo(
     () => agents.filter((agent) => !agent.is_board_lead),
@@ -2826,6 +3207,28 @@ export default function BoardDetailPage() {
   const closeLiveFeed = () => {
     setIsLiveFeedOpen(false);
   };
+
+  const updateLiveFeedMode = useCallback(
+    (nextMode: ActivityCategory | "all") => {
+      setLiveFeedMode(nextMode);
+      router.replace(
+        buildUrlWithTaskAndComment(
+          taskIdFromUrl,
+          commentIdFromUrl,
+          panelFromUrl === "chat" ? "chat" : null,
+          nextMode,
+        ),
+        { scroll: false },
+      );
+    },
+    [
+      buildUrlWithTaskAndComment,
+      commentIdFromUrl,
+      panelFromUrl,
+      router,
+      taskIdFromUrl,
+    ],
+  );
 
   const handlePostComment = async (message: string): Promise<boolean> => {
     if (!selectedTask || !boardId || !isSignedIn) return false;
@@ -4526,29 +4929,46 @@ export default function BoardDetailPage() {
                 Realtime task, approval, agent, and board-chat activity.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={closeLiveFeed}
-              className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50"
-              aria-label="Close live feed"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {BOARD_LIVE_FEED_FILTERS.map((filter) => (
+                <Button
+                  key={filter.value}
+                  type="button"
+                  variant={liveFeedMode === filter.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => updateLiveFeedMode(filter.value)}
+                >
+                  {filter.label}
+                </Button>
+              ))}
+              <button
+                type="button"
+                onClick={closeLiveFeed}
+                className="rounded-lg border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50"
+                aria-label="Close live feed"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto px-6 py-4">
-            {isLiveFeedHistoryLoading && orderedLiveFeed.length === 0 ? (
+            {isLiveFeedHistoryLoading && visibleLiveFeed.length === 0 ? (
               <p className="text-sm text-slate-500">Loading feed…</p>
             ) : liveFeedHistoryError ? (
               <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
                 {liveFeedHistoryError}
               </div>
-            ) : orderedLiveFeed.length === 0 ? (
+            ) : visibleLiveFeed.length === 0 ? (
               <p className="text-sm text-slate-500">
-                Waiting for new activity…
+                {liveFeedMode === "runs"
+                  ? "No execution run activity yet."
+                  : liveFeedMode === "all"
+                    ? "Waiting for new activity…"
+                    : `No ${liveFeedMode} activity yet.`}
               </p>
             ) : (
               <div className="space-y-3">
-                {orderedLiveFeed.map((item) => {
+                {visibleLiveFeed.map((item) => {
                   const taskId = item.task_id;
                   const authorAgent = item.agent_id
                     ? (agents.find((agent) => agent.id === item.agent_id) ??

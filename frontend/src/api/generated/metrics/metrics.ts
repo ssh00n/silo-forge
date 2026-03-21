@@ -18,8 +18,10 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetParams,
   DashboardMetrics,
   DashboardMetricsApiV1MetricsDashboardGetParams,
+  DashboardRuntimeExecutionMetrics,
   HTTPValidationError,
 } from ".././model";
 
@@ -234,6 +236,311 @@ export function useDashboardMetricsApiV1MetricsDashboardGet<
     params,
     options,
   );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Return execution-runtime snapshot for accessible boards.
+ * @summary Dashboard Execution Runtime Metrics
+ */
+export type dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponse200 =
+  {
+    data: DashboardRuntimeExecutionMetrics;
+    status: 200;
+  };
+
+export type dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponseSuccess =
+  dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponse200 & {
+    headers: Headers;
+  };
+export type dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponseError =
+  dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponse422 & {
+    headers: Headers;
+  };
+
+export type dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponse =
+
+    | dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponseSuccess
+    | dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponseError;
+
+export const getDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetUrl =
+  (
+    params?: DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetParams,
+  ) => {
+    const normalizedParams = new URLSearchParams();
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value !== undefined) {
+        normalizedParams.append(
+          key,
+          value === null ? "null" : value.toString(),
+        );
+      }
+    });
+
+    const stringifiedParams = normalizedParams.toString();
+
+    return stringifiedParams.length > 0
+      ? `/api/v1/metrics/execution-runtime?${stringifiedParams}`
+      : `/api/v1/metrics/execution-runtime`;
+  };
+
+export const dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet =
+  async (
+    params?: DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetParams,
+    options?: RequestInit,
+  ): Promise<dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponse> => {
+    return customFetch<dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetResponse>(
+      getDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetUrl(
+        params,
+      ),
+      {
+        ...options,
+        method: "GET",
+      },
+    );
+  };
+
+export const getDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetQueryKey =
+  (
+    params?: DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetParams,
+  ) => {
+    return [
+      `/api/v1/metrics/execution-runtime`,
+      ...(params ? [params] : []),
+    ] as const;
+  };
+
+export const getDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    params?: DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+      request?: SecondParameter<typeof customFetch>;
+    },
+  ) => {
+    const { query: queryOptions, request: requestOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetQueryKey(
+        params,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+        >
+      >
+    > = ({ signal }) =>
+      dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet(params, {
+        signal,
+        ...requestOptions,
+      });
+
+    return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+      >
+    >
+  >;
+export type DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetQueryError =
+  HTTPValidationError;
+
+export function useDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet<
+  TData = Awaited<
+    ReturnType<
+      typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  params:
+    | undefined
+    | DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet<
+  TData = Awaited<
+    ReturnType<
+      typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet<
+  TData = Awaited<
+    ReturnType<
+      typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Dashboard Execution Runtime Metrics
+ */
+
+export function useDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet<
+  TData = Awaited<
+    ReturnType<
+      typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: DashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof dashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetQueryOptions(
+      params,
+      options,
+    );
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
     TData,

@@ -80,3 +80,11 @@ Or run interactively:
 cd frontend
 npm run e2e:open
 ```
+
+## Local operator E2E runbook
+
+Before browser-driven E2E, use the preflight and operator runbooks for the current silo/runtime flow:
+
+- [Local Dev Stack](./local-dev-stack.md)
+- [Local E2E preflight](./local-e2e-preflight.md)
+- [Local E2E: Silo Runtime And Activity](./local-e2e-silo-runtime.md)

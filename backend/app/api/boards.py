@@ -58,6 +58,38 @@ GATEWAY_ID_QUERY = Query(default=None)
 BOARD_GROUP_ID_QUERY = Query(default=None)
 INCLUDE_SELF_QUERY = Query(default=False)
 INCLUDE_DONE_QUERY = Query(default=False)
+
+
+def _board_notification_payload(
+    *,
+    kind: str,
+    board: Board,
+    target_agent: Agent,
+    notification_status: str,
+    error: str | None = None,
+    source_board: Board | None = None,
+    group: BoardGroup | None = None,
+    changed_fields: list[str] | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "notification_kind": kind,
+        "notification_status": notification_status,
+        "board_id": str(board.id),
+        "board_name": board.name,
+        "target_agent_id": str(target_agent.id),
+        "target_agent_name": target_agent.name,
+    }
+    if source_board is not None:
+        payload["source_board_id"] = str(source_board.id)
+        payload["source_board_name"] = source_board.name
+    if group is not None:
+        payload["board_group_id"] = str(group.id)
+        payload["board_group_name"] = group.name
+    if changed_fields:
+        payload["changed_fields"] = changed_fields
+    if error:
+        payload["error"] = error
+    return payload
 PER_BOARD_TASK_LIMIT_QUERY = Query(default=5, ge=0, le=100)
 AGENT_BOARD_ROLE_TAGS = cast("list[str | Enum]", ["agent-lead", "agent-worker"])
 _ERR_GATEWAY_MAIN_AGENT_REQUIRED = (
@@ -344,6 +376,14 @@ async def _notify_agents_on_board_group_change(
                     f"Board-group {action} notice sent to {agent.name} for board "
                     f"{recipient_board.name} related to {board.name} and {group.name}."
                 ),
+                payload=_board_notification_payload(
+                    kind=f"board_group_{action}",
+                    board=recipient_board,
+                    source_board=board,
+                    group=group,
+                    target_agent=agent,
+                    notification_status="sent",
+                ),
                 agent_id=agent.id,
                 board_id=recipient_board.id,
             )
@@ -355,6 +395,15 @@ async def _notify_agents_on_board_group_change(
                 message=(
                     f"Board-group {action} notify failed for {agent.name} on board "
                     f"{recipient_board.name}: {error}"
+                ),
+                payload=_board_notification_payload(
+                    kind=f"board_group_{action}",
+                    board=recipient_board,
+                    source_board=board,
+                    group=group,
+                    target_agent=agent,
+                    notification_status="failed",
+                    error=error,
                 ),
                 agent_id=agent.id,
                 board_id=recipient_board.id,
@@ -442,6 +491,13 @@ async def _notify_lead_on_board_update(
             session,
             event_type="board.lead_notified",
             message=f"Lead agent notified for board update: {board.name}.",
+            payload=_board_notification_payload(
+                kind="board_lead_update",
+                board=board,
+                target_agent=lead,
+                notification_status="sent",
+                changed_fields=sorted(changed_fields.keys()),
+            ),
             agent_id=lead.id,
             board_id=board.id,
         )
@@ -450,6 +506,14 @@ async def _notify_lead_on_board_update(
             session,
             event_type="board.lead_notify_failed",
             message=f"Lead board update notify failed for {board.name}: {error}",
+            payload=_board_notification_payload(
+                kind="board_lead_update",
+                board=board,
+                target_agent=lead,
+                notification_status="failed",
+                changed_fields=sorted(changed_fields.keys()),
+                error=error,
+            ),
             agent_id=lead.id,
             board_id=board.id,
         )

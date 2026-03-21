@@ -30,6 +30,43 @@ SESSION_DEP = Depends(get_session)
 ORG_ADMIN_DEP = Depends(require_org_admin)
 
 
+async def _enqueue_or_dispatch_immediately(
+    *,
+    service: TaskExecutionRunService,
+    organization_id: UUID,
+    board_id: UUID,
+    task_id: UUID,
+    run_id: UUID,
+) -> TaskExecutionRunRead:
+    queued = enqueue_task_execution_dispatch(
+        QueuedTaskExecutionDispatch(
+            organization_id=organization_id,
+            board_id=board_id,
+            task_id=task_id,
+            run_id=run_id,
+        ),
+    )
+    if queued:
+        run = await service.get_run(
+            organization_id=organization_id,
+            board_id=board_id,
+            task_id=task_id,
+            run_id=run_id,
+        )
+        if run is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Execution run not found",
+            )
+        return run
+    return await service.dispatch_run(
+        organization_id=organization_id,
+        board_id=board_id,
+        task_id=task_id,
+        run_id=run_id,
+    )
+
+
 async def _get_board_and_task(
     *,
     session,
@@ -127,21 +164,13 @@ async def create_and_dispatch_task_execution_run(
         if detail.endswith("not found"):
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=detail) from exc
-
-    queued = enqueue_task_execution_dispatch(
-        QueuedTaskExecutionDispatch(
-            organization_id=ctx.organization.id,
-            board_id=board.id,
-            task_id=task.id,
-            run_id=run.id,
-        ),
+    return await _enqueue_or_dispatch_immediately(
+        service=service,
+        organization_id=ctx.organization.id,
+        board_id=board.id,
+        task_id=task.id,
+        run_id=run.id,
     )
-    if not queued:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Execution dispatch queue is unavailable",
-        )
-    return run
 
 
 @router.get("/{run_id}", response_model=TaskExecutionRunRead)
@@ -228,20 +257,13 @@ async def dispatch_task_execution_run(
     )
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execution run not found")
-    queued = enqueue_task_execution_dispatch(
-        QueuedTaskExecutionDispatch(
-            organization_id=ctx.organization.id,
-            board_id=board.id,
-            task_id=task.id,
-            run_id=run_id,
-        ),
+    return await _enqueue_or_dispatch_immediately(
+        service=service,
+        organization_id=ctx.organization.id,
+        board_id=board.id,
+        task_id=task.id,
+        run_id=run_id,
     )
-    if not queued:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Execution dispatch queue is unavailable",
-    )
-    return run
 
 
 @router.post("/{run_id}/retry", response_model=TaskExecutionRunRead, status_code=status.HTTP_201_CREATED)
@@ -313,17 +335,10 @@ async def retry_and_dispatch_task_execution_run(
         )
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
-    queued = enqueue_task_execution_dispatch(
-        QueuedTaskExecutionDispatch(
-            organization_id=ctx.organization.id,
-            board_id=board.id,
-            task_id=task.id,
-            run_id=retried.id,
-        ),
+    return await _enqueue_or_dispatch_immediately(
+        service=TaskExecutionRunService(session),
+        organization_id=ctx.organization.id,
+        board_id=board.id,
+        task_id=task.id,
+        run_id=retried.id,
     )
-    if not queued:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Execution dispatch queue is unavailable",
-        )
-    return retried

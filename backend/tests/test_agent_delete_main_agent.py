@@ -40,6 +40,7 @@ class _AgentStub:
 @dataclass
 class _GatewayStub:
     id: UUID
+    name: str
     url: str
     token: str | None
     workspace_root: str
@@ -64,6 +65,7 @@ async def test_delete_gateway_main_agent_does_not_require_board_id(
     )
     gateway = _GatewayStub(
         id=gateway_id,
+        name="Gateway Host",
         url="ws://gateway.example/ws",
         token=None,
         workspace_root="/tmp/openclaw",
@@ -110,6 +112,7 @@ async def test_delete_gateway_main_agent_does_not_require_board_id(
         return "/tmp/openclaw/workspace-gateway-x"
 
     updated_models: list[type[object]] = []
+    recorded_activity: dict[str, object] = {}
 
     async def _fake_update_where(*_args, **_kwargs) -> None:
         if len(_args) >= 2 and isinstance(_args[1], type):
@@ -125,7 +128,11 @@ async def test_delete_gateway_main_agent_does_not_require_board_id(
         _fake_delete_agent_lifecycle,
     )
     monkeypatch.setattr(agent_service.crud, "update_where", _fake_update_where)
-    monkeypatch.setattr(agent_service, "record_activity", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        agent_service,
+        "record_activity",
+        lambda *_a, **_k: recorded_activity.update(_k),
+    )
 
     result = await service.delete_agent(agent_id=str(agent.id), ctx=ctx)  # type: ignore[arg-type]
 
@@ -133,3 +140,15 @@ async def test_delete_gateway_main_agent_does_not_require_board_id(
     assert called["delete_lifecycle"] == 1
     assert Approval in updated_models
     assert session.deleted and session.deleted[0] == agent
+    assert recorded_activity["event_type"] == "agent.delete.direct"
+    assert recorded_activity["payload"] == {
+        "agent_id": str(agent.id),
+        "agent_name": "Primary Gateway Agent",
+        "action": "delete",
+        "session_key": "agent:gateway-x:main",
+        "delivery_status": "sent",
+        "gateway_id": str(gateway.id),
+        "gateway_name": "Gateway Host",
+        "workspace_path": "/tmp/openclaw/workspace-gateway-x",
+        "target_kind": "main_agent",
+    }

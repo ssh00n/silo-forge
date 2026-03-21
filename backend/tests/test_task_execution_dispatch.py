@@ -167,6 +167,10 @@ async def test_dispatch_run_marks_run_as_dispatching_with_stub_contract() -> Non
             assert "Dispatched Symphony run" in event.message
             assert "via stub adapter" in event.message
             assert "Workspace:" in event.message
+            assert event.payload is not None
+            assert event.payload["status"] == "dispatching"
+            assert event.payload["adapter_mode"] == "stub"
+            assert event.payload["external_run_id"] == f"mc-{created.id}"
     finally:
         await engine.dispose()
 
@@ -314,6 +318,9 @@ async def test_symphony_callback_updates_execution_run_status(
             assert updated_event.message is not None
             assert "is running" in updated_event.message
             assert "feature/live" in updated_event.message
+            assert updated_event.payload is not None
+            assert updated_event.payload["status"] == "running"
+            assert updated_event.payload["workspace_path"] == "/srv/symphony/mission-control/MC-live"
     finally:
         settings.symphony_callback_token = original_callback_token
         await engine.dispose()
@@ -349,6 +356,10 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
                     "branch_name": "feature/live-2",
                     "pr_url": "https://github.com/example/repo/pull/22",
                     "summary": "Opened PR with implementation updates.",
+                    "result_payload": {
+                        "pull_request": 22,
+                        "usage": {"total_tokens": 320},
+                    },
                 },
             )
 
@@ -369,7 +380,13 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
             assert comments
             assert comments[0].message is not None
             assert "Opened PR with implementation updates." in comments[0].message
+            assert "PR #22" in comments[0].message
             assert "https://github.com/example/repo/pull/22" in comments[0].message
+            assert "Tokens: 320" in comments[0].message
+            assert comments[0].payload is not None
+            assert comments[0].payload["status"] == "succeeded"
+            assert comments[0].payload["pull_request"] == 22
+            assert comments[0].payload["total_tokens"] == 320
     finally:
         settings.symphony_callback_token = original_callback_token
         await engine.dispose()

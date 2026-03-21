@@ -138,6 +138,12 @@ class TaskExecutionRunService:
                 role_slug=role.slug,
                 dispatch_payload=run.dispatch_payload,
             ),
+            payload=self._build_created_payload(
+                run=run,
+                silo_slug=silo.slug,
+                role_slug=role.slug,
+                dispatch_payload=run.dispatch_payload,
+            ),
             task_id=task.id,
             board_id=board.id,
             agent_id=requested_by_agent_id,
@@ -198,11 +204,12 @@ class TaskExecutionRunService:
         if payload.status is not None:
             record_activity(
                 self._session,
-                event_type="task.execution_run.updated",
-                message=self._build_updated_message(run=run, silo_slug=silo.slug),
-                task_id=task.id,
-                board_id=board.id,
-            )
+            event_type="task.execution_run.updated",
+            message=self._build_updated_message(run=run, silo_slug=silo.slug),
+            payload=self._build_run_payload(run=run, silo_slug=silo.slug),
+            task_id=task.id,
+            board_id=board.id,
+        )
 
         await self._apply_callback_task_effects(
             board=board,
@@ -276,6 +283,12 @@ class TaskExecutionRunService:
                 silo_slug=silo.slug,
                 dispatch_payload=dispatch_payload,
             ),
+            payload=self._build_retried_payload(
+                original_run=run,
+                retried_run=retried,
+                silo_slug=silo.slug,
+                dispatch_payload=dispatch_payload,
+            ),
             task_id=task.id,
             board_id=board.id,
             agent_id=requested_by_agent_id,
@@ -341,6 +354,11 @@ class TaskExecutionRunService:
             self._session,
             event_type="task.execution_run.dispatched",
             message=self._build_dispatched_message(
+                run=run,
+                silo_slug=silo.slug,
+                adapter_mode=acceptance.adapter_mode,
+            ),
+            payload=self._build_dispatched_payload(
                 run=run,
                 silo_slug=silo.slug,
                 adapter_mode=acceptance.adapter_mode,
@@ -437,6 +455,14 @@ class TaskExecutionRunService:
                     self._session,
                     event_type="task.status_changed",
                     message=f"Task moved to in_progress: {task.title}.",
+                    payload={
+                        "task_id": str(task.id),
+                        "board_id": str(board.id),
+                        "task_title": task.title,
+                        "status": "in_progress",
+                        "previous_status": previous_status,
+                        "reason": "execution_run_running",
+                    },
                     task_id=task.id,
                     board_id=board.id,
                 )
@@ -448,6 +474,10 @@ class TaskExecutionRunService:
                 ActivityEvent(
                     event_type="task.execution_run.report",
                     message=report_message,
+                    payload=self._build_callback_report_payload(
+                        run=run,
+                        payload=payload,
+                    ),
                     task_id=task.id,
                     board_id=board.id,
                 ),
@@ -457,6 +487,7 @@ class TaskExecutionRunService:
             return
 
         if await self._can_auto_transition_task(board=board, task=task, target_status="review"):
+            previous_status = task.status
             lead = await self._board_lead(board_id=board.id)
             task.previous_in_progress_at = task.in_progress_at
             task.in_progress_at = None
@@ -469,6 +500,15 @@ class TaskExecutionRunService:
                 self._session,
                 event_type="task.status_changed",
                 message=f"Task moved to review: {task.title}.",
+                payload={
+                    "task_id": str(task.id),
+                    "board_id": str(board.id),
+                    "task_title": task.title,
+                    "status": "review",
+                    "previous_status": previous_status,
+                    "assigned_agent_id": str(lead.id) if lead is not None else None,
+                    "reason": "execution_run_succeeded",
+                },
                 task_id=task.id,
                 board_id=board.id,
             )
@@ -527,10 +567,20 @@ class TaskExecutionRunService:
         ]
         if payload.summary:
             lines.append(payload.summary)
+        pull_request = TaskExecutionRunService._extract_pull_request_number(
+            payload.result_payload
+        )
+        if pull_request is not None:
+            lines.append(f"PR #{pull_request}")
         if payload.pr_url:
             lines.append(f"PR: {payload.pr_url}")
         elif payload.branch_name:
             lines.append(f"Branch: {payload.branch_name}")
+        total_tokens = TaskExecutionRunService._extract_total_tokens(
+            payload.result_payload
+        )
+        if total_tokens is not None:
+            lines.append(f"Tokens: {total_tokens}")
         if payload.error_message:
             lines.append(f"Error: {payload.error_message}")
         return "\n".join(lines)
@@ -561,6 +611,27 @@ class TaskExecutionRunService:
         return " ".join(parts)
 
     @staticmethod
+    def _build_created_payload(
+        *,
+        run: TaskExecutionRun,
+        silo_slug: str,
+        role_slug: str,
+        dispatch_payload: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        payload = TaskExecutionRunService._build_run_payload(run=run, silo_slug=silo_slug)
+        branch_hint = TaskExecutionRunService._read_dispatch_text(
+            dispatch_payload,
+            "branch_name_hint",
+        )
+        if branch_hint:
+            payload["branch_hint"] = branch_hint
+        payload["has_prompt_override"] = bool(
+            TaskExecutionRunService._read_dispatch_text(dispatch_payload, "prompt_override")
+        )
+        payload["role_slug"] = role_slug
+        return payload
+
+    @staticmethod
     def _build_retried_message(
         *,
         original_run: TaskExecutionRun,
@@ -584,6 +655,25 @@ class TaskExecutionRunService:
         return " ".join(parts)
 
     @staticmethod
+    def _build_retried_payload(
+        *,
+        original_run: TaskExecutionRun,
+        retried_run: TaskExecutionRunRead,
+        silo_slug: str,
+        dispatch_payload: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        payload = TaskExecutionRunService._build_read_payload(run=retried_run)
+        payload["silo_slug"] = silo_slug
+        payload["retried_from_run_id"] = str(original_run.id)
+        branch_hint = TaskExecutionRunService._read_dispatch_text(
+            dispatch_payload,
+            "branch_name_hint",
+        )
+        if branch_hint:
+            payload["branch_hint"] = branch_hint
+        return payload
+
+    @staticmethod
     def _build_dispatched_message(
         *,
         run: TaskExecutionRun,
@@ -603,19 +693,144 @@ class TaskExecutionRunService:
         return " ".join(parts)
 
     @staticmethod
+    def _build_dispatched_payload(
+        *,
+        run: TaskExecutionRun,
+        silo_slug: str,
+        adapter_mode: str,
+    ) -> dict[str, Any]:
+        payload = TaskExecutionRunService._build_run_payload(run=run, silo_slug=silo_slug)
+        payload["adapter_mode"] = adapter_mode
+        return payload
+
+    @staticmethod
     def _build_updated_message(*, run: TaskExecutionRun, silo_slug: str) -> str:
         parts = [
             f"Symphony run {TaskExecutionRunService._short_run_id(run.id)} is {run.status} on {silo_slug}/{run.role_slug}."
         ]
         if run.summary:
             parts.append(run.summary)
+        pull_request = TaskExecutionRunService._extract_pull_request_number(
+            run.result_payload
+        )
+        if pull_request is not None:
+            parts.append(f"PR #{pull_request}.")
         if run.pr_url:
             parts.append(f"PR: {run.pr_url}")
         elif run.branch_name:
             parts.append(f"Branch: {run.branch_name}.")
+        total_tokens = TaskExecutionRunService._extract_total_tokens(
+            run.result_payload
+        )
+        if total_tokens is not None:
+            parts.append(f"Tokens: {total_tokens}.")
         if run.error_message:
             parts.append(f"Error: {run.error_message}")
         return " ".join(parts)
+
+    @staticmethod
+    def _build_callback_report_payload(
+        *,
+        run: TaskExecutionRun,
+        payload: TaskExecutionRunUpdate,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "executor_kind": "symphony",
+            "run_id": str(run.id),
+            "run_short_id": TaskExecutionRunService._short_run_id(run.id),
+            "silo_id": str(run.silo_id),
+            "role_slug": run.role_slug,
+            "status": payload.status or run.status,
+            "external_run_id": payload.external_run_id or run.external_run_id,
+            "workspace_path": payload.workspace_path or run.workspace_path,
+            "branch_name": payload.branch_name or run.branch_name,
+            "pr_url": payload.pr_url or run.pr_url,
+            "summary": payload.summary or run.summary,
+            "error_message": payload.error_message or run.error_message,
+        }
+        pull_request = TaskExecutionRunService._extract_pull_request_number(
+            payload.result_payload or run.result_payload
+        )
+        if pull_request is not None:
+            result["pull_request"] = pull_request
+        total_tokens = TaskExecutionRunService._extract_total_tokens(
+            payload.result_payload or run.result_payload
+        )
+        if total_tokens is not None:
+            result["total_tokens"] = total_tokens
+        return result
+
+    @staticmethod
+    def _build_run_payload(
+        *,
+        run: TaskExecutionRun,
+        silo_slug: str,
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "executor_kind": "symphony",
+            "run_id": str(run.id),
+            "run_short_id": TaskExecutionRunService._short_run_id(run.id),
+            "organization_id": str(run.organization_id),
+            "board_id": str(run.board_id),
+            "task_id": str(run.task_id),
+            "silo_id": str(run.silo_id),
+            "silo_slug": silo_slug,
+            "role_slug": run.role_slug,
+            "status": run.status,
+        }
+        if run.external_run_id:
+            result["external_run_id"] = run.external_run_id
+        if run.workspace_path:
+            result["workspace_path"] = run.workspace_path
+        if run.branch_name:
+            result["branch_name"] = run.branch_name
+        if run.pr_url:
+            result["pr_url"] = run.pr_url
+        if run.summary:
+            result["summary"] = run.summary
+        if run.error_message:
+            result["error_message"] = run.error_message
+        pull_request = TaskExecutionRunService._extract_pull_request_number(run.result_payload)
+        if pull_request is not None:
+            result["pull_request"] = pull_request
+        total_tokens = TaskExecutionRunService._extract_total_tokens(run.result_payload)
+        if total_tokens is not None:
+            result["total_tokens"] = total_tokens
+        return result
+
+    @staticmethod
+    def _build_read_payload(run: TaskExecutionRunRead) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "executor_kind": run.executor_kind,
+            "run_id": str(run.id),
+            "run_short_id": TaskExecutionRunService._short_run_id(run.id),
+            "organization_id": str(run.organization_id),
+            "board_id": str(run.board_id),
+            "task_id": str(run.task_id),
+            "silo_id": str(run.silo_id),
+            "silo_slug": run.silo_slug,
+            "role_slug": run.role_slug,
+            "status": run.status,
+        }
+        if run.external_run_id:
+            result["external_run_id"] = run.external_run_id
+        if run.workspace_path:
+            result["workspace_path"] = run.workspace_path
+        if run.branch_name:
+            result["branch_name"] = run.branch_name
+        if run.pr_url:
+            result["pr_url"] = run.pr_url
+        if run.summary:
+            result["summary"] = run.summary
+        if run.error_message:
+            result["error_message"] = run.error_message
+        pull_request = TaskExecutionRunService._extract_pull_request_number(run.result_payload)
+        if pull_request is not None:
+            result["pull_request"] = pull_request
+        total_tokens = TaskExecutionRunService._extract_total_tokens(run.result_payload)
+        if total_tokens is not None:
+            result["total_tokens"] = total_tokens
+        return result
 
     @staticmethod
     def _read_dispatch_text(
@@ -633,6 +848,41 @@ class TaskExecutionRunService:
     @staticmethod
     def _short_run_id(run_id: UUID | str) -> str:
         return str(run_id)[:8]
+
+    @staticmethod
+    def _extract_pull_request_number(
+        result_payload: dict[str, Any] | None,
+    ) -> int | None:
+        if not isinstance(result_payload, dict):
+            return None
+        value = result_payload.get("pull_request")
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed.isdigit():
+                return int(trimmed)
+        return None
+
+    @staticmethod
+    def _extract_total_tokens(
+        result_payload: dict[str, Any] | None,
+    ) -> int | None:
+        if not isinstance(result_payload, dict):
+            return None
+        usage = result_payload.get("usage")
+        if not isinstance(usage, dict):
+            return None
+        value = usage.get("total_tokens")
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed.isdigit():
+                return int(trimmed)
+        return None
 
     @staticmethod
     def _to_read(run: TaskExecutionRun, *, silo_slug: str) -> TaskExecutionRunRead:

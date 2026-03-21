@@ -17,6 +17,7 @@ node_modules/
 
 # Worktrees
 .worktrees/
+.tmp/
 
 # Accidental literal "~" directories (e.g. when a configured path contains "~" but isn't expanded)
 backend/~/

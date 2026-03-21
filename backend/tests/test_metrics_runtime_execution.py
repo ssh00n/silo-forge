@@ -63,6 +63,9 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
                 "total_tokens": 200,
             }
         },
+        created_at=datetime(2026, 3, 21, 11, 45, 0),
+        started_at=datetime(2026, 3, 21, 11, 50, 0),
+        completed_at=datetime(2026, 3, 21, 12, 0, 0),
         updated_at=datetime(2026, 3, 21, 12, 0, 0),
     )
     session = _SequentialSession(
@@ -89,3 +92,6 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
     assert recent.board_name == "Delivery"
     assert recent.total_tokens == 200
     assert recent.pr_url == "https://github.com/example/repo/pull/9"
+    assert recent.created_at == datetime(2026, 3, 21, 11, 45, 0)
+    assert recent.started_at == datetime(2026, 3, 21, 11, 50, 0)
+    assert recent.completed_at == datetime(2026, 3, 21, 12, 0, 0)

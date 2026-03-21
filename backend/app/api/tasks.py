@@ -94,6 +94,18 @@ TASK_EVENT_TYPES = {
     "task.updated",
     "task.status_changed",
     "task.comment",
+    "task.assignee_notified",
+    "task.assignee_notify_failed",
+    "task.rework_notified",
+    "task.rework_notify_failed",
+    "task.lead_notified",
+    "task.lead_notify_failed",
+    "task.lead_unassigned_notified",
+    "task.lead_unassigned_notify_failed",
+    "task.execution_run.created",
+    "task.execution_run.dispatched",
+    "task.execution_run.retried",
+    "task.execution_run.updated",
     "task.execution_run.report",
 }
 SSE_SEEN_MAX = 2000
@@ -490,6 +502,7 @@ async def _reconcile_dependents_for_dependency_toggle(
     reopened = previous_status == "done" and dependency_task.status != "done"
 
     for dependent in dependents:
+        previous_dependent_status = dependent.status
         if dependent.status == "done":
             continue
         if reopened:
@@ -511,6 +524,12 @@ async def _reconcile_dependents_for_dependency_toggle(
                     message=(
                         "Task returned to inbox: dependency reopened " f"({dependency_task.title})."
                     ),
+                    payload=_task_activity_payload(
+                        dependent,
+                        previous_status=previous_dependent_status,
+                        reason="dependency_reopened",
+                        dependency_task=dependency_task,
+                    ),
                     agent_id=actor_agent_id,
                     board_id=dependent.board_id,
                 )
@@ -520,6 +539,12 @@ async def _reconcile_dependents_for_dependency_toggle(
                     event_type="task.updated",
                     task_id=dependent.id,
                     message=f"Dependency completion changed: {dependency_task.title}.",
+                    payload=_task_activity_payload(
+                        dependent,
+                        previous_status=previous_dependent_status,
+                        reason="dependency_completion_changed",
+                        dependency_task=dependency_task,
+                    ),
                     agent_id=actor_agent_id,
                     board_id=dependent.board_id,
                 )
@@ -529,6 +554,12 @@ async def _reconcile_dependents_for_dependency_toggle(
                 event_type="task.updated",
                 task_id=dependent.id,
                 message=f"Dependency completion changed: {dependency_task.title}.",
+                payload=_task_activity_payload(
+                    dependent,
+                    previous_status=previous_dependent_status,
+                    reason="dependency_completion_changed",
+                    dependency_task=dependency_task,
+                ),
                 agent_id=actor_agent_id,
                 board_id=dependent.board_id,
             )
@@ -688,6 +719,12 @@ async def _notify_agent_on_task_assign(
             session,
             event_type="task.assignee_notified",
             message=f"Agent notified for assignment: {agent.name}.",
+            payload=_task_notification_payload(
+                task,
+                agent=agent,
+                kind="assignment",
+                notification_status="sent",
+            ),
             agent_id=agent.id,
             task_id=task.id,
             board_id=board.id,
@@ -698,6 +735,13 @@ async def _notify_agent_on_task_assign(
             session,
             event_type="task.assignee_notify_failed",
             message=f"Assignee notify failed: {error}",
+            payload=_task_notification_payload(
+                task,
+                agent=agent,
+                kind="assignment",
+                notification_status="failed",
+                error=error,
+            ),
             agent_id=agent.id,
             task_id=task.id,
             board_id=board.id,
@@ -741,6 +785,12 @@ async def _notify_agent_on_task_rework(
             session,
             event_type="task.rework_notified",
             message=f"Assignee notified about requested changes: {agent.name}.",
+            payload=_task_notification_payload(
+                task,
+                agent=agent,
+                kind="rework",
+                notification_status="sent",
+            ),
             agent_id=agent.id,
             task_id=task.id,
             board_id=board.id,
@@ -751,6 +801,13 @@ async def _notify_agent_on_task_rework(
             session,
             event_type="task.rework_notify_failed",
             message=f"Rework notify failed: {error}",
+            payload=_task_notification_payload(
+                task,
+                agent=agent,
+                kind="rework",
+                notification_status="failed",
+                error=error,
+            ),
             agent_id=agent.id,
             task_id=task.id,
             board_id=board.id,
@@ -816,6 +873,12 @@ async def _notify_lead_on_task_create(
             session,
             event_type="task.lead_notified",
             message=f"Lead agent notified for task: {task.title}.",
+            payload=_task_notification_payload(
+                task,
+                agent=lead,
+                kind="lead_new_task",
+                notification_status="sent",
+            ),
             agent_id=lead.id,
             task_id=task.id,
             board_id=board.id,
@@ -826,6 +889,13 @@ async def _notify_lead_on_task_create(
             session,
             event_type="task.lead_notify_failed",
             message=f"Lead notify failed: {error}",
+            payload=_task_notification_payload(
+                task,
+                agent=lead,
+                kind="lead_new_task",
+                notification_status="failed",
+                error=error,
+            ),
             agent_id=lead.id,
             task_id=task.id,
             board_id=board.id,
@@ -875,6 +945,12 @@ async def _notify_lead_on_task_unassigned(
             session,
             event_type="task.lead_unassigned_notified",
             message=f"Lead notified task returned to inbox: {task.title}.",
+            payload=_task_notification_payload(
+                task,
+                agent=lead,
+                kind="lead_unassigned",
+                notification_status="sent",
+            ),
             agent_id=lead.id,
             task_id=task.id,
             board_id=board.id,
@@ -885,6 +961,13 @@ async def _notify_lead_on_task_unassigned(
             session,
             event_type="task.lead_unassigned_notify_failed",
             message=f"Lead notify failed: {error}",
+            payload=_task_notification_payload(
+                task,
+                agent=lead,
+                kind="lead_unassigned",
+                notification_status="failed",
+                error=error,
+            ),
             agent_id=lead.id,
             task_id=task.id,
             board_id=board.id,
@@ -1515,6 +1598,7 @@ async def create_task(
         event_type="task.created",
         task_id=task.id,
         message=f"Task created: {task.title}.",
+        payload=_task_activity_payload(task, reason="task_created"),
         board_id=board.id,
     )
     await session.commit()
@@ -2156,6 +2240,55 @@ def _task_event_details(task: Task, previous_status: str) -> tuple[str, str]:
     return "task.updated", f"Task updated: {task.title}."
 
 
+def _task_activity_payload(
+    task: Task,
+    *,
+    previous_status: str | None = None,
+    reason: str | None = None,
+    dependency_task: Task | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "task_id": str(task.id),
+        "board_id": str(task.board_id),
+        "task_title": task.title,
+        "status": task.status,
+        "assigned_agent_id": str(task.assigned_agent_id) if task.assigned_agent_id else None,
+        "priority": task.priority,
+    }
+    if previous_status is not None:
+        payload["previous_status"] = previous_status
+    if reason:
+        payload["reason"] = reason
+    if dependency_task is not None:
+        payload["dependency_task_id"] = str(dependency_task.id)
+        payload["dependency_task_title"] = dependency_task.title
+        payload["dependency_task_status"] = dependency_task.status
+    return payload
+
+
+def _task_notification_payload(
+    task: Task,
+    *,
+    agent: Agent,
+    kind: str,
+    notification_status: str,
+    error: str | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "task_id": str(task.id),
+        "board_id": str(task.board_id),
+        "task_title": task.title,
+        "status": task.status,
+        "target_agent_id": str(agent.id),
+        "target_agent_name": agent.name,
+        "notification_kind": kind,
+        "notification_status": notification_status,
+    }
+    if error:
+        payload["error"] = error
+    return payload
+
+
 async def _lead_notify_new_assignee(
     session: AsyncSession,
     *,
@@ -2273,6 +2406,11 @@ async def _apply_lead_task_update(
         event_type=event_type,
         task_id=update.task.id,
         message=message,
+        payload=_task_activity_payload(
+            update.task,
+            previous_status=update.previous_status,
+            reason="task_update",
+        ),
         agent_id=update.actor.agent.id,
         board_id=update.board_id,
     )
@@ -2487,6 +2625,11 @@ async def _record_task_update_activity(
         event_type=event_type,
         task_id=update.task.id,
         message=message,
+        payload=_task_activity_payload(
+            update.task,
+            previous_status=update.previous_status,
+            reason="task_update",
+        ),
         agent_id=actor_agent_id,
         board_id=update.board_id,
     )

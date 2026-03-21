@@ -71,6 +71,68 @@ def test_agent_lifecycle_workspace_path_preserves_tilde_in_workspace_root():
     )
 
 
+def test_record_heartbeat_includes_structured_payload(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def _fake_record_activity(_session, **kwargs):
+        captured.update(kwargs)
+        return None
+
+    monkeypatch.setattr("app.services.openclaw.provisioning_db.record_activity", _fake_record_activity)
+    agent = SimpleNamespace(
+        id=uuid4(),
+        name="Fox",
+        board_id=uuid4(),
+        openclaw_session_id="agent:fox:main",
+    )
+
+    AgentLifecycleService.record_heartbeat(SimpleNamespace(), agent)  # type: ignore[arg-type]
+
+    assert captured["event_type"] == "agent.heartbeat"
+    assert captured["payload"] == {
+        "agent_id": str(agent.id),
+        "agent_name": "Fox",
+        "action": "heartbeat",
+        "session_key": "agent:fox:main",
+        "board_id": str(agent.board_id),
+        "delivery_status": "received",
+    }
+
+
+def test_record_instruction_failure_includes_structured_payload(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def _fake_record_activity(_session, **kwargs):
+        captured.update(kwargs)
+        return None
+
+    monkeypatch.setattr("app.services.openclaw.provisioning_db.record_activity", _fake_record_activity)
+    agent = SimpleNamespace(
+        id=uuid4(),
+        name="Bunny",
+        board_id=uuid4(),
+        openclaw_session_id="agent:bunny:worker",
+    )
+
+    AgentLifecycleService.record_instruction_failure(
+        SimpleNamespace(),
+        agent,  # type: ignore[arg-type]
+        "gateway unavailable",
+        "provision",
+    )
+
+    assert captured["event_type"] == "agent.provision.failed"
+    assert captured["payload"] == {
+        "agent_id": str(agent.id),
+        "agent_name": "Bunny",
+        "action": "provision",
+        "session_key": "agent:bunny:worker",
+        "board_id": str(agent.board_id),
+        "delivery_status": "failed",
+        "error": "gateway unavailable",
+    }
+
+
 def test_templates_root_points_to_repo_templates_dir():
     root = agent_provisioning._templates_root()
     assert root.name == "templates"

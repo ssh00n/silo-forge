@@ -26,6 +26,22 @@ export function getBlockedProvisionTargetCount(detail: SiloDetail): number {
   );
 }
 
+export function getLatestRuntimeAttemptedCount(detail: SiloDetail): number {
+  return (
+    detail.latest_runtime_operation?.results.filter(
+      (result) => result.supports_picoclaw_bundle_apply,
+    ).length ?? 0
+  );
+}
+
+export function getLatestRuntimeBlockedCount(detail: SiloDetail): number {
+  return (
+    detail.latest_runtime_operation?.results.filter(
+      (result) => !result.supports_picoclaw_bundle_apply,
+    ).length ?? 0
+  );
+}
+
 export function collectSiloWarnings(detail: SiloDetail): string[] {
   const warnings = new Set<string>();
 

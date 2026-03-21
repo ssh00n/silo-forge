@@ -1,14 +1,18 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { useIsFetching, useIsMutating } from "@tanstack/react-query";
 
+const subscribe = () => () => {};
+
 export function GlobalLoader() {
+  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
   const fetchingCount = useIsFetching({
     predicate: (query) =>
       query.state.fetchStatus === "fetching" && query.state.data === undefined,
   });
   const mutatingCount = useIsMutating();
-  const visible = fetchingCount + mutatingCount > 0;
+  const visible = mounted && fetchingCount + mutatingCount > 0;
 
   return (
     <div

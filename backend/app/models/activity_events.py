@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid4
 
+from sqlalchemy import JSON, Column
 from sqlmodel import Field
 
 from app.core.time import utcnow
@@ -21,6 +23,7 @@ class ActivityEvent(QueryModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     event_type: str = Field(index=True)
     message: str | None = None
+    payload: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
     agent_id: UUID | None = Field(default=None, foreign_key="agents.id", index=True)
     task_id: UUID | None = Field(default=None, foreign_key="tasks.id", index=True)
     board_id: UUID | None = Field(default=None, foreign_key="boards.id", index=True)

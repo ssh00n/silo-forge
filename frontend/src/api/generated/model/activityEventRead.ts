@@ -4,6 +4,7 @@
  * Mission Control API
  * OpenAPI spec version: 0.1.0
  */
+import type { ActivityEventReadPayload } from "./activityEventReadPayload";
 import type { ActivityEventReadRouteParams } from "./activityEventReadRouteParams";
 
 /**
@@ -16,6 +17,7 @@ export interface ActivityEventRead {
   event_type: string;
   id: string;
   message: string | null;
+  payload?: ActivityEventReadPayload;
   route_name?: string | null;
   route_params?: ActivityEventReadRouteParams;
   task_id: string | null;

@@ -83,6 +83,32 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
     """Gateway-main and lead coordination workflows used by agent-facing routes."""
 
     @staticmethod
+    def _gateway_activity_payload(
+        *,
+        kind: str,
+        notification_status: str,
+        board: Board | None = None,
+        actor_agent: Agent | None = None,
+        target_agent: Agent | None = None,
+        error: str | None = None,
+        extra: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "notification_kind": kind,
+            "notification_status": notification_status,
+            "board_id": str(board.id) if board is not None else None,
+            "board_name": board.name if board is not None else None,
+            "actor_agent_id": str(actor_agent.id) if actor_agent is not None else None,
+            "target_agent_id": str(target_agent.id) if target_agent is not None else None,
+            "target_agent_name": target_agent.name if target_agent is not None else None,
+        }
+        if error:
+            payload["error"] = error
+        if extra:
+            payload.update(extra)
+        return payload
+
+    @staticmethod
     def _build_gateway_lead_message(
         *,
         board: Board,
@@ -203,6 +229,14 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
                 self.session,
                 event_type="agent.nudge.failed",
                 message=f"Nudge failed for {target.name}: {exc}",
+                payload=self._gateway_activity_payload(
+                    kind="agent_nudge",
+                    notification_status="failed",
+                    board=board,
+                    actor_agent=actor_agent,
+                    target_agent=target,
+                    error=str(exc),
+                ),
                 agent_id=actor_agent.id,
                 board_id=board.id,
             )
@@ -233,6 +267,13 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             self.session,
             event_type="agent.nudge.sent",
             message=f"Nudge sent to {target.name}.",
+            payload=self._gateway_activity_payload(
+                kind="agent_nudge",
+                notification_status="sent",
+                board=board,
+                actor_agent=actor_agent,
+                target_agent=target,
+            ),
             agent_id=actor_agent.id,
             board_id=board.id,
         )
@@ -398,6 +439,17 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             self.session,
             event_type="agent.soul.updated",
             message=note,
+            payload=self._gateway_activity_payload(
+                kind="agent_soul_update",
+                notification_status="sent",
+                board=board,
+                target_agent=target,
+                extra={
+                    "actor_agent_id": str(actor_agent_id),
+                    "reason": reason_text or None,
+                    "source_url": source_url_text or None,
+                },
+            ),
             agent_id=actor_agent_id,
             board_id=board.id,
         )
@@ -472,6 +524,13 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
                 self.session,
                 event_type="gateway.lead.ask_user.failed",
                 message=f"Lead user question failed for {board.name}: {exc}",
+                payload=self._gateway_activity_payload(
+                    kind="gateway_ask_user",
+                    notification_status="failed",
+                    board=board,
+                    actor_agent=actor_agent,
+                    error=str(exc),
+                ),
                 agent_id=actor_agent.id,
                 board_id=board.id,
             )
@@ -504,6 +563,12 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             self.session,
             event_type="gateway.lead.ask_user.sent",
             message=f"Lead requested user info via gateway agent for board: {board.name}.",
+            payload=self._gateway_activity_payload(
+                kind="gateway_ask_user",
+                notification_status="sent",
+                board=board,
+                actor_agent=actor_agent,
+            ),
             agent_id=actor_agent.id,
             board_id=board.id,
         )
@@ -599,6 +664,14 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
                 self.session,
                 event_type="gateway.main.lead_message.failed",
                 message=f"Lead message failed for {board.name}: {exc}",
+                payload=self._gateway_activity_payload(
+                    kind="gateway_lead_message",
+                    notification_status="failed",
+                    board=board,
+                    actor_agent=actor_agent,
+                    error=str(exc),
+                    extra={"message_kind": payload.kind},
+                ),
                 agent_id=actor_agent.id,
                 board_id=board.id,
             )
@@ -631,6 +704,14 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             self.session,
             event_type="gateway.main.lead_message.sent",
             message=f"Sent {payload.kind} to lead for board: {board.name}.",
+            payload=self._gateway_activity_payload(
+                kind="gateway_lead_message",
+                notification_status="sent",
+                board=board,
+                actor_agent=actor_agent,
+                target_agent=lead,
+                extra={"message_kind": payload.kind},
+            ),
             agent_id=actor_agent.id,
             board_id=board.id,
         )
@@ -719,6 +800,16 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             self.session,
             event_type="gateway.main.lead_broadcast.sent",
             message=f"Broadcast {payload.kind} to {sent} board leads (failed: {failed}).",
+            payload=self._gateway_activity_payload(
+                kind="gateway_lead_broadcast",
+                notification_status="sent",
+                actor_agent=actor_agent,
+                extra={
+                    "message_kind": payload.kind,
+                    "sent": sent,
+                    "failed": failed,
+                },
+            ),
             agent_id=actor_agent.id,
         )
         await self.session.commit()

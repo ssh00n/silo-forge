@@ -242,6 +242,59 @@ async def _fetch_task_comment_events(
     return _coerce_task_comment_rows(list(await session.exec(statement)))
 
 
+async def _fetch_activity_events(
+    session: AsyncSession,
+    since: datetime,
+    *,
+    board_ids: set[UUID],
+    board_id: UUID | None = None,
+) -> list[ActivityEventRead]:
+    statement: Any = (
+        select(
+            ActivityEvent,
+            col(ActivityEvent.board_id).label("event_board_id"),
+            col(Task.board_id).label("task_board_id"),
+        )
+        .outerjoin(Task, col(ActivityEvent.task_id) == col(Task.id))
+        .where(col(ActivityEvent.created_at) >= since)
+        .order_by(asc(col(ActivityEvent.created_at)))
+    )
+    if board_id is not None:
+        statement = statement.where(
+            or_(
+                col(ActivityEvent.board_id) == board_id,
+                col(Task.board_id) == board_id,
+            ),
+        )
+    elif board_ids:
+        statement = statement.where(
+            or_(
+                col(ActivityEvent.board_id).in_(board_ids),
+                and_(
+                    col(ActivityEvent.board_id).is_(None),
+                    col(Task.board_id).in_(board_ids),
+                ),
+            ),
+        )
+    else:
+        return []
+
+    rows = _coerce_activity_rows(list(await session.exec(statement)))
+    events: list[ActivityEventRead] = []
+    for event, event_board_id, task_board_id in rows:
+        payload = ActivityEventRead.model_validate(event, from_attributes=True)
+        resolved_board_id = event_board_id or task_board_id
+        payload.board_id = resolved_board_id
+        route_name, route_params = _build_activity_route(
+            event=event,
+            board_id=resolved_board_id,
+        )
+        payload.route_name = route_name
+        payload.route_params = route_params
+        events.append(payload)
+    return events
+
+
 @router.get("", response_model=DefaultLimitOffsetPage[ActivityEventRead])
 async def list_activity(
     session: AsyncSession = SESSION_DEP,
@@ -386,6 +439,64 @@ async def stream_task_comment_feed(
                     ).model_dump(mode="json"),
                 }
                 yield {"event": "comment", "data": json.dumps(payload)}
+            await asyncio.sleep(STREAM_POLL_SECONDS)
+
+    return EventSourceResponse(event_generator(), ping=15)
+
+
+@router.get("/stream")
+async def stream_activity(
+    request: Request,
+    board_id: UUID | None = BOARD_ID_QUERY,
+    since: str | None = SINCE_QUERY,
+    db_session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_MEMBER_DEP,
+) -> EventSourceResponse:
+    """Stream general activity events for accessible boards."""
+    since_dt = _parse_since(since) or utcnow()
+    board_ids = await list_accessible_board_ids(
+        db_session,
+        member=ctx.member,
+        write=False,
+    )
+    allowed_ids = set(board_ids)
+    if board_id is not None and board_id not in allowed_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    seen_ids: set[UUID] = set()
+    seen_queue: deque[UUID] = deque()
+
+    async def event_generator() -> AsyncIterator[dict[str, str]]:
+        last_seen = since_dt
+        while True:
+            if await request.is_disconnected():
+                break
+            async with async_session_maker() as stream_session:
+                rows = await _fetch_activity_events(
+                    stream_session,
+                    last_seen,
+                    board_ids=allowed_ids,
+                    board_id=board_id,
+                )
+            for event in rows:
+                event_id = event.id
+                if event_id in seen_ids:
+                    continue
+                seen_ids.add(event_id)
+                seen_queue.append(event_id)
+                if len(seen_queue) > SSE_SEEN_MAX:
+                    oldest = seen_queue.popleft()
+                    seen_ids.discard(oldest)
+                created_at = _parse_since(event.created_at)
+                if created_at is not None:
+                    last_seen = max(created_at, last_seen)
+                yield {
+                    "event": "activity",
+                    "data": json.dumps(
+                        {
+                            "activity": event.model_dump(mode="json"),
+                        },
+                    ),
+                }
             await asyncio.sleep(STREAM_POLL_SECONDS)
 
     return EventSourceResponse(event_generator(), ping=15)
