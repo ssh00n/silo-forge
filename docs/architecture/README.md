@@ -16,3 +16,4 @@
 - [Product transition pre-E2E](./product-transition-pre-e2e.md)
 - [Fork branding checklist](./fork-branding-checklist.md)
 - [Branding rename strategy](./branding-rename-strategy.md)
+- [Contracts package plan](./contracts-package-plan.md)

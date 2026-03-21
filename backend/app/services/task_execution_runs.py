@@ -758,6 +758,10 @@ class TaskExecutionRunService:
         )
         if total_tokens is not None:
             result["total_tokens"] = total_tokens
+        TaskExecutionRunService._merge_result_payload_metadata(
+            result=result,
+            result_payload=payload.result_payload or run.result_payload,
+        )
         return result
 
     @staticmethod
@@ -796,6 +800,10 @@ class TaskExecutionRunService:
         total_tokens = TaskExecutionRunService._extract_total_tokens(run.result_payload)
         if total_tokens is not None:
             result["total_tokens"] = total_tokens
+        TaskExecutionRunService._merge_result_payload_metadata(
+            result=result,
+            result_payload=run.result_payload,
+        )
         return result
 
     @staticmethod
@@ -883,6 +891,64 @@ class TaskExecutionRunService:
             if trimmed.isdigit():
                 return int(trimmed)
         return None
+
+    @staticmethod
+    def _extract_result_text(
+        result_payload: dict[str, Any] | None,
+        key: str,
+    ) -> str | None:
+        if not isinstance(result_payload, dict):
+            return None
+        value = result_payload.get(key)
+        if not isinstance(value, str):
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+    @staticmethod
+    def _extract_result_int(
+        result_payload: dict[str, Any] | None,
+        key: str,
+    ) -> int | None:
+        if not isinstance(result_payload, dict):
+            return None
+        value = result_payload.get(key)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        if isinstance(value, str):
+            trimmed = value.strip()
+            if trimmed.lstrip("-").isdigit():
+                return int(trimmed)
+        return None
+
+    @staticmethod
+    def _merge_result_payload_metadata(
+        *,
+        result: dict[str, Any],
+        result_payload: dict[str, Any] | None,
+    ) -> None:
+        text_keys = (
+            "issue_identifier",
+            "runner_kind",
+            "completion_kind",
+            "last_event",
+            "last_message",
+            "session_id",
+        )
+        int_keys = (
+            "turn_count",
+            "duration_ms",
+        )
+        for key in text_keys:
+            value = TaskExecutionRunService._extract_result_text(result_payload, key)
+            if value is not None:
+                result[key] = value
+        for key in int_keys:
+            value = TaskExecutionRunService._extract_result_int(result_payload, key)
+            if value is not None:
+                result[key] = value
 
     @staticmethod
     def _to_read(run: TaskExecutionRun, *, silo_slug: str) -> TaskExecutionRunRead:

@@ -116,7 +116,7 @@ export default function NewGatewayPage() {
         forceRedirectUrl: "/gateways/new",
       }}
       title="Create gateway"
-      description="Configure an OpenClaw gateway for mission control."
+      description="Configure a runtime host for Silo Forge."
       isAdmin={isAdmin}
       adminOnlyMessage="Only organization owners and admins can create gateways."
     >

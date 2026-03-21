@@ -147,6 +147,7 @@ describe("activity-events helpers", () => {
 
   it("classifies activity categories for filters", () => {
     expect(activityCategoryForEvent("task.execution_run.report")).toBe("runs");
+    expect(activityCategoryForEvent("silo.runtime.validate")).toBe("runtime");
     expect(activityCategoryForEvent("task.status_changed")).toBe("tasks");
     expect(activityCategoryForEvent("approval.created")).toBe("approvals");
     expect(activityCategoryForEvent("board.lead_notified")).toBe("boards");

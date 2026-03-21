@@ -449,6 +449,7 @@ const isExecutionRunEvent = (eventType: FeedEventType): boolean =>
 const ACTIVITY_FILTERS: Array<{ value: ActivityCategory; label: string }> = [
   { value: "all", label: "All" },
   { value: "runs", label: "Runs" },
+  { value: "runtime", label: "Runtime" },
   { value: "tasks", label: "Tasks" },
   { value: "approvals", label: "Approvals" },
   { value: "boards", label: "Boards" },

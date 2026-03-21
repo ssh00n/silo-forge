@@ -10,6 +10,7 @@ export type ActivityDetailRow = {
 export type ActivityCategory =
   | "all"
   | "runs"
+  | "runtime"
   | "tasks"
   | "approvals"
   | "boards"
@@ -212,9 +213,8 @@ export const activityCategoryForEvent = (eventType: string): ActivityCategory =>
   if (eventType === "board.chat" || eventType === "board.command") return "chat";
   if (eventType.startsWith("task.")) return "tasks";
   if (eventType.startsWith("approval.")) return "approvals";
-  if (eventType.startsWith("silo.runtime.") || eventType.startsWith("gateway.")) {
-    return "gateway";
-  }
+  if (eventType.startsWith("silo.runtime.")) return "runtime";
+  if (eventType.startsWith("gateway.")) return "gateway";
   if (eventType.startsWith("board.")) return "boards";
   if (eventType.startsWith("agent.")) return "agents";
   return "all";

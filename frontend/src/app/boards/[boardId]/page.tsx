@@ -714,6 +714,7 @@ const BOARD_LIVE_FEED_FILTERS: Array<{
 }> = [
   { value: "all", label: "All" },
   { value: "runs", label: "Runs" },
+  { value: "runtime", label: "Runtime" },
   { value: "tasks", label: "Tasks" },
   { value: "approvals", label: "Approvals" },
   { value: "agents", label: "Agents" },
@@ -5537,7 +5538,7 @@ export default function BoardDetailPage() {
                   to board chat.
                 </li>
                 <li>
-                  Mission Control forwards it to all agents on this board.
+                  Silo Forge forwards it to all agents on this board.
                 </li>
               </ul>
             </div>

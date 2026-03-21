@@ -47,6 +47,14 @@ export type RuntimeRunActivityPayload = {
   pull_request?: number;
   total_tokens?: number;
   error_message?: string;
+  issue_identifier?: string;
+  runner_kind?: string;
+  completion_kind?: string;
+  last_event?: string;
+  last_message?: string;
+  session_id?: string;
+  turn_count?: number;
+  duration_ms?: number;
   has_prompt_override?: boolean;
   retried_from_run_id?: string;
 };
@@ -210,6 +218,27 @@ export const extractRuntimeRunDetailsFromPayload = (
   }
   if (typeof parsed.external_run_id === "string" && parsed.external_run_id.trim()) {
     details.push({ label: "External run", value: parsed.external_run_id.trim() });
+  }
+  if (typeof parsed.issue_identifier === "string" && parsed.issue_identifier.trim()) {
+    details.push({ label: "Issue", value: parsed.issue_identifier.trim() });
+  }
+  if (typeof parsed.runner_kind === "string" && parsed.runner_kind.trim()) {
+    details.push({ label: "Runner", value: parsed.runner_kind.trim() });
+  }
+  if (typeof parsed.completion_kind === "string" && parsed.completion_kind.trim()) {
+    details.push({ label: "Completion", value: parsed.completion_kind.trim() });
+  }
+  if (typeof parsed.turn_count === "number" && Number.isFinite(parsed.turn_count)) {
+    details.push({ label: "Turns", value: String(Math.trunc(parsed.turn_count)) });
+  }
+  if (typeof parsed.session_id === "string" && parsed.session_id.trim()) {
+    details.push({ label: "Session", value: parsed.session_id.trim() });
+  }
+  if (typeof parsed.last_event === "string" && parsed.last_event.trim()) {
+    details.push({ label: "Event", value: parsed.last_event.trim() });
+  }
+  if (typeof parsed.duration_ms === "number" && Number.isFinite(parsed.duration_ms)) {
+    details.push({ label: "Duration", value: formatRuntimeDurationMs(parsed.duration_ms) });
   }
   if (typeof parsed.total_tokens === "number" && Number.isFinite(parsed.total_tokens)) {
     details.push({ label: "Tokens", value: new Intl.NumberFormat("en-US").format(parsed.total_tokens) });

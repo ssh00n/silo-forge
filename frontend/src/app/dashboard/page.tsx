@@ -790,7 +790,7 @@ export default function DashboardPage() {
         : orderedActivityEvents.filter((event) => {
             const category = activityCategoryForEvent(event.event_type);
             if (activityCategory === "runtime") {
-              return category === "runs" || category === "gateway";
+              return category === "runs" || category === "runtime";
             }
             return category === activityCategory;
           });

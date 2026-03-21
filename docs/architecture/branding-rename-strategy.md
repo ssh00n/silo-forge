@@ -44,6 +44,12 @@ Rename later, only if necessary:
 - replace remaining `Mission Control` product references in frontend copy
 - leave technical docs alone if they refer to upstream concepts that still matter
 
+Status:
+
+- visible app shell branding is updated
+- gateway/settings/loading surfaces are updated
+- remaining technical references are mostly internal docs, backend names, and generated API comments
+
 ### Phase 3: Repo And Packaging Cleanup
 
 - consider repo rename only after product direction is stable
@@ -64,3 +70,18 @@ Rename later, only if necessary:
 - do not remove upstream license text
 - avoid broad mechanical rename across internal code unless it improves maintainability
 - prefer a deliberate branding pass over piecemeal copy edits
+
+## Current status
+
+Completed in the visible product surfaces:
+
+- landing, auth, onboarding, invite, app shell
+- dashboard and board operator flows
+- gateway create/edit/list copy
+- loading and account settings copy
+
+Intentionally left for later:
+
+- generated API comments such as `Mission Control API`
+- backend module names and package identifiers
+- upstream-facing technical architecture documents that still describe historical context
