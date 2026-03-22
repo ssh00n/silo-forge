@@ -76,10 +76,14 @@ import {
   runtimeRunTimingLabel,
 } from "@/lib/runtime-runs";
 import {
+  buildDashboardSiloHealthViewModel,
+} from "@/lib/silo-ops";
+import {
   describeSiloRequestPressure,
   fetchSiloSpawnRequests,
   isOpenSiloRequestStatus,
 } from "@/lib/silo-spawn-requests";
+import { fetchSilos } from "@/lib/silos";
 import { cn } from "@/lib/utils";
 
 type SessionSummary = {
@@ -1083,6 +1087,13 @@ export default function DashboardPage() {
     refetchInterval: 30_000,
     refetchOnMount: "always",
   });
+  const silosQuery = useQuery({
+    queryKey: ["silos", "dashboard"],
+    queryFn: fetchSilos,
+    enabled: Boolean(isSignedIn),
+    refetchInterval: 30_000,
+    refetchOnMount: "always",
+  });
 
   const invalidateRuntimeViews = async (): Promise<void> => {
     await Promise.all([
@@ -1210,6 +1221,15 @@ export default function DashboardPage() {
       },
     );
   }, [siloRequestsQuery.data]);
+  const siloHealthViewModel = useMemo(
+    () => buildDashboardSiloHealthViewModel(silosQuery.data ?? []),
+    [silosQuery.data],
+  );
+  const siloHealthContextHref = useMemo(() => {
+    return siloHealthViewModel.primarySiloSlug
+      ? `/silos/${siloHealthViewModel.primarySiloSlug}`
+      : null;
+  }, [siloHealthViewModel.primarySiloSlug]);
 
   const onlineAgents = useMemo(
     () => agents.filter((agent) => (agent.status ?? "").toLowerCase() === "online").length,
@@ -1777,7 +1797,26 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-4">
+              <InfoBlock
+                title="Silo Health"
+                infoText="Core operating posture for the silos that can take work now."
+                badge={siloHealthViewModel.badge}
+                rows={[
+                  { label: "Healthy", value: formatCount(siloHealthViewModel.summary.healthyCount) },
+                  { label: "Busy", value: formatCount(siloHealthViewModel.summary.busyCount) },
+                  { label: "Blocked", value: formatCount(siloHealthViewModel.summary.blockedCount) },
+                  {
+                    label: "Degraded",
+                    value: formatCount(siloHealthViewModel.summary.degradedCount),
+                  },
+                  { label: "Needs setup", value: formatCount(siloHealthViewModel.summary.needsSetupCount) },
+                ]}
+                actionHref="/silos"
+                actionLabel="Open silos"
+                secondaryActionHref={siloHealthContextHref ?? undefined}
+                secondaryActionLabel={siloHealthContextHref ? "Open next silo" : undefined}
+              />
               <InfoBlock
                 title="Worker Telemetry"
                 infoText="Summarized from recent queue worker activity events."
@@ -1800,18 +1839,13 @@ export default function DashboardPage() {
               />
               <InfoBlock
                 title="Silo Requests"
-                infoText="Requested silo demand waiting to be planned or materialized."
+                infoText="Secondary planning queue for future silo demand."
                 rows={[
                   { label: "Open", value: formatCount(siloRequestsSummary.openCount) },
                   { label: "Urgent", value: formatCount(siloRequestsSummary.urgentCount) },
-                  { label: "High", value: formatCount(siloRequestsSummary.highCount) },
                   {
                     label: "Demand-linked",
                     value: formatCount(siloRequestsSummary.demandLinkedCount),
-                  },
-                  {
-                    label: "Active workload",
-                    value: formatCount(siloRequestsSummary.activeWorkloadCount),
                   },
                   {
                     label: "Materialized",

@@ -11,11 +11,14 @@ import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout"
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
-  buildSiloOverviewPosture,
-  dispatchReasonClass,
-} from "@/lib/silo-dispatch";
+  buildSiloOverviewCards,
+  buildSiloOverviewSummaryViewModel,
+  siloReasonChipClass,
+  siloToneBadgeVariant,
+} from "@/lib/silo-ops";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
 import { fetchSilos } from "@/lib/silos";
+import { Badge } from "@/components/ui/badge";
 
 export default function SilosPage() {
   const { isSignedIn } = useAuth();
@@ -29,18 +32,8 @@ export default function SilosPage() {
   });
 
   const silos = useMemo(() => silosQuery.data ?? [], [silosQuery.data]);
-  const siloSummary = useMemo(
-    () => ({
-      total: silos.length,
-      ready: silos.filter((silo) => silo.status === "active").length,
-      needsSetup: silos.filter((silo) => silo.status === "draft").length,
-      activeWork: silos.filter((silo) => silo.active_run_count > 0).length,
-      needsAttention: silos.filter(
-        (silo) => silo.blocked_run_count > 0 || silo.failed_run_count > 0,
-      ).length,
-    }),
-    [silos],
-  );
+  const siloSummary = useMemo(() => buildSiloOverviewSummaryViewModel(silos), [silos]);
+  const siloCards = useMemo(() => buildSiloOverviewCards(silos), [silos]);
 
   return (
     <DashboardPageLayout
@@ -92,7 +85,7 @@ export default function SilosPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <Card>
               <CardHeader>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Total silos</p>
@@ -103,10 +96,34 @@ export default function SilosPage() {
             </Card>
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Ready</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Healthy</p>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold text-emerald-700">{siloSummary.ready}</p>
+                <p className="text-3xl font-semibold text-emerald-700">{siloSummary.healthy}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Busy</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-slate-900">{siloSummary.busy}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Blocked</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-rose-700">{siloSummary.blocked}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Degraded</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-amber-700">{siloSummary.degraded}</p>
               </CardContent>
             </Card>
             <Card>
@@ -114,40 +131,14 @@ export default function SilosPage() {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Needs setup</p>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold text-amber-700">
-                  {siloSummary.needsSetup}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  Active work
-                </p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold text-blue-700">
-                  {siloSummary.activeWork}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  Needs attention
-                </p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold text-rose-700">
-                  {siloSummary.needsAttention}
-                </p>
+                <p className="text-3xl font-semibold text-slate-700">{siloSummary.needsSetup}</p>
               </CardContent>
             </Card>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {silos.map((silo) => {
-              const posture = buildSiloOverviewPosture(silo);
+            {siloCards.map((posture) => {
+              const silo = posture.silo;
               return (
               <Link key={silo.slug} href={`/silos/${silo.slug}`}>
                 <Card className="h-full border border-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300">
@@ -159,19 +150,12 @@ export default function SilosPage() {
                           {silo.blueprint_slug}@{silo.blueprint_version}
                         </p>
                       </div>
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                          posture.tone === "success"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : posture.tone === "warning"
-                              ? "bg-amber-100 text-amber-700"
-                              : posture.tone === "danger"
-                                ? "bg-rose-100 text-rose-700"
-                                : "bg-slate-100 text-slate-700"
-                        }`}
+                      <Badge
+                        variant={siloToneBadgeVariant(posture.tone)}
+                        className="px-2.5 py-1 text-xs font-medium normal-case tracking-normal"
                       >
                         {posture.readinessLabel}
-                      </span>
+                      </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -180,7 +164,7 @@ export default function SilosPage() {
                       {posture.reasons.slice(0, 3).map((reason) => (
                         <span
                           key={`${silo.slug}-${reason.label}`}
-                          className={`rounded-full px-2.5 py-1 ${dispatchReasonClass(reason.tone)}`}
+                          className={`rounded-full px-2.5 py-1 ${siloReasonChipClass(reason.tone)}`}
                         >
                           {reason.label}
                         </span>

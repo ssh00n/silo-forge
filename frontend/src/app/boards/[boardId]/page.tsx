@@ -136,10 +136,11 @@ import {
 } from "@/lib/silo-spawn-requests";
 import { fetchSilos } from "@/lib/silos";
 import {
-  buildSiloDispatchCandidate,
-  buildTaskDemandProfile,
-  dispatchReasonClass,
-} from "@/lib/silo-dispatch";
+  buildTaskDispatchViewModel,
+  siloReasonChipClass,
+  siloToneBadgeVariant,
+} from "@/lib/silo-ops";
+import { Badge } from "@/components/ui/badge";
 import {
   canAcknowledgeRuntimeRun,
   canCancelRuntimeRun,
@@ -1503,28 +1504,18 @@ export default function BoardDetailPage() {
     refetchInterval: 30_000,
     refetchOnMount: "always",
   });
-  const symphonyEnabledSilos = useMemo(
-    () => (silosQuery.data ?? []).filter((silo) => silo.enable_symphony),
-    [silosQuery.data],
-  );
-  const symphonyDispatchCandidates = useMemo(
+  const taskDispatchViewModel = useMemo(
     () =>
-      [...symphonyEnabledSilos]
-        .map((silo) => buildSiloDispatchCandidate(silo, selectedTask))
-        .sort((left, right) => left.score - right.score || left.silo.name.localeCompare(right.silo.name)),
-    [selectedTask, symphonyEnabledSilos],
+      buildTaskDispatchViewModel({
+        silos: silosQuery.data ?? [],
+        task: selectedTask,
+        selectedSiloSlug: newExecutionRunSiloSlug,
+      }),
+    [newExecutionRunSiloSlug, selectedTask, silosQuery.data],
   );
-  const selectedDispatchCandidate = useMemo(
-    () =>
-      symphonyDispatchCandidates.find(
-        (candidate) => candidate.silo.slug === newExecutionRunSiloSlug,
-      ) ?? symphonyDispatchCandidates[0] ?? null,
-    [newExecutionRunSiloSlug, symphonyDispatchCandidates],
-  );
-  const selectedTaskDemandProfile = useMemo(
-    () => buildTaskDemandProfile(selectedTask),
-    [selectedTask],
-  );
+  const symphonyDispatchCandidates = taskDispatchViewModel.candidates;
+  const selectedDispatchCandidate = taskDispatchViewModel.selectedCandidate;
+  const selectedTaskDemandProfile = taskDispatchViewModel.taskDemandProfile;
   const selectedTaskExecutionRunsQuery = useQuery<
     TaskExecutionRunSnapshot[],
     ApiError
@@ -5312,7 +5303,7 @@ export default function BoardDetailPage() {
                             key={`task-demand-${reason.label}`}
                             className={cn(
                               "rounded-full px-2.5 py-1",
-                              dispatchReasonClass(reason.tone),
+                              siloReasonChipClass(reason.tone),
                             )}
                           >
                             {reason.label}
@@ -5332,24 +5323,32 @@ export default function BoardDetailPage() {
                             {selectedDispatchCandidate.silo.name}
                           </p>
                         </div>
-                        <span
-                          className={cn(
-                            "rounded-full px-2.5 py-1 text-xs font-medium",
-                            selectedDispatchCandidate.tone === "success" &&
-                              "bg-emerald-100 text-emerald-700",
-                            selectedDispatchCandidate.tone === "warning" &&
-                              "bg-amber-100 text-amber-700",
-                            selectedDispatchCandidate.tone === "danger" &&
-                              "bg-rose-100 text-rose-700",
-                            selectedDispatchCandidate.tone === "neutral" &&
-                              "bg-slate-100 text-slate-700",
-                          )}
-                        >
-                          {selectedDispatchCandidate.readinessLabel}
-                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge
+                            variant={siloToneBadgeVariant(selectedDispatchCandidate.tone)}
+                            className="px-2.5 py-1 text-xs font-medium normal-case tracking-normal"
+                          >
+                            {selectedDispatchCandidate.readinessLabel}
+                          </Badge>
+                          <Badge
+                            variant={siloToneBadgeVariant(selectedDispatchCandidate.health.tone)}
+                            className="px-2.5 py-1 text-xs font-medium normal-case tracking-normal"
+                          >
+                            {selectedDispatchCandidate.health.label}
+                          </Badge>
+                          <Badge
+                            variant={siloToneBadgeVariant(selectedDispatchCandidate.tone)}
+                            className="px-2.5 py-1 text-xs font-medium normal-case tracking-normal"
+                          >
+                            Fit {selectedDispatchCandidate.readinessLabel}
+                          </Badge>
+                        </div>
                       </div>
                       <p className="mt-2 text-xs text-slate-600">
-                        {selectedDispatchCandidate.guidance}
+                        {selectedDispatchCandidate.health.guidance}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Dispatch fit: {selectedDispatchCandidate.guidance}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
                         {selectedDispatchCandidate.reasons.map((reason) => (
@@ -5357,7 +5356,7 @@ export default function BoardDetailPage() {
                             key={`${selectedDispatchCandidate.silo.slug}-${reason.label}`}
                             className={cn(
                               "rounded-full px-2.5 py-1",
-                              dispatchReasonClass(reason.tone),
+                              siloReasonChipClass(reason.tone),
                             )}
                           >
                             {reason.label}
@@ -5417,7 +5416,7 @@ export default function BoardDetailPage() {
                         <SelectContent>
                           {symphonyDispatchCandidates.map((candidate) => (
                             <SelectItem key={candidate.silo.slug} value={candidate.silo.slug}>
-                              {candidate.silo.name} · {candidate.readinessLabel}
+                              {candidate.silo.name} · {candidate.health.label}
                             </SelectItem>
                           ))}
                         </SelectContent>

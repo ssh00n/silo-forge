@@ -9,11 +9,10 @@ import {
   getLatestRuntimeAttemptedCount,
   getLatestRuntimeBlockedCount,
   getReadyProvisionTargetCount,
-  getSiloHealthSummary,
-  getSiloWorkloadGuidance,
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
 } from "./silo-detail";
+import { buildSiloDetailOpsViewModel } from "./silo-ops";
 
 const buildDetail = (overrides: Partial<SiloDetail> = {}): SiloDetail => ({
   silo: {
@@ -202,12 +201,12 @@ describe("silo-detail helpers", () => {
   });
 
   it("describes current silo workload in operator terms", () => {
-    expect(getSiloWorkloadGuidance(buildDetail())).toBe(
+    expect(buildSiloDetailOpsViewModel(buildDetail()).workloadGuidance).toBe(
       "This silo is actively carrying runtime work right now.",
     );
 
     expect(
-      getSiloWorkloadGuidance(
+      buildSiloDetailOpsViewModel(
         buildDetail({
           workload_summary: {
             ...buildDetail().workload_summary!,
@@ -216,14 +215,14 @@ describe("silo-detail helpers", () => {
             blocked_run_count: 1,
           },
         }),
-      ),
+      ).workloadGuidance,
     ).toBe(
       "Blocked runs need operator attention before this silo can be trusted with more work.",
     );
   });
 
   it("reflects workload pressure in health summary when runtime is otherwise ready", () => {
-    const summary = getSiloHealthSummary(
+    const summary = buildSiloDetailOpsViewModel(
       buildDetail({
         silo: {
           ...buildDetail().silo,
@@ -265,8 +264,8 @@ describe("silo-detail helpers", () => {
           running_run_count: 2,
         },
       }),
-    );
+    ).healthSummary;
 
-    expect(summary.label).toBe("Available but busy");
+    expect(summary.label).toBe("Busy");
   });
 });

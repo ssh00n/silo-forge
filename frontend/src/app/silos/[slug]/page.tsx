@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import {
   UNASSIGNED_GATEWAY,
   collectSiloWarnings,
@@ -33,12 +34,10 @@ import {
   getLatestRuntimeAttemptedCount,
   getLatestRuntimeBlockedCount,
   getReadyProvisionTargetCount,
-  getSiloHealthSummary,
-  getSiloRuntimePosture,
-  getSiloWorkloadGuidance,
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
 } from "@/lib/silo-detail";
+import { buildSiloDetailOpsViewModel, siloToneBadgeVariant } from "@/lib/silo-ops";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
 import { fetchSiloDetail, runSiloRuntime, updateSilo } from "@/lib/silos";
 
@@ -136,9 +135,10 @@ export default function SiloDetailPage() {
     : 0;
   const latestRuntimeBlockedCount = detail ? getLatestRuntimeBlockedCount(detail) : 0;
   const canApplyRuntime = detail ? hasActionableProvisionTargets(detail) : false;
-  const healthSummary = detail ? getSiloHealthSummary(detail) : null;
-  const runtimePosture = detail ? getSiloRuntimePosture(detail) : "Loading";
-  const workloadGuidance = detail ? getSiloWorkloadGuidance(detail) : "Loading";
+  const opsViewModel = detail ? buildSiloDetailOpsViewModel(detail) : null;
+  const healthSummary = opsViewModel?.healthSummary ?? null;
+  const runtimePosture = opsViewModel?.runtimePosture ?? "Loading";
+  const workloadGuidance = opsViewModel?.workloadGuidance ?? "Loading";
   const configDirty = detail
     ? hasSiloConfigChanges({
         detail,
@@ -238,19 +238,12 @@ export default function SiloDetailPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs font-medium">
-              <span
-                className={`rounded-full px-3 py-1 ${
-                  healthSummary?.tone === "success"
-                    ? "bg-emerald-100 text-emerald-800"
-                    : healthSummary?.tone === "danger"
-                      ? "bg-rose-100 text-rose-800"
-                      : healthSummary?.tone === "warning"
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-white text-slate-700"
-                }`}
+              <Badge
+                variant={siloToneBadgeVariant(healthSummary?.tone ?? "neutral")}
+                className="px-3 py-1 text-xs font-medium normal-case tracking-normal"
               >
                 {healthSummary?.label}
-              </span>
+              </Badge>
               <span className="rounded-full bg-white px-3 py-1 text-slate-700">
                 {assignedGatewayRoleCount}/{gatewayRuntimeRoleCount} assigned
               </span>

@@ -19,3 +19,4 @@
 - [Contracts package plan](./contracts-package-plan.md)
 - [OpenAPI vs Contracts Boundary](./openapi-vs-contracts-boundary.md)
 - [Silo Control Plane Roadmap](./silo-control-plane-roadmap.md)
+- [Silo Ops Refactor Plan](./silo-ops-refactor-plan.md)
