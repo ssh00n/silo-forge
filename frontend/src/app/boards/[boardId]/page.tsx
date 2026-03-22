@@ -966,6 +966,8 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   onEscalate,
   approvalsHref,
   pendingApprovalsCount,
+  latestResolvedApprovalStatus,
+  latestResolvedApprovalAt,
 }: {
   run: TaskExecutionRunSnapshot;
   isRetrying: boolean;
@@ -978,6 +980,8 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   onEscalate?: () => void;
   approvalsHref?: string | null;
   pendingApprovalsCount?: number;
+  latestResolvedApprovalStatus?: "approved" | "rejected" | null;
+  latestResolvedApprovalAt?: string | null;
 }) {
   const totalTokens = executionRunTotalTokens(run);
   const pullRequestNumber = executionRunPullRequestNumber(run);
@@ -989,6 +993,12 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
     canAcknowledgeRuntimeRun(run.status) && Boolean(onAcknowledge);
   const canEscalate = canEscalateRuntimeRun(run.status) && Boolean(onEscalate);
   const needsApprovalAttention = runtimeRunNeedsApprovalAttention(run);
+  const resolvedApprovalLabel =
+    latestResolvedApprovalStatus === "approved"
+      ? "approved"
+      : latestResolvedApprovalStatus === "rejected"
+        ? "rejected"
+        : null;
   const operatorState = runtimeRunOperatorState(run);
   const guidance = runtimeRunOperatorGuidance(run);
   const detailRows = [
@@ -1139,6 +1149,21 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
         </p>
         <p className="mt-1 text-sm font-medium text-slate-900">{guidance.title}</p>
         <p className="mt-1 text-xs text-slate-600">{guidance.detail}</p>
+        {needsApprovalAttention && resolvedApprovalLabel ? (
+          <div className="mt-2 rounded-md border border-slate-200 bg-white/70 px-2 py-2 text-xs text-slate-700">
+            Latest approval was <span className="font-semibold">{resolvedApprovalLabel}</span>
+            {latestResolvedApprovalAt ? (
+              <>
+                {" "}
+                {formatApprovalTimestamp(latestResolvedApprovalAt)}
+              </>
+            ) : null}
+            .{" "}
+            {latestResolvedApprovalStatus === "approved"
+              ? "Retry or continue the run now that the gate is clear."
+              : "Review the rejection reason before retrying or escalating again."}
+          </div>
+        ) : null}
       </div>
       <RuntimeRunMetaGrid details={detailRows} itemKey={run.id} />
     </div>
@@ -3220,6 +3245,20 @@ export default function BoardDetailPage() {
     [taskApprovals],
   );
 
+  const latestResolvedTaskApproval = useMemo(() => {
+    const resolved = taskApprovals
+      .filter(
+        (approval): approval is Approval & { status: "approved" | "rejected" } =>
+          approval.status === "approved" || approval.status === "rejected",
+      )
+      .sort((a, b) => {
+        const aStamp = a.resolved_at ?? a.created_at;
+        const bStamp = b.resolved_at ?? b.created_at;
+        return new Date(bStamp).getTime() - new Date(aStamp).getTime();
+      });
+    return resolved[0] ?? null;
+  }, [taskApprovals]);
+
   const workingAgentIds = useMemo(() => {
     const working = new Set<string>();
     tasks.forEach((task) => {
@@ -5188,6 +5227,17 @@ export default function BoardDetailPage() {
                         boardId ? `/boards/${encodeURIComponent(boardId)}/approvals` : null
                       }
                       pendingApprovalsCount={pendingTaskApprovalsCount}
+                      latestResolvedApprovalStatus={
+                        latestResolvedTaskApproval?.status === "approved" ||
+                        latestResolvedTaskApproval?.status === "rejected"
+                          ? latestResolvedTaskApproval.status
+                          : null
+                      }
+                      latestResolvedApprovalAt={
+                        latestResolvedTaskApproval?.resolved_at ??
+                        latestResolvedTaskApproval?.created_at ??
+                        null
+                      }
                       onRetry={
                         canWrite && canRetryRuntimeRun(run.status)
                           ? () => handleRetryExecutionRun(run)
