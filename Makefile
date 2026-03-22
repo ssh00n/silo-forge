@@ -149,6 +149,10 @@ api-gen: frontend-tooling ## Regenerate TS API client (requires backend running 
 contracts-gen: ## Regenerate shared contract artifacts for backend/frontend/(optional) sibling symphony
 	python3 scripts/generate_contract_artifacts.py
 
+.PHONY: contracts-check
+contracts-check: ## Fail if generated contract artifacts are stale
+	bash scripts/check_contract_artifacts.sh
+
 .PHONY: docker-up
 docker-up: ## Start full Docker stack with image rebuild
 	docker compose -f compose.yml --env-file .env up -d --build
@@ -191,7 +195,7 @@ backend-templates-sync: ## Sync templates to existing gateway agents (usage: mak
 	cd $(BACKEND_DIR) && uv run python scripts/sync_gateway_templates.py --gateway-id "$(GATEWAY_ID)" $(SYNC_ARGS)
 
 .PHONY: check
-check: lint typecheck backend-coverage frontend-test build ## Run lint + typecheck + tests + coverage + build
+check: contracts-check lint typecheck backend-coverage frontend-test build ## Run lint + typecheck + tests + coverage + build
 
 
 .PHONY: docs-lint

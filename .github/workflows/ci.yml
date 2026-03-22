@@ -51,6 +51,9 @@ jobs:
       - name: Install frontend dependencies
         run: make frontend-sync
 
+      - name: Verify contract artifacts
+        run: make contracts-check
+
       - name: Cache Next.js build cache
         uses: actions/cache@v4
         with:

@@ -6,7 +6,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from app.contracts.json_schema import load_contract_schema, validate_contract_payload
+from app.contracts.generated_schemas import (
+    ACTIVITY__EXECUTION_RUN_PAYLOAD_SCHEMA_JSON,
+    EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON,
+)
+from app.contracts.json_schema import validate_contract_payload
 
 ExecutionRunStatus = Literal[
     "queued",
@@ -18,10 +22,8 @@ ExecutionRunStatus = Literal[
     "blocked",
 ]
 
-ExecutionCallbackSchema = load_contract_schema("contracts/execution/callback.payload.schema.json")
-ExecutionRunActivitySchema = load_contract_schema(
-    "contracts/activity/execution-run.payload.schema.json"
-)
+ExecutionCallbackSchema = EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON
+ExecutionRunActivitySchema = ACTIVITY__EXECUTION_RUN_PAYLOAD_SCHEMA_JSON
 
 
 class ExecutionCallbackResultPayload(BaseModel):

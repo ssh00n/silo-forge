@@ -1,16 +1,14 @@
 "use client";
 
-import { activityExecutionRunPayloadSchemaJson } from "@/contracts/generated/schemas";
+import type {
+  ActivityExecutionRunPayloadExecutorKind,
+  ActivityExecutionRunPayloadStatus,
+} from "@/contracts/generated/schemas";
 import { parseApiDatetime } from "@/lib/datetime";
 import { parseTimestamp } from "@/lib/formatters";
 
-type EnumValues<T> = T extends { enum: readonly (infer U)[] } ? U : never;
-
-type ActivityExecutionRunSchema = typeof activityExecutionRunPayloadSchemaJson;
-type ActivityExecutionRunProperties = ActivityExecutionRunSchema["properties"];
-
-export type RuntimeRunStatus = EnumValues<ActivityExecutionRunProperties["status"]>;
-export type RuntimeExecutorKind = EnumValues<ActivityExecutionRunProperties["executor_kind"]>;
+export type RuntimeRunStatus = ActivityExecutionRunPayloadStatus;
+export type RuntimeExecutorKind = ActivityExecutionRunPayloadExecutorKind;
 
 export type RuntimeRunSnapshot = {
   id: string;
