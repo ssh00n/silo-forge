@@ -18,6 +18,7 @@ from app.models.organization_invites import OrganizationInvite
 from app.models.organization_members import OrganizationMember
 from app.models.organizations import Organization
 from app.models.silo_roles import SiloRole
+from app.models.silo_spawn_requests import SiloSpawnRequest
 from app.models.silo_runtime_operations import (
     SiloRuntimeOperation,
     SiloRuntimeOperationResult,
@@ -64,6 +65,7 @@ __all__ = [
     "OrganizationInviteBoardAccess",
     "SiloRuntimeOperation",
     "SiloRuntimeOperationResult",
+    "SiloSpawnRequest",
     "Silo",
     "SiloRole",
     "TaskDependency",

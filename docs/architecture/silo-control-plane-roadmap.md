@@ -1,13 +1,13 @@
-# Organism Control Plane Roadmap
+# Silo Control Plane Roadmap
 
 This document reframes `Silo Forge` around the actual product goal:
 
-- let operators define a small organizational unit
-- spawn and manage organism agents inside that unit
-- observe, govern, retry, and evolve those organisms through one control plane
+- let operators define and run small agent silos
+- spawn and manage agents inside those silos
+- observe, govern, retry, and evolve those silos through one control plane
 
-`Silo` is the current implementation term for one such unit.
-It is not the final product boundary.
+`Silo` is now the primary product noun.
+Under the hood, a silo may still collapse to one agent or expand to a coordinated sub-organization.
 
 ## Product Goal
 
@@ -15,8 +15,8 @@ The target product is not just a runtime dashboard.
 It is a control plane for:
 
 - defining operator-owned organizational units
-- attaching runtimes, gateways, and policies to those units
-- spawning organism agents into those units
+- attaching runtimes, gateways, and policies to those silos
+- spawning agents into those silos
 - observing execution, failures, retries, and approvals
 - managing the full lifecycle of those agents over time
 
@@ -82,31 +82,31 @@ Implemented:
 Assessment:
 
 - strong observability baseline
-- still biased toward debugging systems, not yet managing organisms as first-class product objects
+- still biased toward debugging systems, not yet managing silos as first-class product objects
 
 ## What Is Still Missing
 
 The biggest gaps are no longer low-level runtime plumbing.
 The gaps are now product-level operating concepts.
 
-### A. Organizational Unit Abstraction
+### A. Silo Operating Model
 
 Today:
 
-- `silo` is the only real unit model
+- `silo` is the real operator-facing unit
 
 Needed:
 
-- a clearer product concept for “the operator-defined unit that owns organisms”
-- a path where `silo` can remain the initial implementation without forcing the final UX vocabulary
+- a clearer model for how a silo can represent one agent or a small coordinated team
+- explicit desired-state and lifecycle flows around that silo
 
 Working direction:
 
-- keep backend/storage term `silo` for now
-- introduce product language like `unit`, `organism group`, or `operating cell` only when UX needs it
-- avoid premature model churn until spawn/manage flows are clearer
+- keep `silo` as the primary UX vocabulary
+- use lower-level runtime terms like `pod` or container only for infrastructure surfaces
+- avoid premature generic abstractions until spawn/manage flows are clearer
 
-### B. Organism Spawn And Management
+### B. Silo Spawn And Management
 
 Today:
 
@@ -116,9 +116,9 @@ Today:
 Needed:
 
 - explicit spawn workflow
-- explicit mapping between a unit and its organisms
+- explicit mapping between a silo and its agents
 - operator controls for start, stop, retry, replace, wake, and inspect
-- persistent organism inventory at the unit and organization level
+- persistent agent inventory at the silo and organization level
 
 ### C. Runtime Operator Flow
 
@@ -135,7 +135,7 @@ Needed:
 - timeout/cancel/blocked handling as first-class operator actions
 - stronger linking between runtime state, approvals, tasks, and feed actions
 
-### D. Multi-Unit Organization Operations
+### D. Multi-Silo Organization Operations
 
 Today:
 
@@ -144,9 +144,9 @@ Today:
 
 Needed:
 
-- organization-level view of units and organisms
-- filtering by unit, runtime, gateway, health, and failure state
-- compare units and understand which ones need intervention
+- organization-level view of silos and agents
+- filtering by silo, runtime, gateway, health, and failure state
+- compare silos and understand which ones need intervention
 
 ## Strategic Priorities
 
@@ -177,10 +177,10 @@ Must include:
 
 - runtime apply status as a stronger state model
 - role/gateway assignment health
-- visible unit inventory and health
-- ability to understand which organisms belong to which unit
+- visible silo inventory and health
+- ability to understand which agents belong to which silo
 
-### Priority 3. Add Organism Spawn And Management
+### Priority 3. Add Silo Spawn And Agent Management
 
 Why third:
 
@@ -189,8 +189,8 @@ Why third:
 
 Must include:
 
-- spawn organism into a unit
-- organism inventory page or panel
+- spawn agent-oriented silos
+- agent inventory page or panel
 - lifecycle controls and status
 - operator drill-down into current and past runs
 
@@ -198,7 +198,7 @@ Must include:
 
 Must include:
 
-- organization-wide unit and organism views
+- organization-wide silo and agent views
 - health rollups
 - failure queues
 - governance and audit surfaces
@@ -209,7 +209,7 @@ Must include:
 
 - second-pass `Silo Forge` product wording cleanup
 - docs and empty-state cleanup
-- product vocabulary that can evolve beyond `silo` without forcing a model rewrite
+- product vocabulary that stays anchored on `silo` while leaving room for future runtime shapes
 
 ## Recommended Execution Waves
 
@@ -226,28 +226,28 @@ Concrete scope:
 - connect runtime failures to task status and approvals more explicitly
 - improve callback metadata handling in feed surfaces
 
-### Wave 2. Unit Health And Inventory
+### Wave 2. Silo Health And Inventory
 
 Target outcome:
 
-- an operator can see whether a unit is valid, applied, healthy, and ready to spawn organisms
+- an operator can see whether a silo is valid, applied, healthy, and ready to spawn agents
 
 Concrete scope:
 
-- strengthen unit runtime status model
+- strengthen silo runtime status model
 - expose assignment health and apply history
-- add organization-level unit listing improvements
+- add organization-level silo listing improvements
 
-### Wave 3. Organism Spawn And Lifecycle
+### Wave 3. Silo Spawn And Agent Lifecycle
 
 Target outcome:
 
-- an operator can create and manage organisms from the control plane
+- an operator can create and manage silo-contained agents from the control plane
 
 Concrete scope:
 
 - spawn flow
-- organism inventory
+- agent inventory
 - lifecycle actions
 - links to runtime history and telemetry
 
@@ -255,7 +255,7 @@ Concrete scope:
 
 - keep `contracts/` discipline in place
 - do not rename storage/API primitives just to chase vocabulary
-- do not introduce a separate “organism service” until spawn semantics are real
+- do not introduce a separate spawn service until spawn semantics are real
 - prefer product-level workflows over more raw telemetry widgets
 
 ## Immediate Next Step

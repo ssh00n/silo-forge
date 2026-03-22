@@ -75,6 +75,7 @@ import {
   runtimeRunOperatorGuidance,
   runtimeRunTimingLabel,
 } from "@/lib/runtime-runs";
+import { fetchSiloSpawnRequests } from "@/lib/silo-spawn-requests";
 import { cn } from "@/lib/utils";
 
 type SessionSummary = {
@@ -184,9 +185,16 @@ type TelemetryOpsResponse = {
   headers: Headers;
 };
 
+type SiloRequestsSummary = {
+  openCount: number;
+  urgentCount: number;
+  highCount: number;
+  materializedRecentCount: number;
+};
+
 type StreamedActivityEvent = ActivityEventRead;
 
-const DASH = "—";
+  const DASH = "—";
 const DASHBOARD_RANGE = "7d";
 const DASHBOARD_RANGE_DAYS = 7;
 const DASHBOARD_RANGE_LABEL = "7 days";
@@ -209,6 +217,11 @@ const dashboardActivityLabel = (eventType: string): string => {
   if (eventType === "task.execution_run.retried") return "Run retried";
   if (eventType === "task.execution_run.updated") return "Run update";
   if (eventType === "task.execution_run.report") return "Run report";
+  if (eventType === "silo.request.created") return "Request created";
+  if (eventType === "silo.request.planned") return "Request planned";
+  if (eventType === "silo.request.cancelled") return "Request cancelled";
+  if (eventType === "silo.request.materialized") return "Request materialized";
+  if (eventType.startsWith("silo.request.")) return "Silo request";
   if (eventType === "silo.runtime.validate") return "Runtime validate";
   if (eventType === "silo.runtime.apply") return "Runtime apply";
   if (eventType === "queue.worker.batch_started") return "Worker start";
@@ -258,6 +271,18 @@ const dashboardActivityPillClass = (eventType: string): string => {
   }
   if (eventType === "task.execution_run.report") {
     return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "silo.request.created" || eventType === "silo.request.planned") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.request.materialized") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "silo.request.cancelled") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType.startsWith("silo.request.")) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
   }
   if (eventType === "silo.runtime.validate") {
     return "border-sky-200 bg-sky-50 text-sky-700";
@@ -957,6 +982,9 @@ function InfoBlock({
   );
 }
 
+const isOpenSiloRequestStatus = (status: string): boolean =>
+  status === "requested" || status === "planned" || status === "spawning" || status === "running";
+
 export default function DashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -1044,6 +1072,13 @@ export default function DashboardPage() {
       );
       return response.data;
     },
+  });
+  const siloRequestsQuery = useQuery({
+    queryKey: ["silo-spawn-requests", "dashboard"],
+    queryFn: fetchSiloSpawnRequests,
+    enabled: Boolean(isSignedIn),
+    refetchInterval: 30_000,
+    refetchOnMount: "always",
   });
 
   const invalidateRuntimeViews = async (): Promise<void> => {
@@ -1137,6 +1172,30 @@ export default function DashboardPage() {
   const metrics = metricsQuery.data?.status === 200 ? metricsQuery.data.data : null;
   const runtimeMetrics = runtimeMetricsQuery.data ?? null;
   const telemetryOpsMetrics = telemetryOpsQuery.data ?? null;
+  const siloRequestsSummary = useMemo<SiloRequestsSummary>(() => {
+    const now = Date.now();
+    const requests = siloRequestsQuery.data ?? [];
+    return requests.reduce<SiloRequestsSummary>(
+      (acc, request) => {
+        if (isOpenSiloRequestStatus(request.status)) {
+          acc.openCount += 1;
+          if (request.priority === "urgent") acc.urgentCount += 1;
+          if (request.priority === "high") acc.highCount += 1;
+        }
+        if (request.materialized_at) {
+          const materializedAt = new Date(request.materialized_at).getTime();
+          if (
+            Number.isFinite(materializedAt) &&
+            now - materializedAt <= 7 * 24 * 60 * 60 * 1000
+          ) {
+            acc.materializedRecentCount += 1;
+          }
+        }
+        return acc;
+      },
+      { openCount: 0, urgentCount: 0, highCount: 0, materializedRecentCount: 0 },
+    );
+  }, [siloRequestsQuery.data]);
 
   const onlineAgents = useMemo(
     () => agents.filter((agent) => (agent.status ?? "").toLowerCase() === "online").length,
@@ -1704,7 +1763,7 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
               <InfoBlock
                 title="Worker Telemetry"
                 infoText="Summarized from recent queue worker activity events."
@@ -1724,6 +1783,21 @@ export default function DashboardPage() {
                 actionLabel="Open feed"
                 secondaryActionHref={webhookContextHref ?? undefined}
                 secondaryActionLabel={webhookContextHref ? "Open board" : undefined}
+              />
+              <InfoBlock
+                title="Silo Requests"
+                infoText="Requested silo demand waiting to be planned or materialized."
+                rows={[
+                  { label: "Open", value: formatCount(siloRequestsSummary.openCount) },
+                  { label: "Urgent", value: formatCount(siloRequestsSummary.urgentCount) },
+                  { label: "High", value: formatCount(siloRequestsSummary.highCount) },
+                  {
+                    label: "Materialized",
+                    value: formatCount(siloRequestsSummary.materializedRecentCount),
+                  },
+                ]}
+                actionHref="/silos/requests"
+                actionLabel="Open queue"
               />
             </div>
 

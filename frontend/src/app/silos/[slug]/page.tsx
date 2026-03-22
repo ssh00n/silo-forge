@@ -245,6 +245,26 @@ export default function SiloDetailPage() {
         </div>
       ) : null}
 
+      {detail?.source_request_id ? (
+        <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-blue-900">Created from silo request</p>
+              <p className="mt-1 text-sm text-blue-800">
+                {detail.source_request_display_name ?? "Silo request"} ·{" "}
+                {detail.source_request_status ?? "linked"}
+              </p>
+            </div>
+            <Link
+              href="/silos/requests"
+              className="text-sm font-medium text-blue-700 hover:text-blue-900"
+            >
+              Open requests
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       {!slug ? (
         <Card>
           <CardContent className="pt-6">

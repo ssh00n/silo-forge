@@ -36,12 +36,20 @@ export default function SilosPage() {
       description="Track provisioned silo factories, blueprint versions, and runtime readiness."
       headerActions={
         isAdmin ? (
-          <Link
-            href="/silos/new"
-            className={buttonVariants({ size: "md", variant: "primary" })}
-          >
-            Create silo
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/silos/requests"
+              className={buttonVariants({ size: "md", variant: "secondary" })}
+            >
+              Silo requests
+            </Link>
+            <Link
+              href="/silos/new"
+              className={buttonVariants({ size: "md", variant: "primary" })}
+            >
+              Create silo
+            </Link>
+          </div>
         ) : null
       }
       isAdmin={isAdmin}

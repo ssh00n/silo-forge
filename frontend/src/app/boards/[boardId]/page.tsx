@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   useParams,
   usePathname,
@@ -129,6 +130,7 @@ import {
 import { AGENT_EMOJI_GLYPHS } from "@/lib/agent-emoji";
 import { cn } from "@/lib/utils";
 import { usePageActive } from "@/hooks/usePageActive";
+import { fetchSiloSpawnRequestsForBoard } from "@/lib/silo-spawn-requests";
 import { fetchSilos } from "@/lib/silos";
 import {
   canAcknowledgeRuntimeRun,
@@ -203,6 +205,13 @@ type LiveFeedOpsSummary = {
   failureCount: number;
 };
 
+const siloRequestPriorityClass = (priority: string): string => {
+  if (priority === "urgent") return "bg-rose-50 text-rose-700 border border-rose-200";
+  if (priority === "high") return "bg-amber-50 text-amber-700 border border-amber-200";
+  if (priority === "low") return "bg-slate-100 text-slate-600 border border-slate-200";
+  return "bg-blue-50 text-blue-700 border border-blue-200";
+};
+
 const DASH = "—";
 
 const LIVE_FEED_EVENT_TYPES = new Set<string>([
@@ -222,6 +231,10 @@ const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "task.execution_run.report",
   "task.execution_run.acknowledged",
   "task.execution_run.escalated",
+  "silo.request.created",
+  "silo.request.planned",
+  "silo.request.cancelled",
+  "silo.request.materialized",
   "task.created",
   "task.updated",
   "task.status_changed",
@@ -594,6 +607,10 @@ const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "webhook.dispatch.requeued") return "Webhook retried";
   if (eventType === "webhook.dispatch.batch_complete") return "Webhook batch";
   if (eventType === "webhook.dispatch.batch_finished") return "Webhook finished";
+  if (eventType === "silo.request.created") return "Request created";
+  if (eventType === "silo.request.planned") return "Request planned";
+  if (eventType === "silo.request.cancelled") return "Request cancelled";
+  if (eventType === "silo.request.materialized") return "Request materialized";
   if (eventType === "silo.runtime.validate") return "Runtime validate";
   if (eventType === "silo.runtime.apply") return "Runtime apply";
   return "Updated";
@@ -752,6 +769,15 @@ const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   }
   if (eventType.startsWith("webhook.dispatch.")) {
     return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.request.created" || eventType === "silo.request.planned") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.request.materialized") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "silo.request.cancelled") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
   }
   if (eventType === "silo.runtime.validate") {
     return "border-sky-200 bg-sky-50 text-sky-700";
@@ -1457,6 +1483,24 @@ export default function BoardDetailPage() {
     },
   });
   const selectedTaskExecutionRuns = selectedTaskExecutionRunsQuery.data ?? [];
+  const boardSiloRequestsQuery = useQuery({
+    queryKey: ["board", boardId, "silo-spawn-requests"],
+    queryFn: () => fetchSiloSpawnRequestsForBoard(boardId ?? ""),
+    enabled: Boolean(isSignedIn && boardId && isOrgAdmin && isDetailOpen),
+    refetchInterval: 30_000,
+    refetchOnMount: "always",
+  });
+  const boardSiloRequests = useMemo(
+    () => boardSiloRequestsQuery.data ?? [],
+    [boardSiloRequestsQuery.data],
+  );
+  const boardOpenSiloRequestsCount = useMemo(
+    () =>
+      boardSiloRequests.filter((request) =>
+        ["requested", "planned", "spawning"].includes(request.status),
+      ).length,
+    [boardSiloRequests],
+  );
 
   const [board, setBoard] = useState<Board | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -4847,6 +4891,89 @@ export default function BoardDetailPage() {
                 <p className="text-sm text-slate-500">
                   No description provided.
                 </p>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Silo requests
+                </p>
+                <div className="flex items-center gap-2">
+                  {isOrgAdmin && selectedTask ? (
+                    <Link
+                      href={`/silos/requests?board_id=${encodeURIComponent(boardId)}&task_id=${encodeURIComponent(
+                        selectedTask.id,
+                      )}&task_title=${encodeURIComponent(selectedTask.title)}&priority=high`}
+                      className="inline-flex h-9 items-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Request from task
+                    </Link>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/silos/requests")}
+                  >
+                    View all
+                  </Button>
+                </div>
+              </div>
+              {boardSiloRequestsQuery.isLoading ? (
+                <p className="text-sm text-slate-500">Loading silo requests…</p>
+              ) : boardSiloRequests.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No board-scoped silo requests. {boardOpenSiloRequestsCount > 0
+                    ? `${boardOpenSiloRequestsCount} open elsewhere.`
+                    : "Create one from the silo requests queue when this board needs a dedicated operating silo."}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {boardSiloRequests.slice(0, 3).map((request) => (
+                    <div
+                      key={request.id}
+                      className="rounded-xl border border-slate-200 bg-white p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">
+                            {request.display_name}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {request.silo_kind} · {request.status}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${siloRequestPriorityClass(request.priority)}`}
+                        >
+                          {request.priority}
+                        </span>
+                        {request.materialized_silo_slug ? (
+                          <Link
+                            href={`/silos/${request.materialized_silo_slug}`}
+                            className="text-xs font-medium text-blue-700 hover:text-blue-900"
+                          >
+                            Open silo
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/silos/new?request=${request.id}`}
+                            className="text-xs font-medium text-blue-700 hover:text-blue-900"
+                          >
+                            Materialize
+                          </Link>
+                        )}
+                      </div>
+                      {request.summary ? (
+                        <p className="mt-2 text-xs text-slate-600">{request.summary}</p>
+                      ) : null}
+                      {request.source_task_title ? (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Demand source: {request.source_task_title}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
             <div className="space-y-2">

@@ -285,6 +285,11 @@ const eventLabel = (eventType: FeedEventType): string => {
   if (eventType === "approval.updated") return "Approval update";
   if (eventType === "approval.approved") return "Approved";
   if (eventType === "approval.rejected") return "Rejected";
+  if (eventType === "silo.request.created") return "Request created";
+  if (eventType === "silo.request.planned") return "Request planned";
+  if (eventType === "silo.request.cancelled") return "Request cancelled";
+  if (eventType === "silo.request.materialized") return "Request materialized";
+  if (eventType.startsWith("silo.request.")) return "Silo request";
   if (eventType === "silo.runtime.validate") return "Runtime validate";
   if (eventType === "silo.runtime.apply") return "Runtime apply";
   if (eventType === "queue.worker.batch_started") return "Worker start";
@@ -413,6 +418,18 @@ const eventPillClass = (eventType: FeedEventType): string => {
   }
   if (eventType === "approval.rejected") {
     return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "silo.request.created" || eventType === "silo.request.planned") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.request.materialized") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "silo.request.cancelled") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType.startsWith("silo.request.")) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
   }
   if (eventType === "silo.runtime.validate") {
     return "border-sky-200 bg-sky-50 text-sky-700";

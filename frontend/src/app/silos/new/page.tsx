@@ -3,7 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 
 import { useAuth } from "@/auth/clerk";
@@ -24,17 +24,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
+import { fetchSiloSpawnRequest } from "@/lib/silo-spawn-requests";
 import { createSilo, fetchSiloBlueprints } from "@/lib/silos";
 
 const DEFAULT_BLUEPRINT = "default-four-agent";
 
 export default function NewSiloPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isSignedIn } = useAuth();
   const { isAdmin } = useOrganizationMembership(isSignedIn);
+  const requestId = searchParams.get("request");
 
-  const [name, setName] = useState("");
-  const [enableSymphony, setEnableSymphony] = useState(false);
+  const [name, setName] = useState<string | null>(null);
+  const [enableSymphonyOverride, setEnableSymphonyOverride] = useState<boolean | null>(null);
   const [enableTelemetry, setEnableTelemetry] = useState(true);
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +56,11 @@ export default function NewSiloPage() {
       refetchOnMount: "always",
     },
   });
+  const spawnRequestQuery = useQuery({
+    queryKey: ["silo-spawn-requests", requestId],
+    queryFn: () => fetchSiloSpawnRequest(requestId ?? ""),
+    enabled: Boolean(isSignedIn && isAdmin && requestId),
+  });
 
   const blueprint = useMemo(
     () =>
@@ -66,6 +74,11 @@ export default function NewSiloPage() {
   );
   const gateways =
     gatewaysQuery.data?.status === 200 ? (gatewaysQuery.data.data.items ?? []) : [];
+  const spawnRequest = spawnRequestQuery.data ?? null;
+  const resolvedName = name ?? spawnRequest?.display_name ?? "";
+  const resolvedEnableSymphony =
+    enableSymphonyOverride ??
+    (spawnRequest?.runtime_preference?.toLowerCase().includes("symphony") === true);
 
   const createMutation = useMutation({
     mutationFn: createSilo,
@@ -82,7 +95,7 @@ export default function NewSiloPage() {
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!name.trim()) {
+    if (!resolvedName.trim()) {
       setError("Silo name is required.");
       return;
     }
@@ -92,9 +105,10 @@ export default function NewSiloPage() {
     }
     setError(null);
     createMutation.mutate({
-      name: name.trim(),
+      name: resolvedName.trim(),
       blueprint_slug: blueprint.slug,
-      enable_symphony: enableSymphony,
+      spawn_request_id: spawnRequest?.id ?? null,
+      enable_symphony: resolvedEnableSymphony,
       enable_telemetry: enableTelemetry,
       gateway_assignments: roles
         .map((role) => ({
@@ -120,6 +134,22 @@ export default function NewSiloPage() {
         onSubmit={handleSubmit}
         className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
       >
+        {spawnRequest ? (
+          <Card className="border border-blue-200 bg-blue-50">
+            <CardHeader>
+              <h2 className="text-lg font-semibold text-slate-900">Prefilled from request</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {spawnRequest.display_name} · {spawnRequest.silo_kind} · {spawnRequest.scope}
+              </p>
+            </CardHeader>
+            {spawnRequest.summary ? (
+              <CardContent>
+                <p className="text-sm text-slate-700">{spawnRequest.summary}</p>
+              </CardContent>
+            ) : null}
+          </Card>
+        ) : null}
+
         <Card className="border border-slate-100 bg-slate-50">
           <CardHeader>
             <h2 className="text-lg font-semibold text-slate-900">Blueprint</h2>
@@ -142,7 +172,7 @@ export default function NewSiloPage() {
               Silo name <span className="text-red-500">*</span>
             </label>
             <Input
-              value={name}
+              value={resolvedName}
               onChange={(event) => setName(event.target.value)}
               placeholder="e.g. Launch Crew"
               disabled={isLoading}
@@ -163,8 +193,8 @@ export default function NewSiloPage() {
               <label className="flex items-center gap-3">
                 <input
                   type="checkbox"
-                  checked={enableSymphony}
-                  onChange={(event) => setEnableSymphony(event.target.checked)}
+                  checked={resolvedEnableSymphony}
+                  onChange={(event) => setEnableSymphonyOverride(event.target.checked)}
                   className="h-4 w-4 rounded border-slate-300"
                 />
                 Enable Symphony
@@ -235,7 +265,7 @@ export default function NewSiloPage() {
           <Button
             type="button"
             variant="secondary"
-            onClick={() => router.push("/silos")}
+            onClick={() => router.push(requestId ? "/silos/requests" : "/silos")}
             disabled={isLoading}
           >
             Cancel

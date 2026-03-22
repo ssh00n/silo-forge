@@ -92,6 +92,7 @@ class SiloBlueprintRead(SQLModel):
 class SiloRead(SQLModel):
     """Read model returned for silo overview pages."""
 
+    id: str | None = None
     slug: str
     name: str
     blueprint_slug: str
@@ -143,6 +144,7 @@ class SiloCreate(SQLModel):
 
     name: str
     blueprint_slug: str
+    spawn_request_id: str | None = None
     blueprint_version: str | None = None
     owner_display_name: str | None = None
     enable_symphony: bool = False
@@ -301,6 +303,10 @@ class SiloRuntimeHistoryEntryRead(SQLModel):
 class SiloDetailRead(SQLModel):
     """Detailed silo view for operator-facing Silo Detail pages."""
 
+    source_request_id: str | None = None
+    source_request_slug: str | None = None
+    source_request_status: str | None = None
+    source_request_display_name: str | None = None
     silo: SiloRead
     desired_state: SiloPreviewRead
     roles: list[SiloRoleDesiredState] = Field(default_factory=list)

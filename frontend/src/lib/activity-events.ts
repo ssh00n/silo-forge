@@ -145,6 +145,17 @@ const parseWebhookTelemetryPayload = (
   return record as Partial<WebhookDeliveryResultTelemetryPayload>;
 };
 
+const parseSiloRequestPayload = (
+  payload: unknown,
+): Record<string, unknown> | null => {
+  const record = toRecord(payload);
+  if (!record) return null;
+  if (!hasString(record, "display_name") && !hasString(record, "status")) {
+    return null;
+  }
+  return record;
+};
+
 const resolveBoardActivityContent = (
   eventType: string,
   message: string,
@@ -430,6 +441,31 @@ export const resolveActivityFeedContent = (
     };
   }
 
+  if (eventType.startsWith("silo.request.")) {
+    const requestPayload = parseSiloRequestPayload(normalizedPayload);
+    const displayName = readString(requestPayload, ["display_name"]) ?? "Silo request";
+    const status = readString(requestPayload, ["status"]);
+    const previousStatus = readString(requestPayload, ["previous_status"]);
+    const priority = readString(requestPayload, ["priority"]);
+    const scope = readString(requestPayload, ["scope"]);
+    const siloKind = readString(requestPayload, ["silo_kind"]);
+    const sourceTaskTitle = readString(requestPayload, ["source_task_title"]);
+    const materializedSiloSlug = readString(requestPayload, ["materialized_silo_slug"]);
+    const details: ActivityDetailRow[] = [];
+    if (status) details.push({ label: "Status", value: status });
+    if (previousStatus) details.push({ label: "Previous", value: previousStatus });
+    if (priority) details.push({ label: "Priority", value: priority });
+    if (scope) details.push({ label: "Scope", value: scope });
+    if (siloKind) details.push({ label: "Shape", value: siloKind });
+    if (sourceTaskTitle) details.push({ label: "Demand", value: sourceTaskTitle });
+    if (materializedSiloSlug) details.push({ label: "Silo", value: materializedSiloSlug });
+    return {
+      summary: normalizedMessage || `Silo request updated: ${displayName}.`,
+      details,
+      runtimeStatus: null,
+    };
+  }
+
   if (eventType.startsWith("queue.worker.")) {
     const telemetry = parseQueueWorkerTelemetryPayload(normalizedPayload);
     const queueName = telemetry?.queue_name?.trim() || readString(normalizedPayload, ["queue_name"]);
@@ -581,6 +617,7 @@ export const activityCategoryForEvent = (eventType: string): ActivityCategory =>
   if (eventType === "board.chat" || eventType === "board.command") return "chat";
   if (eventType.startsWith("task.")) return "tasks";
   if (eventType.startsWith("approval.")) return "approvals";
+  if (eventType.startsWith("silo.request.")) return "boards";
   if (eventType.startsWith("silo.runtime.")) return "runtime";
   if (eventType.startsWith("queue.worker.")) return "runtime";
   if (eventType.startsWith("webhook.dispatch.")) return "gateway";

@@ -13,6 +13,7 @@ from app.core.time import utcnow
 from app.db import crud
 from app.models.gateways import Gateway
 from app.models.silo_roles import SiloRole
+from app.models.silo_spawn_requests import SiloSpawnRequest
 from app.models.silo_runtime_operations import (
     SiloRuntimeOperation,
     SiloRuntimeOperationResult,
@@ -33,6 +34,7 @@ from app.schemas.silos import (
     SiloUpdate,
 )
 from app.services.silos.blueprints import build_default_four_agent_blueprint
+from app.services.activity_log import record_activity
 
 _SLUG_SANITIZER_RE = re.compile(r"[^a-z0-9]+")
 
@@ -131,6 +133,12 @@ class SiloService:
         if existing is not None:
             raise ValueError(f"Silo already exists: {preview.slug}")
 
+        spawn_request: SiloSpawnRequest | None = None
+        if payload.spawn_request_id:
+            spawn_request = await self._session.get(SiloSpawnRequest, UUID(payload.spawn_request_id))
+            if spawn_request is None or spawn_request.organization_id != organization_id:
+                raise ValueError("Silo spawn request not found")
+
         now = utcnow()
         silo = Silo(
             organization_id=organization_id,
@@ -148,6 +156,32 @@ class SiloService:
         )
         self._session.add(silo)
         await self._session.flush()
+
+        if spawn_request is not None:
+            spawn_request.materialized_silo_id = silo.id
+            spawn_request.materialized_silo_slug = silo.slug
+            spawn_request.materialized_at = now
+            spawn_request.status = "materialized"
+            spawn_request.updated_at = now
+            self._session.add(spawn_request)
+            record_activity(
+                self._session,
+                event_type="silo.request.materialized",
+                message=f"Silo request materialized into {silo.name}.",
+                payload={
+                    "request_id": str(spawn_request.id),
+                    "request_slug": spawn_request.slug,
+                    "display_name": spawn_request.display_name,
+                    "status": spawn_request.status,
+                    "scope": spawn_request.scope,
+                    "silo_kind": spawn_request.silo_kind,
+                    "priority": spawn_request.priority,
+                    "board_id": str(spawn_request.board_id) if spawn_request.board_id else None,
+                    "materialized_silo_id": str(silo.id),
+                    "materialized_silo_slug": silo.slug,
+                },
+                board_id=spawn_request.board_id,
+            )
 
         for role in preview.roles:
             gateway_name = role.gateway_name
@@ -181,6 +215,7 @@ class SiloService:
 
         await self._session.commit()
         return SiloRead(
+            id=str(silo.id),
             slug=silo.slug,
             name=silo.name,
             blueprint_slug=silo.blueprint_slug,
@@ -277,6 +312,7 @@ class SiloService:
             roles = await crud.list_by(self._session, SiloRole, silo_id=silo.id)
             results.append(
                 SiloRead(
+                    id=str(silo.id),
                     slug=silo.slug,
                     name=silo.name,
                     blueprint_slug=silo.blueprint_slug,
@@ -304,6 +340,7 @@ class SiloService:
             return None
         roles = await crud.list_by(self._session, SiloRole, silo_id=silo.id)
         return SiloRead(
+            id=str(silo.id),
             slug=silo.slug,
             name=silo.name,
             blueprint_slug=silo.blueprint_slug,
@@ -365,7 +402,17 @@ class SiloService:
             slug=slug,
         )
         latest_runtime_operation = await self._latest_runtime_operation(silo_id=silo.id)
+        source_request = await crud.get_one_by(
+            self._session,
+            SiloSpawnRequest,
+            organization_id=organization_id,
+            materialized_silo_id=silo.id,
+        )
         return SiloDetailRead(
+            source_request_id=str(source_request.id) if source_request else None,
+            source_request_slug=source_request.slug if source_request else None,
+            source_request_status=source_request.status if source_request else None,
+            source_request_display_name=source_request.display_name if source_request else None,
             silo=summary,
             desired_state=desired_state,
             roles=roles,
