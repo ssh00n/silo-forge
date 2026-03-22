@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SiloSummary } from "@/lib/silos";
 import {
   buildSiloDispatchCandidate,
+  buildSiloOverviewPosture,
   buildTaskDemandProfile,
   dispatchReasonClass,
 } from "./silo-dispatch";
@@ -51,6 +52,13 @@ describe("silo-dispatch helpers", () => {
     expect(candidate.readinessLabel).toBe("Needs attention");
     expect(candidate.tone).toBe("danger");
     expect(candidate.reasons[0]?.label).toBe("Blocked or failed runs present");
+  });
+
+  it("derives overview posture without task demand", () => {
+    const posture = buildSiloOverviewPosture(buildSilo({ active_run_count: 2 }));
+
+    expect(posture.readinessLabel).toBe("Available but busy");
+    expect(posture.reasons.some((reason) => reason.label === "Active load 2")).toBe(true);
   });
 
   it("builds approval pressure demand profile", () => {

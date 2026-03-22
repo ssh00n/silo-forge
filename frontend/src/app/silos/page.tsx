@@ -10,56 +10,12 @@ import { useAuth } from "@/auth/clerk";
 import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  buildSiloOverviewPosture,
+  dispatchReasonClass,
+} from "@/lib/silo-dispatch";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
 import { fetchSilos } from "@/lib/silos";
-
-const siloHealthTone = (
-  silo: Awaited<ReturnType<typeof fetchSilos>>[number],
-): string => {
-  if (silo.status === "active") return "bg-emerald-100 text-emerald-700";
-  if (silo.status === "provisioning") return "bg-amber-100 text-amber-700";
-  if (silo.status === "paused" || silo.status === "archived") {
-    return "bg-slate-200 text-slate-700";
-  }
-  return "bg-blue-100 text-blue-700";
-};
-
-const siloHealthLabel = (
-  silo: Awaited<ReturnType<typeof fetchSilos>>[number],
-): string => {
-  if (silo.status === "active") return "Ready";
-  if (silo.status === "provisioning") return "Applying";
-  if (silo.status === "paused") return "Paused";
-  if (silo.status === "archived") return "Archived";
-  return "Needs setup";
-};
-
-const siloGuidance = (
-  silo: Awaited<ReturnType<typeof fetchSilos>>[number],
-): string => {
-  if (silo.blocked_run_count > 0) {
-    return "Blocked runtime work needs operator attention before assigning more load.";
-  }
-  if (silo.failed_run_count > 0) {
-    return "Recent runtime failures need review before trusting this silo with more work.";
-  }
-  if (silo.active_run_count > 0) {
-    return "This silo is currently carrying active runtime work.";
-  }
-  if (silo.status === "active") {
-    return "Runtime has been activated. Open detail to inspect assignments and current readiness.";
-  }
-  if (silo.status === "provisioning") {
-    return "This silo is being driven toward an applied runtime state.";
-  }
-  if (silo.status === "paused") {
-    return "The silo exists but is paused. Review runtime posture before sending more work.";
-  }
-  if (silo.status === "archived") {
-    return "This silo is archived and should not receive new work.";
-  }
-  return "Finish assignment and runtime setup before treating this silo as an operating unit.";
-};
 
 export default function SilosPage() {
   const { isSignedIn } = useAuth();
@@ -190,7 +146,9 @@ export default function SilosPage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {silos.map((silo) => (
+            {silos.map((silo) => {
+              const posture = buildSiloOverviewPosture(silo);
+              return (
               <Link key={silo.slug} href={`/silos/${silo.slug}`}>
                 <Card className="h-full border border-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300">
                   <CardHeader>
@@ -202,14 +160,32 @@ export default function SilosPage() {
                         </p>
                       </div>
                       <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${siloHealthTone(silo)}`}
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                          posture.tone === "success"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : posture.tone === "warning"
+                              ? "bg-amber-100 text-amber-700"
+                              : posture.tone === "danger"
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-slate-100 text-slate-700"
+                        }`}
                       >
-                        {siloHealthLabel(silo)}
+                        {posture.readinessLabel}
                       </span>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <p className="text-sm text-slate-600">{siloGuidance(silo)}</p>
+                    <p className="text-sm text-slate-600">{posture.guidance}</p>
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      {posture.reasons.slice(0, 3).map((reason) => (
+                        <span
+                          key={`${silo.slug}-${reason.label}`}
+                          className={`rounded-full px-2.5 py-1 ${dispatchReasonClass(reason.tone)}`}
+                        >
+                          {reason.label}
+                        </span>
+                      ))}
+                    </div>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div className="rounded-xl bg-slate-50 p-3">
                         <p className="text-xs uppercase tracking-wide text-slate-400">Roles</p>
@@ -259,7 +235,7 @@ export default function SilosPage() {
                   </CardContent>
                 </Card>
               </Link>
-            ))}
+            )})}
           </div>
         </div>
       )}

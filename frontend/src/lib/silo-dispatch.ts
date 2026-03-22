@@ -136,6 +136,9 @@ export const buildSiloDispatchCandidate = (
   };
 };
 
+export const buildSiloOverviewPosture = (silo: SiloSummary): SiloDispatchCandidate =>
+  buildSiloDispatchCandidate(silo, null);
+
 export const buildTaskDemandProfile = (
   task: TaskDemandInput,
 ): TaskDemandProfile | null => {
