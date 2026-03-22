@@ -69,6 +69,7 @@ import {
   canEscalateRuntimeRun,
   canRetryRuntimeRun,
   formatRuntimeDurationMs,
+  runtimeRunNeedsApprovalAttention,
   runtimeRunOperatorState,
   type RuntimeRunSnapshot,
   runtimeRunOperatorGuidance,
@@ -2198,6 +2199,16 @@ export default function DashboardPage() {
                                       ? "Escalating…"
                                       : "Escalate"}
                                   </button>
+                                ) : null}
+                                {runtimeRunNeedsApprovalAttention(run) ? (
+                                  <a
+                                    href={`/boards/${encodeURIComponent(run.board_id)}/approvals`}
+                                    onClick={(event) => event.stopPropagation()}
+                                    className="mt-1 inline-flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-800"
+                                  >
+                                    Open approvals
+                                    <ArrowUpRight className="h-3 w-3" />
+                                  </a>
                                 ) : null}
                               </div>
                             </div>

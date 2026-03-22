@@ -158,6 +158,10 @@ export const canAcknowledgeRuntimeRun = (status: RuntimeRunStatus | string): boo
 export const canEscalateRuntimeRun = (status: RuntimeRunStatus | string): boolean =>
   status === "failed" || status === "cancelled" || status === "blocked";
 
+export const runtimeRunNeedsApprovalAttention = (
+  run: RuntimeRunSnapshot & { error_message?: string | null },
+): boolean => runtimeRunOperatorState(run).label === "approval blocked";
+
 const normalizeRuntimeHint = (value?: string | null): string | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -276,11 +280,13 @@ export const runtimeRunOperatorGuidance = (
     };
   }
   if (operatorState.label === "approval blocked") {
-      return {
-        tone: "warning",
-        title: "Resolve the block",
-        detail: blockReason ?? "Clear the approval or policy blocker, then retry the run.",
-      };
+    return {
+      tone: "warning",
+      title: "Resolve the approval gate",
+      detail:
+        blockReason ??
+        "Open the board approvals queue, resolve the decision, then retry or continue the run.",
+    };
   }
   if (operatorState.label === "blocked") {
     return {

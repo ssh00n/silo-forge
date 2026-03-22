@@ -136,6 +136,7 @@ import {
   canEscalateRuntimeRun,
   canRetryRuntimeRun,
   formatRuntimeDurationMs,
+  runtimeRunNeedsApprovalAttention,
   type TaskExecutionRunResponse,
   type TaskExecutionRunSnapshot,
   type TaskExecutionRunsResponse,
@@ -963,6 +964,8 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   onCancel,
   onAcknowledge,
   onEscalate,
+  approvalsHref,
+  pendingApprovalsCount,
 }: {
   run: TaskExecutionRunSnapshot;
   isRetrying: boolean;
@@ -973,6 +976,8 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   onCancel?: () => void;
   onAcknowledge?: () => void;
   onEscalate?: () => void;
+  approvalsHref?: string | null;
+  pendingApprovalsCount?: number;
 }) {
   const totalTokens = executionRunTotalTokens(run);
   const pullRequestNumber = executionRunPullRequestNumber(run);
@@ -983,6 +988,7 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   const canAcknowledge =
     canAcknowledgeRuntimeRun(run.status) && Boolean(onAcknowledge);
   const canEscalate = canEscalateRuntimeRun(run.status) && Boolean(onEscalate);
+  const needsApprovalAttention = runtimeRunNeedsApprovalAttention(run);
   const operatorState = runtimeRunOperatorState(run);
   const guidance = runtimeRunOperatorGuidance(run);
   const detailRows = [
@@ -1100,6 +1106,17 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
             >
               {isEscalating ? "Escalating…" : "Escalate"}
             </Button>
+          ) : null}
+          {approvalsHref && needsApprovalAttention ? (
+            <a
+              href={approvalsHref}
+              className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-100"
+            >
+              {pendingApprovalsCount && pendingApprovalsCount > 0
+                ? `Open approvals (${pendingApprovalsCount})`
+                : "Open approvals"}
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </a>
           ) : null}
         </div>
       </div>
@@ -3198,6 +3215,11 @@ export default function BoardDetailPage() {
     );
   }, [approvals, selectedTask]);
 
+  const pendingTaskApprovalsCount = useMemo(
+    () => taskApprovals.filter((approval) => approval.status === "pending").length,
+    [taskApprovals],
+  );
+
   const workingAgentIds = useMemo(() => {
     const working = new Set<string>();
     tasks.forEach((task) => {
@@ -5162,6 +5184,10 @@ export default function BoardDetailPage() {
                       isCancelling={cancellingExecutionRunId === run.id}
                       isAcknowledging={acknowledgingExecutionRunId === run.id}
                       isEscalating={escalatingExecutionRunId === run.id}
+                      approvalsHref={
+                        boardId ? `/boards/${encodeURIComponent(boardId)}/approvals` : null
+                      }
+                      pendingApprovalsCount={pendingTaskApprovalsCount}
                       onRetry={
                         canWrite && canRetryRuntimeRun(run.status)
                           ? () => handleRetryExecutionRun(run)
