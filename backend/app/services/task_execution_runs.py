@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.contracts.execution import finalize_execution_run_activity_payload
 from app.core.time import utcnow
 from app.db import crud
 from app.models.activity_events import ActivityEvent
@@ -648,7 +649,7 @@ class TaskExecutionRunService:
             TaskExecutionRunService._read_dispatch_text(dispatch_payload, "prompt_override")
         )
         payload["role_slug"] = role_slug
-        return payload
+        return TaskExecutionRunService._finalize_activity_payload(payload)
 
     @staticmethod
     def _build_retried_message(
@@ -690,7 +691,7 @@ class TaskExecutionRunService:
         )
         if branch_hint:
             payload["branch_hint"] = branch_hint
-        return payload
+        return TaskExecutionRunService._finalize_activity_payload(payload)
 
     @staticmethod
     def _build_dispatched_message(
@@ -720,7 +721,7 @@ class TaskExecutionRunService:
     ) -> dict[str, Any]:
         payload = TaskExecutionRunService._build_run_payload(run=run, silo_slug=silo_slug)
         payload["adapter_mode"] = adapter_mode
-        return payload
+        return TaskExecutionRunService._finalize_activity_payload(payload)
 
     @staticmethod
     def _build_updated_message(*, run: TaskExecutionRun, silo_slug: str) -> str:
@@ -781,7 +782,7 @@ class TaskExecutionRunService:
             result=result,
             result_payload=payload.result_payload or run.result_payload,
         )
-        return result
+        return TaskExecutionRunService._finalize_activity_payload(result)
 
     @staticmethod
     def _build_run_payload(
@@ -823,7 +824,7 @@ class TaskExecutionRunService:
             result=result,
             result_payload=run.result_payload,
         )
-        return result
+        return TaskExecutionRunService._finalize_activity_payload(result)
 
     @staticmethod
     def _build_read_payload(run: TaskExecutionRunRead) -> dict[str, Any]:
@@ -857,7 +858,11 @@ class TaskExecutionRunService:
         total_tokens = TaskExecutionRunService._extract_total_tokens(run.result_payload)
         if total_tokens is not None:
             result["total_tokens"] = total_tokens
-        return result
+        return TaskExecutionRunService._finalize_activity_payload(result)
+
+    @staticmethod
+    def _finalize_activity_payload(payload: dict[str, Any]) -> dict[str, Any]:
+        return finalize_execution_run_activity_payload(payload)
 
     @staticmethod
     def _read_dispatch_text(

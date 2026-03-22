@@ -1,16 +1,16 @@
 "use client";
 
+import { activityExecutionRunPayloadSchemaJson } from "@/contracts/generated/schemas";
 import { parseApiDatetime } from "@/lib/datetime";
 import { parseTimestamp } from "@/lib/formatters";
 
-export type RuntimeRunStatus =
-  | "queued"
-  | "dispatching"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "blocked";
+type EnumValues<T> = T extends { enum: readonly (infer U)[] } ? U : never;
+
+type ActivityExecutionRunSchema = typeof activityExecutionRunPayloadSchemaJson;
+type ActivityExecutionRunProperties = ActivityExecutionRunSchema["properties"];
+
+export type RuntimeRunStatus = EnumValues<ActivityExecutionRunProperties["status"]>;
+export type RuntimeExecutorKind = EnumValues<ActivityExecutionRunProperties["executor_kind"]>;
 
 export type RuntimeRunSnapshot = {
   id: string;
@@ -27,7 +27,7 @@ export type RuntimeRunSnapshot = {
 };
 
 export type RuntimeRunActivityPayload = {
-  executor_kind?: string;
+  executor_kind?: RuntimeExecutorKind;
   run_id?: string;
   run_short_id?: string;
   organization_id?: string;
@@ -36,7 +36,7 @@ export type RuntimeRunActivityPayload = {
   silo_id?: string;
   silo_slug?: string;
   role_slug?: string;
-  status?: string;
+  status?: RuntimeRunStatus;
   adapter_mode?: string;
   branch_hint?: string;
   branch_name?: string;

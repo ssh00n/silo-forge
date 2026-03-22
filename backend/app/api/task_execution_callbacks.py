@@ -7,11 +7,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import ValidationError
 
-from app.contracts.json_schema import (
-    ContractValidationError,
-    load_contract_schema,
-    validate_contract_payload,
-)
+from app.contracts.execution import parse_execution_callback_contract
+from app.contracts.json_schema import ContractValidationError
 from app.core.config import settings
 from app.db.session import get_session
 from app.schemas.task_execution_runs import TaskExecutionRunCallback, TaskExecutionRunRead
@@ -54,11 +51,8 @@ async def receive_symphony_execution_callback(
     """Receive execution status updates from a Symphony bridge."""
     try:
         raw_payload = await request.json()
-        validate_contract_payload(
-            schema=load_contract_schema("contracts/execution/callback.payload.schema.json"),
-            payload=raw_payload,
-        )
-        payload = TaskExecutionRunCallback.model_validate(raw_payload)
+        contract = parse_execution_callback_contract(raw_payload)
+        payload = TaskExecutionRunCallback.model_validate(contract.model_dump(exclude_none=True))
         return await TaskExecutionRunService(session).update_run_by_id(run_id=run_id, payload=payload)
     except (ContractValidationError, ValidationError) as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc

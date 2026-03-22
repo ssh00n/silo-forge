@@ -1,6 +1,11 @@
 "use client";
 
-import { resolveRuntimeRunFeedContent } from "@/lib/runtime-runs";
+import {
+  type RuntimeRunActivityPayload,
+  type RuntimeRunStatus,
+  parseRuntimeRunActivityPayload,
+  resolveRuntimeRunFeedContent,
+} from "@/lib/runtime-runs";
 
 export type ActivityDetailRow = {
   label: string;
@@ -39,7 +44,7 @@ export const resolveActivityFeedContent = (
   eventType: string,
   message: string | null | undefined,
   payload: unknown,
-): { summary: string; details: ActivityDetailRow[]; runtimeStatus: string | null } => {
+): { summary: string; details: ActivityDetailRow[]; runtimeStatus: RuntimeRunStatus | null } => {
   const normalizedMessage = (message ?? "").trim();
   const normalizedPayload = toRecord(payload);
 
@@ -207,6 +212,10 @@ export const resolveActivityFeedContent = (
     runtimeStatus: null,
   };
 };
+
+export const parseExecutionRunActivityPayload = (
+  payload: unknown,
+): RuntimeRunActivityPayload | null => parseRuntimeRunActivityPayload(payload);
 
 export const activityCategoryForEvent = (eventType: string): ActivityCategory => {
   if (eventType.startsWith("task.execution_run.")) return "runs";
