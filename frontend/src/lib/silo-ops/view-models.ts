@@ -1,6 +1,7 @@
 "use client";
 
 import type { SiloDetail, SiloSummary } from "@/lib/silos";
+import type { TaskExecutionRunSnapshot } from "@/lib/runtime-runs";
 import {
   buildSiloOverviewPosture,
   buildSiloDispatchCandidate,
@@ -58,6 +59,12 @@ export type SiloDetailOpsViewModel = {
 export type TaskDispatchViewModel = {
   taskDemandProfile: TaskDemandProfile | null;
   candidates: SiloDispatchCandidate[];
+  assignedSilo: {
+    label: "Current silo" | "Last used silo";
+    guidance: string;
+    run: TaskExecutionRunSnapshot;
+    candidate: SiloDispatchCandidate | null;
+  } | null;
   selectedCandidate: SiloDispatchCandidate | null;
 };
 
@@ -218,9 +225,64 @@ export const buildSiloDetailOpsViewModel = (
   workloadGuidance: buildSiloWorkloadGuidance(detail),
 });
 
+const ACTIVE_ASSIGNMENT_STATUSES = new Set(["queued", "dispatching", "running", "blocked"]);
+
+const parseRunTime = (value: string | null | undefined): number =>
+  value ? Date.parse(value) || 0 : 0;
+
+const pickAssignedRun = (
+  runs: TaskExecutionRunSnapshot[],
+): TaskExecutionRunSnapshot | null => {
+  if (runs.length === 0) return null;
+
+  const ranked = [...runs].sort((left, right) => {
+    const leftActive = ACTIVE_ASSIGNMENT_STATUSES.has(left.status);
+    const rightActive = ACTIVE_ASSIGNMENT_STATUSES.has(right.status);
+    if (leftActive !== rightActive) return leftActive ? -1 : 1;
+    return (
+      parseRunTime(right.updated_at) - parseRunTime(left.updated_at) ||
+      parseRunTime(right.created_at) - parseRunTime(left.created_at)
+    );
+  });
+
+  return ranked[0] ?? null;
+};
+
+const buildAssignedSiloViewModel = (args: {
+  silos: SiloSummary[];
+  candidates: SiloDispatchCandidate[];
+  task: TaskDemandInput;
+  executionRuns: TaskExecutionRunSnapshot[];
+}): TaskDispatchViewModel["assignedSilo"] => {
+  const assignedRun = pickAssignedRun(args.executionRuns);
+  if (!assignedRun) return null;
+
+  const candidate =
+    args.candidates.find((item) => item.silo.slug === assignedRun.silo_slug) ??
+    (() => {
+      const matchedSilo = args.silos.find((item) => item.slug === assignedRun.silo_slug);
+      return matchedSilo ? buildSiloDispatchCandidate(matchedSilo, args.task) : null;
+    })();
+
+  const isCurrent = ACTIVE_ASSIGNMENT_STATUSES.has(assignedRun.status);
+  const guidance = isCurrent
+    ? "This task is already attached to this silo through an active run. Continue here unless you need to recover or rebalance."
+    : assignedRun.status === "succeeded"
+      ? "This silo handled the most recent run for this task. Reuse it to preserve continuity."
+      : "This silo handled the most recent run for this task. Keep it for continuity or switch if recovery needs a different silo.";
+
+  return {
+    label: isCurrent ? "Current silo" : "Last used silo",
+    guidance,
+    run: assignedRun,
+    candidate,
+  };
+};
+
 export const buildTaskDispatchViewModel = (args: {
   silos: SiloSummary[];
   task: TaskDemandInput;
+  executionRuns: TaskExecutionRunSnapshot[];
   selectedSiloSlug: string | null;
 }): TaskDispatchViewModel => {
   const symphonyEnabledSilos = args.silos.filter((silo) => silo.enable_symphony);
@@ -230,12 +292,20 @@ export const buildTaskDispatchViewModel = (args: {
       (left, right) =>
         left.score - right.score || left.silo.name.localeCompare(right.silo.name),
     );
+  const assignedSilo = buildAssignedSiloViewModel({
+    silos: args.silos,
+    candidates,
+    task: args.task,
+    executionRuns: args.executionRuns,
+  });
 
   return {
     taskDemandProfile: buildTaskDemandProfile(args.task),
     candidates,
+    assignedSilo,
     selectedCandidate:
       candidates.find((candidate) => candidate.silo.slug === args.selectedSiloSlug) ??
+      assignedSilo?.candidate ??
       candidates[0] ??
       null,
   };

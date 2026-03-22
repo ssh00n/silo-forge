@@ -1504,18 +1504,6 @@ export default function BoardDetailPage() {
     refetchInterval: 30_000,
     refetchOnMount: "always",
   });
-  const taskDispatchViewModel = useMemo(
-    () =>
-      buildTaskDispatchViewModel({
-        silos: silosQuery.data ?? [],
-        task: selectedTask,
-        selectedSiloSlug: newExecutionRunSiloSlug,
-      }),
-    [newExecutionRunSiloSlug, selectedTask, silosQuery.data],
-  );
-  const symphonyDispatchCandidates = taskDispatchViewModel.candidates;
-  const selectedDispatchCandidate = taskDispatchViewModel.selectedCandidate;
-  const selectedTaskDemandProfile = taskDispatchViewModel.taskDemandProfile;
   const selectedTaskExecutionRunsQuery = useQuery<
     TaskExecutionRunSnapshot[],
     ApiError
@@ -1539,7 +1527,29 @@ export default function BoardDetailPage() {
       return response.data;
     },
   });
-  const selectedTaskExecutionRuns = selectedTaskExecutionRunsQuery.data ?? [];
+  const selectedTaskExecutionRuns = useMemo(
+    () => selectedTaskExecutionRunsQuery.data ?? [],
+    [selectedTaskExecutionRunsQuery.data],
+  );
+  const taskDispatchViewModel = useMemo(
+    () =>
+      buildTaskDispatchViewModel({
+        silos: silosQuery.data ?? [],
+        task: selectedTask,
+        executionRuns: selectedTaskExecutionRuns,
+        selectedSiloSlug: newExecutionRunSiloSlug,
+      }),
+    [
+      newExecutionRunSiloSlug,
+      selectedTask,
+      selectedTaskExecutionRuns,
+      silosQuery.data,
+    ],
+  );
+  const symphonyDispatchCandidates = taskDispatchViewModel.candidates;
+  const selectedDispatchCandidate = taskDispatchViewModel.selectedCandidate;
+  const selectedTaskDemandProfile = taskDispatchViewModel.taskDemandProfile;
+  const assignedDispatchSilo = taskDispatchViewModel.assignedSilo;
   const boardSiloRequestsQuery = useQuery({
     queryKey: ["board", boardId, "silo-spawn-requests"],
     queryFn: () => fetchSiloSpawnRequestsForBoard(boardId ?? ""),
@@ -5262,6 +5272,83 @@ export default function BoardDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  {assignedDispatchSilo ? (
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            {assignedDispatchSilo.label}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900">
+                            {assignedDispatchSilo.candidate?.silo.name ??
+                              assignedDispatchSilo.run.silo_slug}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {assignedDispatchSilo.candidate ? (
+                            <Badge
+                              variant={siloToneBadgeVariant(
+                                assignedDispatchSilo.candidate.health.tone,
+                              )}
+                              className="px-2.5 py-1 text-xs font-medium normal-case tracking-normal"
+                            >
+                              {assignedDispatchSilo.candidate.health.label}
+                            </Badge>
+                          ) : null}
+                          <Badge
+                            variant={runtimeRunStatusClass(assignedDispatchSilo.run.status)}
+                            className="px-2.5 py-1 text-xs font-medium normal-case tracking-normal"
+                          >
+                            {assignedDispatchSilo.run.status}
+                          </Badge>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">
+                        {assignedDispatchSilo.guidance}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                          Run {assignedDispatchSilo.run.id.slice(0, 8)}
+                        </span>
+                        {assignedDispatchSilo.run.role_slug ? (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                            Role {assignedDispatchSilo.run.role_slug}
+                          </span>
+                        ) : null}
+                        {assignedDispatchSilo.candidate?.reasons
+                          .slice(0, 3)
+                          .map((reason) => (
+                            <span
+                              key={`assigned-${assignedDispatchSilo.run.id}-${reason.label}`}
+                              className={cn(
+                                "rounded-full px-2.5 py-1",
+                                siloReasonChipClass(reason.tone),
+                              )}
+                            >
+                              {reason.label}
+                            </span>
+                          ))}
+                      </div>
+                      {assignedDispatchSilo.candidate &&
+                      assignedDispatchSilo.candidate.silo.slug !== newExecutionRunSiloSlug ? (
+                        <div className="mt-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setNewExecutionRunSiloSlug(
+                                assignedDispatchSilo.candidate!.silo.slug,
+                              )
+                            }
+                            disabled={isCreatingExecutionRun}
+                          >
+                            Continue on this silo
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {selectedTaskDemandProfile ? (
                     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SiloSummary } from "@/lib/silos";
 import {
+  buildTaskDispatchViewModel,
   buildSiloHealthModel,
   buildSiloDispatchCandidate,
   buildSiloOverviewPosture,
@@ -100,6 +101,45 @@ describe("silo-dispatch helpers", () => {
 
     expect(profile?.label).toBe("Approval pressure");
     expect(profile?.reasons[0]?.label).toBe("2 approvals pending");
+  });
+
+  it("prefers the currently attached silo when a task already has an active run", () => {
+    const idle = buildSilo();
+    const busy = buildSilo({
+      slug: "busy-crew",
+      name: "Busy Crew",
+      active_run_count: 2,
+    });
+
+    const viewModel = buildTaskDispatchViewModel({
+      silos: [idle, busy],
+      task: {
+        status: "in_progress",
+        priority: "medium",
+        approvals_pending_count: 0,
+        is_blocked: false,
+      },
+      executionRuns: [
+        {
+          id: "run-1",
+          organization_id: "org-1",
+          board_id: "board-1",
+          task_id: "task-1",
+          silo_id: "silo-1",
+          silo_slug: "busy-crew",
+          executor_kind: "symphony",
+          role_slug: "symphony",
+          status: "running",
+          created_at: "2026-03-22T00:00:00Z",
+          updated_at: "2026-03-22T00:05:00Z",
+        },
+      ],
+      selectedSiloSlug: null,
+    });
+
+    expect(viewModel.assignedSilo?.label).toBe("Current silo");
+    expect(viewModel.assignedSilo?.candidate?.silo.slug).toBe("busy-crew");
+    expect(viewModel.selectedCandidate?.silo.slug).toBe("busy-crew");
   });
 
   it("returns tone-aware chip classes", () => {
