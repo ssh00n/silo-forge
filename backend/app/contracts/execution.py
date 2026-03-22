@@ -8,19 +8,15 @@ from pydantic import BaseModel, ConfigDict
 
 from app.contracts.generated_schemas import (
     ACTIVITY__EXECUTION_RUN_PAYLOAD_SCHEMA_JSON,
+    ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND,
+    ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS,
     EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON,
+    EXECUTION_CALLBACK_PAYLOAD_STATUS,
 )
 from app.contracts.json_schema import validate_contract_payload
 
-ExecutionRunStatus = Literal[
-    "queued",
-    "dispatching",
-    "running",
-    "succeeded",
-    "failed",
-    "cancelled",
-    "blocked",
-]
+ExecutionRunStatus = EXECUTION_CALLBACK_PAYLOAD_STATUS
+ExecutionRunExecutorKind = ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND
 
 ExecutionCallbackSchema = EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON
 ExecutionRunActivitySchema = ACTIVITY__EXECUTION_RUN_PAYLOAD_SCHEMA_JSON
@@ -59,7 +55,7 @@ class ExecutionCallbackContract(BaseModel):
 class ExecutionRunActivityPayloadContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    executor_kind: Literal["symphony"]
+    executor_kind: ExecutionRunExecutorKind
     run_id: str
     run_short_id: str
     organization_id: str | None = None
@@ -68,7 +64,7 @@ class ExecutionRunActivityPayloadContract(BaseModel):
     silo_id: str
     silo_slug: str | None = None
     role_slug: str
-    status: ExecutionRunStatus
+    status: ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS
     adapter_mode: str | None = None
     branch_hint: str | None = None
     branch_name: str | None = None

@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import pprint
 from pathlib import Path
+from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,54 @@ def _ts_name(key: str) -> str:
 
 def _py_name(key: str) -> str:
     return key.upper()
+
+
+def _required_fields(schema: dict[str, object]) -> set[str]:
+    required = schema.get("required")
+    if not isinstance(required, list):
+        return set()
+    return {item for item in required if isinstance(item, str)}
+
+
+def _ts_type_expr(schema: dict[str, Any], *, inline: bool = False) -> str:
+    expected = schema.get("type")
+    if "enum" in schema and isinstance(schema["enum"], list):
+        values = " | ".join(json.dumps(item) for item in schema["enum"])
+        return values or "never"
+    if isinstance(expected, list):
+        return " | ".join(_ts_type_expr({"type": item, **{k: v for k, v in schema.items() if k != "type"}}) for item in expected)
+    if expected == "string":
+        return "string"
+    if expected == "integer" or expected == "number":
+        return "number"
+    if expected == "boolean":
+        return "boolean"
+    if expected == "null":
+        return "null"
+    if expected == "array":
+        items = schema.get("items")
+        if isinstance(items, dict):
+            return f"Array<{_ts_type_expr(items)}>"
+        return "unknown[]"
+    if expected == "object":
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            return "Record<string, unknown>"
+        required = _required_fields(schema)
+        parts: list[str] = []
+        for key, child in properties.items():
+            if not isinstance(child, dict):
+                continue
+            optional = "" if key in required else "?"
+            parts.append(f"{key}{optional}: {_ts_type_expr(child)};")
+        body = " ".join(parts)
+        return f"{{ {body} }}" if inline else "{ " + body + " }"
+    return "unknown"
+
+
+def _py_literal_alias(values: list[Any]) -> str:
+    rendered = ", ".join(repr(item) for item in values)
+    return f"Literal[{rendered}]"
 
 
 def load_schemas() -> list[tuple[str, dict[str, object]]]:
@@ -80,6 +129,33 @@ def render_frontend(schemas: list[tuple[str, dict[str, object]]]) -> str:
             f'export type {alias_name} = SchemaEnum<SchemaProperties<typeof {schema_name}>["{property_name}"]>;',
         )
     lines.append("")
+    type_specs = [
+        (
+            "ActivityExecutionRunPayload",
+            "activityExecutionRunPayloadSchemaJson",
+        ),
+        (
+            "ExecutionCallbackPayload",
+            "executionCallbackPayloadSchemaJson",
+        ),
+        (
+            "ExecutionDispatchAcceptance",
+            "executionDispatchAcceptanceSchemaJson",
+        ),
+        (
+            "ExecutionDispatchRequest",
+            "executionDispatchRequestSchemaJson",
+        ),
+    ]
+    schema_map = {key: schema for key, schema in schemas}
+    for type_name, schema_name in type_specs:
+        matching_key = next(
+            key for key, _schema in schemas if _ts_name(key) == schema_name
+        )
+        lines.append(
+            f"export type {type_name} = {_ts_type_expr(schema_map[matching_key], inline=True)};"
+        )
+    lines.append("")
     lines.append("export const contractSchemaIds = {")
     for key, _schema in schemas:
         lines.append(f'  "{key}": "{_ts_name(key)}",')
@@ -97,6 +173,8 @@ def render_backend(schemas: list[tuple[str, dict[str, object]]]) -> str:
         "",
         "from __future__ import annotations",
         "",
+        "from typing import Literal, TypeAlias",
+        "",
         "SCHEMAS = {",
     ]
     for key, schema in schemas:
@@ -108,6 +186,44 @@ def render_backend(schemas: list[tuple[str, dict[str, object]]]) -> str:
     lines.append("")
     for key, _schema in schemas:
         lines.append(f'{_py_name(key)} = SCHEMAS["{key}"]')
+    lines.append("")
+    enum_specs = [
+        (
+            "ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS",
+            "activity__execution_run_payload_schema_json",
+            "status",
+        ),
+        (
+            "ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND",
+            "activity__execution_run_payload_schema_json",
+            "executor_kind",
+        ),
+        (
+            "EXECUTION_CALLBACK_PAYLOAD_STATUS",
+            "execution__callback_payload_schema_json",
+            "status",
+        ),
+        (
+            "EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE",
+            "execution__dispatch_acceptance_schema_json",
+            "adapter_mode",
+        ),
+    ]
+    schema_lookup = {key: schema for key, schema in schemas}
+    for alias_name, schema_key, property_name in enum_specs:
+        properties = schema_lookup[schema_key].get("properties", {})
+        if not isinstance(properties, dict):
+            continue
+        property_schema = properties.get(property_name)
+        if not isinstance(property_schema, dict):
+            continue
+        enum_values = property_schema.get("enum")
+        if not isinstance(enum_values, list):
+            continue
+        lines.append(f"{alias_name}_VALUES = {tuple(enum_values)!r}")
+        lines.append(
+            f"{alias_name}: TypeAlias = {_py_literal_alias(enum_values)}"
+        )
     lines.append("")
     return "\n".join(lines)
 

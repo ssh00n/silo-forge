@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  ActivityExecutionRunPayload,
   ActivityExecutionRunPayloadExecutorKind,
   ActivityExecutionRunPayloadStatus,
 } from "@/contracts/generated/schemas";
@@ -24,38 +25,7 @@ export type RuntimeRunSnapshot = {
   pr_url?: string | null;
 };
 
-export type RuntimeRunActivityPayload = {
-  executor_kind?: RuntimeExecutorKind;
-  run_id?: string;
-  run_short_id?: string;
-  organization_id?: string;
-  board_id?: string;
-  task_id?: string;
-  silo_id?: string;
-  silo_slug?: string;
-  role_slug?: string;
-  status?: RuntimeRunStatus;
-  adapter_mode?: string;
-  branch_hint?: string;
-  branch_name?: string;
-  workspace_path?: string;
-  external_run_id?: string;
-  summary?: string;
-  pr_url?: string;
-  pull_request?: number;
-  total_tokens?: number;
-  error_message?: string;
-  issue_identifier?: string;
-  runner_kind?: string;
-  completion_kind?: string;
-  last_event?: string;
-  last_message?: string;
-  session_id?: string;
-  turn_count?: number;
-  duration_ms?: number;
-  has_prompt_override?: boolean;
-  retried_from_run_id?: string;
-};
+export type RuntimeRunActivityPayload = Partial<ActivityExecutionRunPayload>;
 
 export type TaskExecutionRunSnapshot = RuntimeRunSnapshot & {
   organization_id: string;

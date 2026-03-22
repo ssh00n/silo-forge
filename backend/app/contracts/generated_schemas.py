@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from typing import Literal, TypeAlias
+
 SCHEMAS = {
     "activity__execution_run_payload_schema_json":
     {'$schema': 'https://json-schema.org/draft/2020-12/schema',
@@ -179,3 +181,12 @@ ACTIVITY__EXECUTION_RUN_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__execution_run_p
 EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON = SCHEMAS["execution__callback_payload_schema_json"]
 EXECUTION__DISPATCH_ACCEPTANCE_SCHEMA_JSON = SCHEMAS["execution__dispatch_acceptance_schema_json"]
 EXECUTION__DISPATCH_REQUEST_SCHEMA_JSON = SCHEMAS["execution__dispatch_request_schema_json"]
+
+ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS_VALUES = ('queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked')
+ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS: TypeAlias = Literal['queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked']
+ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND_VALUES = ('symphony',)
+ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND: TypeAlias = Literal['symphony']
+EXECUTION_CALLBACK_PAYLOAD_STATUS_VALUES = ('queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked')
+EXECUTION_CALLBACK_PAYLOAD_STATUS: TypeAlias = Literal['queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked']
+EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE_VALUES = ('http', 'stub')
+EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE: TypeAlias = Literal['http', 'stub']
