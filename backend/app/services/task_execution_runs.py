@@ -8,11 +8,13 @@ from uuid import UUID
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.contracts.activity import finalize_task_activity_payload
 from app.contracts.execution import finalize_execution_run_activity_payload
 from app.core.time import utcnow
 from app.db import crud
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
+from app.models.approvals import Approval
 from app.models.boards import Board
 from app.models.silo_roles import SiloRole
 from app.models.silos import Silo
@@ -25,7 +27,10 @@ from app.schemas.task_execution_runs import (
     TaskExecutionRunUpdate,
 )
 from app.services.activity_log import record_activity
-from app.services.approval_task_links import pending_approval_conflicts_by_task
+from app.services.approval_task_links import (
+    pending_approval_conflicts_by_task,
+    replace_approval_task_links,
+)
 from app.services.task_execution_dispatch import SymphonyDispatchAdapter
 
 
@@ -297,6 +302,212 @@ class TaskExecutionRunService:
         await self._session.commit()
         return retried
 
+    async def cancel_run(
+        self,
+        *,
+        organization_id: UUID,
+        board: Board,
+        task: Task,
+        run_id: UUID,
+        note: str | None = None,
+    ) -> TaskExecutionRunRead:
+        """Cancel an active execution run from the operator surface."""
+        run = await crud.get_one_by(
+            self._session,
+            TaskExecutionRun,
+            organization_id=organization_id,
+            board_id=board.id,
+            task_id=task.id,
+            id=run_id,
+        )
+        if run is None:
+            raise ValueError("Execution run not found")
+        if run.status in {"succeeded", "failed", "cancelled"}:
+            raise ValueError("Only active or blocked runs can be cancelled")
+
+        summary = note or "Operator cancelled the run."
+        cancel_reason = note or "Operator cancelled the run from the control plane."
+        return await self.update_run(
+            organization_id=organization_id,
+            board=board,
+            task=task,
+            run_id=run.id,
+            payload=TaskExecutionRunUpdate(
+                status="cancelled",
+                summary=summary,
+                completion_kind="operator_cancelled",
+                cancel_reason=cancel_reason,
+                last_event="operator_cancelled",
+                last_message=summary,
+                result_payload={
+                    "completion_kind": "operator_cancelled",
+                    "cancel_reason": cancel_reason,
+                    "last_event": "operator_cancelled",
+                    "last_message": summary,
+                },
+            ),
+        )
+
+    async def acknowledge_run(
+        self,
+        *,
+        organization_id: UUID,
+        board: Board,
+        task: Task,
+        run_id: UUID,
+        note: str | None = None,
+    ) -> TaskExecutionRunRead:
+        """Record an operator acknowledgement event for a terminal execution run."""
+        run = await crud.get_one_by(
+            self._session,
+            TaskExecutionRun,
+            organization_id=organization_id,
+            board_id=board.id,
+            task_id=task.id,
+            id=run_id,
+        )
+        if run is None:
+            raise ValueError("Execution run not found")
+        if run.status not in {"failed", "cancelled", "blocked"}:
+            raise ValueError("Only failed, cancelled, or blocked runs can be acknowledged")
+
+        silo = await self._session.get(Silo, run.silo_id)
+        if silo is None:
+            raise ValueError("Silo not found")
+
+        message = f"Operator acknowledged Symphony run {self._short_run_id(run.id)}."
+        if note:
+            message = f"{message} {note}"
+
+        payload = self._build_run_payload(run=run, silo_slug=silo.slug)
+        if note:
+            payload["summary"] = note
+        record_activity(
+            self._session,
+            event_type="task.execution_run.acknowledged",
+            message=message,
+            payload=self._finalize_activity_payload(payload),
+            task_id=task.id,
+            board_id=board.id,
+        )
+        await self._session.commit()
+        return self._to_read(run, silo_slug=silo.slug)
+
+    async def escalate_run(
+        self,
+        *,
+        organization_id: UUID,
+        board: Board,
+        task: Task,
+        run_id: UUID,
+        note: str | None = None,
+    ) -> TaskExecutionRunRead:
+        """Escalate a blocked runtime run into a board approval workflow."""
+        run = await crud.get_one_by(
+            self._session,
+            TaskExecutionRun,
+            organization_id=organization_id,
+            board_id=board.id,
+            task_id=task.id,
+            id=run_id,
+        )
+        if run is None:
+            raise ValueError("Execution run not found")
+        if run.status not in {"failed", "cancelled", "blocked"}:
+            raise ValueError("Only failed, cancelled, or blocked runs can be escalated")
+
+        conflicts = await pending_approval_conflicts_by_task(
+            self._session,
+            board_id=board.id,
+            task_ids=[task.id],
+        )
+        if task.id in conflicts:
+            raise ValueError("Task already has a pending approval")
+
+        silo = await self._session.get(Silo, run.silo_id)
+        if silo is None:
+            raise ValueError("Silo not found")
+
+        lead = await self._board_lead(board_id=board.id)
+        approval_reason = note or self._default_escalation_reason(run=run)
+        approval_payload = {
+            "reason": approval_reason,
+            "source": "runtime_operator_escalation",
+            "run_id": str(run.id),
+            "run_short_id": self._short_run_id(run.id),
+            "run_status": run.status,
+            "completion_kind": self._extract_result_text(run.result_payload, "completion_kind"),
+            "task_id": str(task.id),
+            "task_ids": [str(task.id)],
+            "board_id": str(board.id),
+            "silo_slug": silo.slug,
+            "role_slug": run.role_slug,
+        }
+        approval = Approval(
+            board_id=board.id,
+            task_id=task.id,
+            agent_id=lead.id if lead is not None else None,
+            action_type="runtime.escalation",
+            payload=approval_payload,
+            confidence=100,
+            status="pending",
+        )
+        self._session.add(approval)
+        await self._session.flush()
+        await replace_approval_task_links(
+            self._session,
+            approval_id=approval.id,
+            task_ids=[task.id],
+        )
+
+        previous_status = task.status
+        if task.status in {"inbox", "in_progress"}:
+            if task.status == "in_progress":
+                task.previous_in_progress_at = task.in_progress_at
+                task.in_progress_at = None
+            task.status = "review"
+            if lead is not None:
+                task.assigned_agent_id = lead.id
+            task.updated_at = utcnow()
+            self._session.add(task)
+            record_activity(
+                self._session,
+                event_type="task.status_changed",
+                message=f"Task moved to review: runtime escalation for {task.title}.",
+                payload=finalize_task_activity_payload(
+                    {
+                        "task_id": str(task.id),
+                        "board_id": str(board.id),
+                        "task_title": task.title,
+                        "status": "review",
+                        "previous_status": previous_status,
+                        "assigned_agent_id": str(task.assigned_agent_id)
+                        if task.assigned_agent_id
+                        else None,
+                        "priority": task.priority,
+                        "reason": "execution_run_escalated",
+                    }
+                ),
+                task_id=task.id,
+                board_id=board.id,
+            )
+
+        message = f"Operator escalated Symphony run {self._short_run_id(run.id)} for review."
+        if note:
+            message = f"{message} {note}"
+        payload = self._build_run_payload(run=run, silo_slug=silo.slug)
+        payload["summary"] = note or approval_reason
+        record_activity(
+            self._session,
+            event_type="task.execution_run.escalated",
+            message=message,
+            payload=self._finalize_activity_payload(payload),
+            task_id=task.id,
+            board_id=board.id,
+        )
+        await self._session.commit()
+        return self._to_read(run, silo_slug=silo.slug)
+
     async def dispatch_run(
         self,
         *,
@@ -405,6 +616,10 @@ class TaskExecutionRunService:
                 issue_identifier=payload.issue_identifier,
                 runner_kind=payload.runner_kind,
                 completion_kind=payload.completion_kind,
+                failure_reason=payload.failure_reason,
+                block_reason=payload.block_reason,
+                cancel_reason=payload.cancel_reason,
+                stall_reason=payload.stall_reason,
                 last_event=payload.last_event,
                 last_message=payload.last_message,
                 session_id=payload.session_id,
@@ -428,6 +643,14 @@ class TaskExecutionRunService:
             result_payload["runner_kind"] = payload.runner_kind
         if payload.completion_kind is not None:
             result_payload["completion_kind"] = payload.completion_kind
+        if payload.failure_reason is not None:
+            result_payload["failure_reason"] = payload.failure_reason
+        if payload.block_reason is not None:
+            result_payload["block_reason"] = payload.block_reason
+        if payload.cancel_reason is not None:
+            result_payload["cancel_reason"] = payload.cancel_reason
+        if payload.stall_reason is not None:
+            result_payload["stall_reason"] = payload.stall_reason
         if payload.last_event is not None:
             result_payload["last_event"] = payload.last_event
         if payload.last_message is not None:
@@ -643,6 +866,19 @@ class TaskExecutionRunService:
         if prompt_override:
             parts.append("Prompt override attached.")
         return " ".join(parts)
+
+    @staticmethod
+    def _default_escalation_reason(run: TaskExecutionRun) -> str:
+        result_payload = run.result_payload if isinstance(run.result_payload, dict) else {}
+        for key in ("block_reason", "failure_reason", "cancel_reason", "stall_reason", "last_message"):
+            value = result_payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        if isinstance(run.error_message, str) and run.error_message.strip():
+            return run.error_message.strip()
+        if isinstance(run.summary, str) and run.summary.strip():
+            return run.summary.strip()
+        return "Runtime run requires operator review."
 
     @staticmethod
     def _build_created_payload(
@@ -967,6 +1203,10 @@ class TaskExecutionRunService:
             "issue_identifier",
             "runner_kind",
             "completion_kind",
+            "failure_reason",
+            "block_reason",
+            "cancel_reason",
+            "stall_reason",
             "last_event",
             "last_message",
             "session_id",
@@ -1015,6 +1255,18 @@ class TaskExecutionRunService:
             ),
             completion_kind=TaskExecutionRunService._extract_result_text(
                 run.result_payload, "completion_kind"
+            ),
+            failure_reason=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "failure_reason"
+            ),
+            block_reason=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "block_reason"
+            ),
+            cancel_reason=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "cancel_reason"
+            ),
+            stall_reason=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "stall_reason"
             ),
             last_event=TaskExecutionRunService._extract_result_text(run.result_payload, "last_event"),
             last_message=TaskExecutionRunService._extract_result_text(

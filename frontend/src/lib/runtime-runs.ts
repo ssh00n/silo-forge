@@ -26,11 +26,26 @@ export type RuntimeRunSnapshot = {
   issue_identifier?: string | null;
   runner_kind?: string | null;
   completion_kind?: string | null;
+  failure_reason?: string | null;
+  block_reason?: string | null;
+  cancel_reason?: string | null;
+  stall_reason?: string | null;
   last_event?: string | null;
   last_message?: string | null;
   session_id?: string | null;
   turn_count?: number | null;
   duration_ms?: number | null;
+};
+
+export type RuntimeRunOperatorGuidance = {
+  tone: "neutral" | "warning" | "danger" | "success";
+  title: string;
+  detail: string;
+};
+
+export type RuntimeRunOperatorState = {
+  tone: "neutral" | "warning" | "danger" | "success";
+  label: string;
 };
 
 export type RuntimeRunActivityPayload = Partial<ActivityExecutionRunPayload>;
@@ -130,6 +145,181 @@ export const runtimeRunTimingRows = (
 export const runtimeRunTimingLabel = (
   run: RuntimeRunSnapshot,
 ): { label: string; value: string } | null => runtimeRunTimingRows(run)[0] ?? null;
+
+export const canRetryRuntimeRun = (status: RuntimeRunStatus | string): boolean =>
+  status === "failed" || status === "cancelled" || status === "blocked";
+
+export const canCancelRuntimeRun = (status: RuntimeRunStatus | string): boolean =>
+  status === "queued" || status === "dispatching" || status === "running" || status === "blocked";
+
+export const canAcknowledgeRuntimeRun = (status: RuntimeRunStatus | string): boolean =>
+  status === "failed" || status === "cancelled" || status === "blocked";
+
+export const canEscalateRuntimeRun = (status: RuntimeRunStatus | string): boolean =>
+  status === "failed" || status === "cancelled" || status === "blocked";
+
+export const runtimeRunNeedsApprovalAttention = (
+  run: RuntimeRunSnapshot & { error_message?: string | null },
+): boolean => runtimeRunOperatorState(run).label === "approval blocked";
+
+const normalizeRuntimeHint = (value?: string | null): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+};
+
+const RUNTIME_STALL_THRESHOLD_MS = 5 * 60 * 1000;
+
+export const runtimeRunOperatorState = (
+  run: RuntimeRunSnapshot & { error_message?: string | null },
+): RuntimeRunOperatorState => {
+  const completionKind = normalizeRuntimeHint(run.completion_kind)?.toLowerCase();
+  const blockReason = normalizeRuntimeHint(run.block_reason)?.toLowerCase();
+  const cancelReason = normalizeRuntimeHint(run.cancel_reason)?.toLowerCase();
+  const stallReason = normalizeRuntimeHint(run.stall_reason)?.toLowerCase();
+  const failureReason = normalizeRuntimeHint(run.failure_reason)?.toLowerCase();
+  const lastEvent = normalizeRuntimeHint(run.last_event)?.toLowerCase();
+  const updatedAt = parseRunTimestamp(run.updated_at);
+  const ageMs = updatedAt == null ? null : Date.now() - updatedAt;
+
+  if (run.status === "succeeded") {
+    return { tone: "success", label: "completed" };
+  }
+  if (run.status === "failed") {
+    if (failureReason?.includes("timeout")) {
+      return { tone: "danger", label: "timed out" };
+    }
+    return { tone: "danger", label: "execution failed" };
+  }
+  if (run.status === "cancelled") {
+    if (cancelReason?.includes("operator")) {
+      return { tone: "warning", label: "operator cancelled" };
+    }
+    return { tone: "warning", label: "cancelled" };
+  }
+  if (run.status === "blocked") {
+    if (
+      blockReason?.includes("approval") ||
+      blockReason?.includes("policy") ||
+      completionKind?.includes("approval") ||
+      completionKind?.includes("policy") ||
+      lastEvent?.includes("approval")
+    ) {
+      return { tone: "warning", label: "approval blocked" };
+    }
+    return { tone: "warning", label: "blocked" };
+  }
+  if (
+    stallReason != null ||
+    ageMs != null &&
+    ageMs >= RUNTIME_STALL_THRESHOLD_MS &&
+    (run.status === "running" || run.status === "dispatching")
+  ) {
+    return { tone: "warning", label: "stalled" };
+  }
+  if (run.status === "running") {
+    return { tone: "neutral", label: "executing" };
+  }
+  if (run.status === "dispatching") {
+    return { tone: "neutral", label: "handoff" };
+  }
+  return { tone: "neutral", label: "queued" };
+};
+
+export const runtimeRunOperatorGuidance = (
+  run: RuntimeRunSnapshot & { error_message?: string | null; pr_url?: string | null },
+): RuntimeRunOperatorGuidance => {
+  const operatorState = runtimeRunOperatorState(run);
+  const lastMessage = normalizeRuntimeHint(run.last_message);
+  const errorMessage = normalizeRuntimeHint(run.error_message);
+  const blockReason = normalizeRuntimeHint(run.block_reason);
+  const cancelReason = normalizeRuntimeHint(run.cancel_reason);
+  const stallReason = normalizeRuntimeHint(run.stall_reason);
+  const failureReason = normalizeRuntimeHint(run.failure_reason);
+
+  if (operatorState.label === "queued") {
+    return {
+      tone: "neutral",
+      title: "Waiting for dispatch",
+      detail: "Monitor the queue and runtime worker. Retry only if this stays queued unexpectedly long.",
+    };
+  }
+  if (operatorState.label === "handoff") {
+    return {
+      tone: "neutral",
+      title: "Bridge handoff in progress",
+      detail: "The control plane has handed this run to the runtime bridge. Watch for a running update.",
+    };
+  }
+  if (operatorState.label === "stalled") {
+    return {
+      tone: "warning",
+      title: "Check the runtime bridge",
+      detail:
+        stallReason ??
+        "This run has not emitted a recent update. Inspect worker, bridge, or callback health before retrying.",
+    };
+  }
+  if (operatorState.label === "executing") {
+    return {
+      tone: "neutral",
+      title: "Session is active",
+      detail:
+        lastMessage ??
+        "The runtime session is still executing. Watch turns, callback updates, and final completion.",
+    };
+  }
+  if (operatorState.label === "completed") {
+    return {
+      tone: "success",
+      title: "Review the result",
+      detail:
+        run.pr_url != null
+          ? "Open the PR and move the task through review."
+          : lastMessage ?? "Inspect the output and advance the task to the next review step.",
+    };
+  }
+  if (operatorState.label === "approval blocked") {
+    return {
+      tone: "warning",
+      title: "Resolve the approval gate",
+      detail:
+        blockReason ??
+        "Open the board approvals queue, resolve the decision, then retry or continue the run.",
+    };
+  }
+  if (operatorState.label === "blocked") {
+    return {
+      tone: "warning",
+      title: "Inspect the blocker",
+      detail:
+        blockReason ??
+        errorMessage ??
+        lastMessage ??
+        "Review the blocking condition, then retry when ready.",
+    };
+  }
+  if (operatorState.label === "cancelled") {
+    return {
+      tone: "warning",
+      title: "Rerun when ready",
+      detail:
+        cancelReason ??
+        errorMessage ??
+        lastMessage ??
+        "This run was cancelled before completion. Retry when the task is ready to continue.",
+    };
+  }
+  return {
+    tone: "danger",
+    title: "Investigate failure",
+    detail:
+      failureReason ??
+      errorMessage ??
+      lastMessage ??
+      "Review the last runtime event and retry after fixing the underlying issue.",
+  };
+};
 
 export const extractRuntimeRunMessageParts = (message: string) => {
   const detailLabels = [

@@ -108,6 +108,8 @@ TASK_EVENT_TYPES = {
     "task.execution_run.retried",
     "task.execution_run.updated",
     "task.execution_run.report",
+    "task.execution_run.acknowledged",
+    "task.execution_run.escalated",
 }
 SSE_SEEN_MAX = 2000
 TASK_SNIPPET_MAX_LEN = 500

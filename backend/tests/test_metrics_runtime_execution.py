@@ -7,6 +7,7 @@ import pytest
 
 from app.api import metrics as metrics_api
 from app.models.boards import Board
+from app.models.approvals import Approval
 from app.models.task_execution_runs import TaskExecutionRun
 from app.models.tasks import Task
 
@@ -60,6 +61,10 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
             "issue_identifier": "MC-9",
             "runner_kind": "codex",
             "completion_kind": "normal",
+            "failure_reason": None,
+            "block_reason": None,
+            "cancel_reason": None,
+            "stall_reason": None,
             "last_event": "turn_completed",
             "last_message": "Worker completed normally",
             "session_id": "session-9",
@@ -76,11 +81,31 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
         completed_at=datetime(2026, 3, 21, 12, 0, 0),
         updated_at=datetime(2026, 3, 21, 12, 0, 0),
     )
+    approval = Approval(
+        id=uuid4(),
+        board_id=board_id,
+        task_id=task_id,
+        action_type="runtime.escalation",
+        confidence=100,
+        status="approved",
+        created_at=datetime(2026, 3, 21, 12, 1, 0),
+        resolved_at=datetime(2026, 3, 21, 12, 5, 0),
+    )
+    pending_approval = Approval(
+        id=uuid4(),
+        board_id=board_id,
+        task_id=task_id,
+        action_type="runtime.escalation",
+        confidence=100,
+        status="pending",
+        created_at=datetime(2026, 3, 21, 12, 6, 0),
+    )
     session = _SequentialSession(
         [
             _ExecOneResult(2),
             _ExecOneResult(1),
             _ExecAllResult([(run, task, board)]),
+            _ExecAllResult([pending_approval, approval]),
             _ExecAllResult([run]),
         ]
     )
@@ -105,6 +130,13 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
     assert recent.issue_identifier == "MC-9"
     assert recent.runner_kind == "codex"
     assert recent.completion_kind == "normal"
+    assert recent.failure_reason is None
+    assert recent.block_reason is None
+    assert recent.cancel_reason is None
+    assert recent.stall_reason is None
+    assert recent.latest_approval_status == "approved"
+    assert recent.latest_approval_resolved_at == datetime(2026, 3, 21, 12, 5, 0)
+    assert recent.pending_approval_count == 1
     assert recent.last_event == "turn_completed"
     assert recent.last_message == "Worker completed normally"
     assert recent.session_id == "session-9"

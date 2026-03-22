@@ -39,6 +39,20 @@ class TaskExecutionRunCreate(SQLModel):
         return value
 
 
+class TaskExecutionRunOperatorAction(SQLModel):
+    """Operator action payload for cancel/acknowledge runtime actions."""
+
+    note: str | None = None
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def normalize_note(cls, value: object) -> object:
+        if isinstance(value, str):
+            trimmed = value.strip()
+            return trimmed or None
+        return value
+
+
 class TaskExecutionRunUpdate(SQLModel):
     """Patch payload for updating execution run status and results."""
 
@@ -52,6 +66,10 @@ class TaskExecutionRunUpdate(SQLModel):
     issue_identifier: str | None = None
     runner_kind: str | None = None
     completion_kind: str | None = None
+    failure_reason: str | None = None
+    block_reason: str | None = None
+    cancel_reason: str | None = None
+    stall_reason: str | None = None
     last_event: str | None = None
     last_message: str | None = None
     session_id: str | None = None
@@ -69,6 +87,10 @@ class TaskExecutionRunUpdate(SQLModel):
         "issue_identifier",
         "runner_kind",
         "completion_kind",
+        "failure_reason",
+        "block_reason",
+        "cancel_reason",
+        "stall_reason",
         "last_event",
         "last_message",
         "session_id",
@@ -109,6 +131,10 @@ class TaskExecutionRunRead(SQLModel):
     issue_identifier: str | None = None
     runner_kind: str | None = None
     completion_kind: str | None = None
+    failure_reason: str | None = None
+    block_reason: str | None = None
+    cancel_reason: str | None = None
+    stall_reason: str | None = None
     last_event: str | None = None
     last_message: str | None = None
     session_id: str | None = None
@@ -133,6 +159,10 @@ class TaskExecutionRunCallback(SQLModel):
     issue_identifier: str | None = None
     runner_kind: str | None = None
     completion_kind: str | None = None
+    failure_reason: str | None = None
+    block_reason: str | None = None
+    cancel_reason: str | None = None
+    stall_reason: str | None = None
     last_event: str | None = None
     last_message: str | None = None
     session_id: str | None = None
@@ -150,6 +180,10 @@ class TaskExecutionRunCallback(SQLModel):
         "issue_identifier",
         "runner_kind",
         "completion_kind",
+        "failure_reason",
+        "block_reason",
+        "cancel_reason",
+        "stall_reason",
         "last_event",
         "last_message",
         "session_id",

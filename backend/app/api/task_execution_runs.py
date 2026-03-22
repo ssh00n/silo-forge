@@ -13,6 +13,7 @@ from app.models.boards import Board
 from app.models.tasks import Task
 from app.schemas.task_execution_runs import (
     TaskExecutionRunCreate,
+    TaskExecutionRunOperatorAction,
     TaskExecutionRunRead,
     TaskExecutionRunUpdate,
 )
@@ -345,3 +346,105 @@ async def retry_and_dispatch_task_execution_run(
         task_id=task.id,
         run_id=retried.id,
     )
+
+
+@router.post("/{run_id}/cancel", response_model=TaskExecutionRunRead)
+async def cancel_task_execution_run(
+    board_id: UUID,
+    task_id: UUID,
+    run_id: UUID,
+    payload: TaskExecutionRunOperatorAction | None = None,
+    session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> TaskExecutionRunRead:
+    """Cancel an active execution run from the operator surface."""
+    board, task = await _get_board_and_task(
+        session=session,
+        ctx=ctx,
+        board_id=board_id,
+        task_id=task_id,
+    )
+    try:
+        return await TaskExecutionRunService(session).cancel_run(
+            organization_id=ctx.organization.id,
+            board=board,
+            task=task,
+            run_id=run_id,
+            note=payload.note if payload else None,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if detail.endswith("not found")
+            else status.HTTP_422_UNPROCESSABLE_CONTENT
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.post("/{run_id}/acknowledge", response_model=TaskExecutionRunRead)
+async def acknowledge_task_execution_run(
+    board_id: UUID,
+    task_id: UUID,
+    run_id: UUID,
+    payload: TaskExecutionRunOperatorAction | None = None,
+    session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> TaskExecutionRunRead:
+    """Record an operator acknowledgement for a terminal runtime run."""
+    board, task = await _get_board_and_task(
+        session=session,
+        ctx=ctx,
+        board_id=board_id,
+        task_id=task_id,
+    )
+    try:
+        return await TaskExecutionRunService(session).acknowledge_run(
+            organization_id=ctx.organization.id,
+            board=board,
+            task=task,
+            run_id=run_id,
+            note=payload.note if payload else None,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if detail.endswith("not found")
+            else status.HTTP_422_UNPROCESSABLE_CONTENT
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.post("/{run_id}/escalate", response_model=TaskExecutionRunRead)
+async def escalate_task_execution_run(
+    board_id: UUID,
+    task_id: UUID,
+    run_id: UUID,
+    payload: TaskExecutionRunOperatorAction | None = None,
+    session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_ADMIN_DEP,
+) -> TaskExecutionRunRead:
+    """Escalate a runtime run into the board approval flow."""
+    board, task = await _get_board_and_task(
+        session=session,
+        ctx=ctx,
+        board_id=board_id,
+        task_id=task_id,
+    )
+    try:
+        return await TaskExecutionRunService(session).escalate_run(
+            organization_id=ctx.organization.id,
+            board=board,
+            task=task,
+            run_id=run_id,
+            note=payload.note if payload else None,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if detail.endswith("not found")
+            else status.HTTP_422_UNPROCESSABLE_CONTENT
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc

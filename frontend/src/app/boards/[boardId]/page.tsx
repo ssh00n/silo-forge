@@ -131,11 +131,17 @@ import { cn } from "@/lib/utils";
 import { usePageActive } from "@/hooks/usePageActive";
 import { fetchSilos } from "@/lib/silos";
 import {
+  canAcknowledgeRuntimeRun,
+  canCancelRuntimeRun,
+  canEscalateRuntimeRun,
+  canRetryRuntimeRun,
   formatRuntimeDurationMs,
+  runtimeRunNeedsApprovalAttention,
   type TaskExecutionRunResponse,
   type TaskExecutionRunSnapshot,
   type TaskExecutionRunsResponse,
-  type RuntimeRunStatus,
+  runtimeRunOperatorState,
+  runtimeRunOperatorGuidance,
   runtimeRunTimingRows,
 } from "@/lib/runtime-runs";
 import {
@@ -197,6 +203,8 @@ type LiveFeedOpsSummary = {
   failureCount: number;
 };
 
+const DASH = "—";
+
 const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "task.comment",
   "task.assignee_notified",
@@ -212,6 +220,8 @@ const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "task.execution_run.retried",
   "task.execution_run.updated",
   "task.execution_run.report",
+  "task.execution_run.acknowledged",
+  "task.execution_run.escalated",
   "task.created",
   "task.updated",
   "task.status_changed",
@@ -545,6 +555,8 @@ const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "task.execution_run.retried") return "Run retried";
   if (eventType === "task.execution_run.updated") return "Run update";
   if (eventType === "task.execution_run.report") return "Run report";
+  if (eventType === "task.execution_run.acknowledged") return "Run acknowledged";
+  if (eventType === "task.execution_run.escalated") return "Run escalated";
   if (eventType === "task.created") return "Created";
   if (eventType === "task.status_changed") return "Status";
   if (eventType === "board.chat") return "Chat";
@@ -629,6 +641,12 @@ const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   }
   if (eventType === "task.execution_run.report") {
     return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "task.execution_run.acknowledged") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "task.execution_run.escalated") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
   }
   if (eventType === "task.created") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -750,6 +768,8 @@ const EXECUTION_RUN_LIVE_FEED_EVENTS = new Set<LiveFeedEventType>([
   "task.execution_run.retried",
   "task.execution_run.updated",
   "task.execution_run.report",
+  "task.execution_run.acknowledged",
+  "task.execution_run.escalated",
 ]);
 
 const isExecutionRunLiveFeedEvent = (eventType: LiveFeedEventType): boolean =>
@@ -851,9 +871,6 @@ const executionRunPullRequestNumber = (
   return null;
 };
 
-const canRetryExecutionRun = (status: RuntimeRunStatus): boolean =>
-  status === "failed" || status === "cancelled" || status === "blocked";
-
 const commentElementId = (id: string): string =>
   `task-comment-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
@@ -940,17 +957,50 @@ TaskCommentCard.displayName = "TaskCommentCard";
 const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   run,
   isRetrying,
+  isCancelling,
+  isAcknowledging,
+  isEscalating,
   onRetry,
+  onCancel,
+  onAcknowledge,
+  onEscalate,
+  approvalsHref,
+  pendingApprovalsCount,
+  latestResolvedApprovalStatus,
+  latestResolvedApprovalAt,
 }: {
   run: TaskExecutionRunSnapshot;
   isRetrying: boolean;
+  isCancelling: boolean;
+  isAcknowledging: boolean;
+  isEscalating: boolean;
   onRetry?: () => void;
+  onCancel?: () => void;
+  onAcknowledge?: () => void;
+  onEscalate?: () => void;
+  approvalsHref?: string | null;
+  pendingApprovalsCount?: number;
+  latestResolvedApprovalStatus?: "approved" | "rejected" | null;
+  latestResolvedApprovalAt?: string | null;
 }) {
   const totalTokens = executionRunTotalTokens(run);
   const pullRequestNumber = executionRunPullRequestNumber(run);
   const summary = (run.summary ?? "").trim();
   const errorMessage = (run.error_message ?? "").trim();
-  const canRetry = canRetryExecutionRun(run.status) && Boolean(onRetry);
+  const canRetry = canRetryRuntimeRun(run.status) && Boolean(onRetry);
+  const canCancel = canCancelRuntimeRun(run.status) && Boolean(onCancel);
+  const canAcknowledge =
+    canAcknowledgeRuntimeRun(run.status) && Boolean(onAcknowledge);
+  const canEscalate = canEscalateRuntimeRun(run.status) && Boolean(onEscalate);
+  const needsApprovalAttention = runtimeRunNeedsApprovalAttention(run);
+  const resolvedApprovalLabel =
+    latestResolvedApprovalStatus === "approved"
+      ? "approved"
+      : latestResolvedApprovalStatus === "rejected"
+        ? "rejected"
+        : null;
+  const operatorState = runtimeRunOperatorState(run);
+  const guidance = runtimeRunOperatorGuidance(run);
   const detailRows = [
     ...runtimeRunTimingRows(run),
     pullRequestNumber
@@ -965,6 +1015,10 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
     run.issue_identifier ? { label: "Issue", value: run.issue_identifier } : null,
     run.runner_kind ? { label: "Runner", value: run.runner_kind } : null,
     run.completion_kind ? { label: "Completion", value: run.completion_kind } : null,
+    run.failure_reason ? { label: "Failure reason", value: run.failure_reason } : null,
+    run.block_reason ? { label: "Block reason", value: run.block_reason } : null,
+    run.cancel_reason ? { label: "Cancel reason", value: run.cancel_reason } : null,
+    run.stall_reason ? { label: "Stall reason", value: run.stall_reason } : null,
     run.turn_count != null ? { label: "Turns", value: String(run.turn_count) } : null,
     run.session_id ? { label: "Session", value: run.session_id } : null,
     run.last_event ? { label: "Event", value: run.last_event } : null,
@@ -984,6 +1038,17 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <RuntimeRunStatusChip status={run.status} />
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                operatorState.tone === "success" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                operatorState.tone === "warning" && "border-amber-200 bg-amber-50 text-amber-700",
+                operatorState.tone === "danger" && "border-rose-200 bg-rose-50 text-rose-700",
+                operatorState.tone === "neutral" && "border-slate-200 bg-slate-50 text-slate-700",
+              )}
+            >
+              {operatorState.label}
+            </span>
             <span>{run.role_slug}</span>
             <span className="text-slate-300">·</span>
             <span>{formatShortTimestamp(run.updated_at)}</span>
@@ -1016,6 +1081,53 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
               {isRetrying ? "Retrying…" : "Retry"}
             </Button>
           ) : null}
+          {canCancel ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="h-8 px-2 text-xs"
+            >
+              {isCancelling ? "Cancelling…" : "Cancel"}
+            </Button>
+          ) : null}
+          {canAcknowledge ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onAcknowledge}
+              disabled={isAcknowledging}
+              className="h-8 px-2 text-xs"
+            >
+              {isAcknowledging ? "Acknowledging…" : "Acknowledge"}
+            </Button>
+          ) : null}
+          {canEscalate ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onEscalate}
+              disabled={isEscalating}
+              className="h-8 px-2 text-xs"
+            >
+              {isEscalating ? "Escalating…" : "Escalate"}
+            </Button>
+          ) : null}
+          {approvalsHref && needsApprovalAttention ? (
+            <a
+              href={approvalsHref}
+              className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 transition hover:bg-violet-100"
+            >
+              {pendingApprovalsCount && pendingApprovalsCount > 0
+                ? `Open approvals (${pendingApprovalsCount})`
+                : "Open approvals"}
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </a>
+          ) : null}
         </div>
       </div>
       {summary ? (
@@ -1023,6 +1135,36 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
           <Markdown content={summary} variant="basic" />
         </div>
       ) : null}
+      <div
+        className={cn(
+          "mt-3 rounded-lg border px-3 py-2",
+          guidance.tone === "success" && "border-emerald-200 bg-emerald-50",
+          guidance.tone === "warning" && "border-amber-200 bg-amber-50",
+          guidance.tone === "danger" && "border-rose-200 bg-rose-50",
+          guidance.tone === "neutral" && "border-slate-200 bg-slate-50",
+        )}
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+          What next
+        </p>
+        <p className="mt-1 text-sm font-medium text-slate-900">{guidance.title}</p>
+        <p className="mt-1 text-xs text-slate-600">{guidance.detail}</p>
+        {needsApprovalAttention && resolvedApprovalLabel ? (
+          <div className="mt-2 rounded-md border border-slate-200 bg-white/70 px-2 py-2 text-xs text-slate-700">
+            Latest approval was <span className="font-semibold">{resolvedApprovalLabel}</span>
+            {latestResolvedApprovalAt ? (
+              <>
+                {" "}
+                {formatApprovalTimestamp(latestResolvedApprovalAt)}
+              </>
+            ) : null}
+            .{" "}
+            {latestResolvedApprovalStatus === "approved"
+              ? "Retry or continue the run now that the gate is clear."
+              : "Review the rejection reason before retrying or escalating again."}
+          </div>
+        ) : null}
+      </div>
       <RuntimeRunMetaGrid details={detailRows} itemKey={run.id} />
     </div>
   );
@@ -1347,6 +1489,15 @@ export default function BoardDetailPage() {
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [postCommentError, setPostCommentError] = useState<string | null>(null);
   const [retryingExecutionRunId, setRetryingExecutionRunId] = useState<
+    string | null
+  >(null);
+  const [cancellingExecutionRunId, setCancellingExecutionRunId] = useState<
+    string | null
+  >(null);
+  const [acknowledgingExecutionRunId, setAcknowledgingExecutionRunId] = useState<
+    string | null
+  >(null);
+  const [escalatingExecutionRunId, setEscalatingExecutionRunId] = useState<
     string | null
   >(null);
   const [newExecutionRunSiloSlug, setNewExecutionRunSiloSlug] = useState("");
@@ -3089,6 +3240,25 @@ export default function BoardDetailPage() {
     );
   }, [approvals, selectedTask]);
 
+  const pendingTaskApprovalsCount = useMemo(
+    () => taskApprovals.filter((approval) => approval.status === "pending").length,
+    [taskApprovals],
+  );
+
+  const latestResolvedTaskApproval = useMemo(() => {
+    const resolved = taskApprovals
+      .filter(
+        (approval): approval is Approval & { status: "approved" | "rejected" } =>
+          approval.status === "approved" || approval.status === "rejected",
+      )
+      .sort((a, b) => {
+        const aStamp = a.resolved_at ?? a.created_at;
+        const bStamp = b.resolved_at ?? b.created_at;
+        return new Date(bStamp).getTime() - new Date(aStamp).getTime();
+      });
+    return resolved[0] ?? null;
+  }, [taskApprovals]);
+
   const workingAgentIds = useMemo(() => {
     const working = new Set<string>();
     tasks.forEach((task) => {
@@ -3438,6 +3608,81 @@ export default function BoardDetailPage() {
       }
     },
     [boardId, pushToast, queryClient, selectedTask],
+  );
+
+  const invalidateExecutionRunViews = useCallback(async () => {
+    if (!selectedTask || !boardId) return;
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["board", boardId, "task", selectedTask.id, "execution-runs"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["/api/v1/activity", { limit: 200 }],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", "execution-runtime", "7d"],
+      }),
+    ]);
+  }, [boardId, queryClient, selectedTask]);
+
+  const handleCancelExecutionRun = useCallback(
+    async (run: TaskExecutionRunSnapshot) => {
+      if (!selectedTask || !boardId) return;
+      setCancellingExecutionRunId(run.id);
+      try {
+        await customFetch<TaskExecutionRunResponse>(
+          `/api/v1/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(selectedTask.id)}/execution-runs/${encodeURIComponent(run.id)}/cancel`,
+          { method: "POST" },
+        );
+        await invalidateExecutionRunViews();
+        pushToast("Run cancelled.", "success");
+      } catch (err) {
+        pushToast(formatActionError(err, "Unable to cancel execution run."));
+      } finally {
+        setCancellingExecutionRunId(null);
+      }
+    },
+    [boardId, invalidateExecutionRunViews, pushToast, selectedTask],
+  );
+
+  const handleAcknowledgeExecutionRun = useCallback(
+    async (run: TaskExecutionRunSnapshot) => {
+      if (!selectedTask || !boardId) return;
+      setAcknowledgingExecutionRunId(run.id);
+      try {
+        await customFetch<TaskExecutionRunResponse>(
+          `/api/v1/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(selectedTask.id)}/execution-runs/${encodeURIComponent(run.id)}/acknowledge`,
+          { method: "POST" },
+        );
+        await invalidateExecutionRunViews();
+        pushToast("Run acknowledged.", "success");
+      } catch (err) {
+        pushToast(formatActionError(err, "Unable to acknowledge execution run."));
+      } finally {
+        setAcknowledgingExecutionRunId(null);
+      }
+    },
+    [boardId, invalidateExecutionRunViews, pushToast, selectedTask],
+  );
+
+  const handleEscalateExecutionRun = useCallback(
+    async (run: TaskExecutionRunSnapshot) => {
+      if (!selectedTask || !boardId) return;
+      setEscalatingExecutionRunId(run.id);
+      try {
+        await customFetch<TaskExecutionRunResponse>(
+          `/api/v1/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(selectedTask.id)}/execution-runs/${encodeURIComponent(run.id)}/escalate`,
+          { method: "POST" },
+        );
+        await invalidateExecutionRunViews();
+        pushToast("Run escalated for approval.", "success");
+      } catch (err) {
+        pushToast(formatActionError(err, "Unable to escalate execution run."));
+      } finally {
+        setEscalatingExecutionRunId(null);
+      }
+    },
+    [boardId, invalidateExecutionRunViews, pushToast, selectedTask],
   );
 
   const handleCreateExecutionRun = useCallback(async () => {
@@ -4975,9 +5220,42 @@ export default function BoardDetailPage() {
                       key={run.id}
                       run={run}
                       isRetrying={retryingExecutionRunId === run.id}
+                      isCancelling={cancellingExecutionRunId === run.id}
+                      isAcknowledging={acknowledgingExecutionRunId === run.id}
+                      isEscalating={escalatingExecutionRunId === run.id}
+                      approvalsHref={
+                        boardId ? `/boards/${encodeURIComponent(boardId)}/approvals` : null
+                      }
+                      pendingApprovalsCount={pendingTaskApprovalsCount}
+                      latestResolvedApprovalStatus={
+                        latestResolvedTaskApproval?.status === "approved" ||
+                        latestResolvedTaskApproval?.status === "rejected"
+                          ? latestResolvedTaskApproval.status
+                          : null
+                      }
+                      latestResolvedApprovalAt={
+                        latestResolvedTaskApproval?.resolved_at ??
+                        latestResolvedTaskApproval?.created_at ??
+                        null
+                      }
                       onRetry={
-                        canWrite && canRetryExecutionRun(run.status)
+                        canWrite && canRetryRuntimeRun(run.status)
                           ? () => handleRetryExecutionRun(run)
+                          : undefined
+                      }
+                      onCancel={
+                        canWrite && canCancelRuntimeRun(run.status)
+                          ? () => handleCancelExecutionRun(run)
+                          : undefined
+                      }
+                      onAcknowledge={
+                        canWrite && canAcknowledgeRuntimeRun(run.status)
+                          ? () => handleAcknowledgeExecutionRun(run)
+                          : undefined
+                      }
+                      onEscalate={
+                        canWrite && canEscalateRuntimeRun(run.status)
+                          ? () => handleEscalateExecutionRun(run)
                           : undefined
                       }
                     />

@@ -4,6 +4,8 @@ import {
   extractRuntimeRunDetailsFromPayload,
   inferRuntimeRunStatusFromEvent,
   resolveRuntimeRunFeedContent,
+  runtimeRunOperatorGuidance,
+  runtimeRunOperatorState,
   runtimeRunFallbackSummary,
 } from "@/lib/runtime-runs";
 
@@ -102,6 +104,75 @@ describe("runtime-runs helpers", () => {
         { label: "PR #", value: "22" },
         { label: "Tokens", value: "320" },
       ],
+    });
+  });
+
+  it("builds operator guidance for blocked approval-style runs", () => {
+    expect(
+      runtimeRunOperatorGuidance({
+        id: "run-1",
+        board_id: "board-1",
+        task_id: "task-1",
+        status: "blocked",
+        created_at: "2026-03-22T00:00:00Z",
+        updated_at: "2026-03-22T00:01:00Z",
+        block_reason: "Waiting for lead approval before continuing.",
+      }),
+    ).toEqual({
+      tone: "warning",
+      title: "Resolve the block",
+      detail: "Waiting for lead approval before continuing.",
+    });
+  });
+
+  it("builds operator guidance for failed runs from error context", () => {
+    expect(
+      runtimeRunOperatorGuidance({
+        id: "run-2",
+        board_id: "board-1",
+        task_id: "task-1",
+        status: "failed",
+        created_at: "2026-03-22T00:00:00Z",
+        updated_at: "2026-03-22T00:01:00Z",
+        error_message: "Codex runner exited with status 1",
+      }),
+    ).toEqual({
+      tone: "danger",
+      title: "Investigate failure",
+      detail: "Codex runner exited with status 1",
+    });
+  });
+
+  it("classifies stale running runs as stalled", () => {
+    expect(
+      runtimeRunOperatorState({
+        id: "run-3",
+        board_id: "board-1",
+        task_id: "task-1",
+        status: "running",
+        created_at: "2026-03-22T00:00:00Z",
+        updated_at: "2026-03-21T00:00:00Z",
+      }),
+    ).toEqual({
+      tone: "warning",
+      label: "stalled",
+    });
+  });
+
+  it("classifies blocked runs from explicit block reasons", () => {
+    expect(
+      runtimeRunOperatorState({
+        id: "run-4",
+        board_id: "board-1",
+        task_id: "task-1",
+        status: "blocked",
+        created_at: "2026-03-22T00:00:00Z",
+        updated_at: "2026-03-22T00:01:00Z",
+        block_reason: "approval gate pending",
+      }),
+    ).toEqual({
+      tone: "warning",
+      label: "approval blocked",
     });
   });
 });
