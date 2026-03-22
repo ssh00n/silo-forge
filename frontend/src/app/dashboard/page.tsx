@@ -764,6 +764,8 @@ function TopMetricCard({
   infoText,
   icon,
   accent,
+  onClick,
+  ariaLabel,
 }: {
   title: string;
   value: string;
@@ -771,6 +773,8 @@ function TopMetricCard({
   infoText?: string;
   icon: React.ReactNode;
   accent: "blue" | "green" | "violet" | "emerald";
+  onClick?: () => void;
+  ariaLabel?: string;
 }) {
   const iconTone =
     accent === "blue"
@@ -781,8 +785,29 @@ function TopMetricCard({
           ? "bg-violet-50 text-violet-600"
           : "bg-green-50 text-green-600";
 
+  const interactiveProps = onClick
+    ? {
+        role: "link" as const,
+        tabIndex: 0,
+        "aria-label": ariaLabel ?? title,
+        onClick,
+        onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          onClick();
+        },
+      }
+    : {};
+
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <section
+      {...interactiveProps}
+      className={`rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+        onClick
+          ? "cursor-pointer focus-visible:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+          : ""
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-1.5">
@@ -1590,6 +1615,42 @@ export default function DashboardPage() {
                 rows={webhookTelemetrySummary.rows}
                 actionHref={webhookFeedHref}
                 actionLabel="Open feed"
+              />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <TopMetricCard
+                title="Worker Failures"
+                value={formatCount(
+                  telemetryOpsMetrics
+                    ? telemetryOpsMetrics.worker.failure_count_7d +
+                        telemetryOpsMetrics.worker.dequeue_failure_count_7d
+                    : 0,
+                )}
+                secondary={
+                  telemetryOpsMetrics?.worker.latest_at
+                    ? `Latest ${formatRelativeTimestamp(telemetryOpsMetrics.worker.latest_at)}`
+                    : "No recent worker signal"
+                }
+                infoText={`Queue worker failures and dequeue failures over ${DASHBOARD_RANGE_LABEL}`}
+                icon={<Timer className="h-4 w-4" />}
+                accent="violet"
+                onClick={() => router.push(workerFeedHref)}
+                ariaLabel="Open runtime activity feed for worker telemetry"
+              />
+              <TopMetricCard
+                title="Webhook Failures"
+                value={formatCount(telemetryOpsMetrics?.webhook.failure_count_7d ?? 0)}
+                secondary={
+                  telemetryOpsMetrics?.webhook.retried_count_7d
+                    ? `${formatCount(telemetryOpsMetrics.webhook.retried_count_7d)} retried`
+                    : "No retries"
+                }
+                infoText={`Webhook dispatch failures over ${DASHBOARD_RANGE_LABEL}`}
+                icon={<Shield className="h-4 w-4" />}
+                accent="green"
+                onClick={() => router.push(webhookFeedHref)}
+                ariaLabel="Open gateway activity feed for webhook telemetry"
               />
             </div>
 
