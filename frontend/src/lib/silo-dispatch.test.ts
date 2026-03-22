@@ -6,9 +6,9 @@ import {
   buildSiloDispatchCandidate,
   buildSiloOverviewPosture,
   buildTaskDemandProfile,
-  dispatchReasonClass,
+  siloReasonChipClass,
   summarizeSiloHealth,
-} from "./silo-dispatch";
+} from "./silo-ops";
 
 const buildSilo = (overrides: Partial<SiloSummary> = {}): SiloSummary => ({
   slug: "launch-crew",
@@ -103,9 +103,9 @@ describe("silo-dispatch helpers", () => {
   });
 
   it("returns tone-aware chip classes", () => {
-    expect(dispatchReasonClass("success")).toContain("emerald");
-    expect(dispatchReasonClass("warning")).toContain("amber");
-    expect(dispatchReasonClass("danger")).toContain("rose");
-    expect(dispatchReasonClass("neutral")).toContain("slate");
+    expect(siloReasonChipClass("success")).toContain("emerald");
+    expect(siloReasonChipClass("warning")).toContain("amber");
+    expect(siloReasonChipClass("danger")).toContain("rose");
+    expect(siloReasonChipClass("neutral")).toContain("slate");
   });
 });

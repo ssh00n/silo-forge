@@ -12,7 +12,7 @@ import {
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
 } from "./silo-detail";
-import { buildSiloDetailOpsViewModel } from "./silo-dispatch";
+import { buildSiloDetailOpsViewModel } from "./silo-ops";
 
 const buildDetail = (overrides: Partial<SiloDetail> = {}): SiloDetail => ({
   silo: {
