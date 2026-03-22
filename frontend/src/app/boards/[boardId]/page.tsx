@@ -199,6 +199,8 @@ type LiveFeedOpsSummary = {
   failureCount: number;
 };
 
+const DASH = "—";
+
 const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "task.comment",
   "task.assignee_notified",
