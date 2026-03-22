@@ -121,7 +121,8 @@ Current status:
 
 - initial `contracts/` directory exists in the main repo
 - first draft schemas exist for dispatch, acceptance, callback, and execution-run activity payloads
-- next step is generation and service adoption
+- generation script exists for frontend/backend schema snapshots
+- next step is service adoption on top of generated artifacts
 
 ### Phase 2: backend and frontend adoption
 

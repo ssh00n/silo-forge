@@ -400,9 +400,28 @@ class TaskExecutionRunService:
                 pr_url=payload.pr_url,
                 summary=payload.summary,
                 error_message=payload.error_message,
-                result_payload=payload.result_payload,
+                issue_identifier=payload.issue_identifier,
+                completion_kind=payload.completion_kind,
+                duration_ms=payload.duration_ms,
+                result_payload=self._merge_callback_result_payload(payload=payload),
             ),
         )
+
+    @staticmethod
+    def _merge_callback_result_payload(
+        *,
+        payload: TaskExecutionRunCallback,
+    ) -> dict[str, Any] | None:
+        result_payload: dict[str, Any] = (
+            dict(payload.result_payload) if isinstance(payload.result_payload, dict) else {}
+        )
+        if payload.issue_identifier is not None:
+            result_payload["issue_identifier"] = payload.issue_identifier
+        if payload.completion_kind is not None:
+            result_payload["completion_kind"] = payload.completion_kind
+        if payload.duration_ms is not None:
+            result_payload["duration_ms"] = payload.duration_ms
+        return result_payload or None
 
     async def _resolve_role(self, *, silo_id: UUID, requested_role_slug: str | None) -> SiloRole:
         role: SiloRole | None = None

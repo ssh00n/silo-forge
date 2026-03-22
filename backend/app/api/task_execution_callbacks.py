@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from pydantic import ValidationError
 
+from app.contracts.json_schema import (
+    ContractValidationError,
+    load_contract_schema,
+    validate_contract_payload,
+)
 from app.core.config import settings
 from app.db.session import get_session
 from app.schemas.task_execution_runs import TaskExecutionRunCallback, TaskExecutionRunRead
@@ -41,12 +47,20 @@ CALLBACK_AUTH_DEP = Depends(_require_symphony_callback_auth)
 @router.post("/{run_id}/callbacks/symphony", response_model=TaskExecutionRunRead)
 async def receive_symphony_execution_callback(
     run_id: UUID,
-    payload: TaskExecutionRunCallback,
+    request: Request,
     _auth=CALLBACK_AUTH_DEP,
     session=SESSION_DEP,
 ) -> TaskExecutionRunRead:
     """Receive execution status updates from a Symphony bridge."""
     try:
+        raw_payload = await request.json()
+        validate_contract_payload(
+            schema=load_contract_schema("contracts/execution/callback.payload.schema.json"),
+            payload=raw_payload,
+        )
+        payload = TaskExecutionRunCallback.model_validate(raw_payload)
         return await TaskExecutionRunService(session).update_run_by_id(run_id=run_id, payload=payload)
+    except (ContractValidationError, ValidationError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

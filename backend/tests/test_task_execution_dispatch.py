@@ -407,6 +407,9 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
                     "branch_name": "feature/live-2",
                     "pr_url": "https://github.com/example/repo/pull/22",
                     "summary": "Opened PR with implementation updates.",
+                    "issue_identifier": "MC-live-2",
+                    "completion_kind": "normal",
+                    "duration_ms": 65000,
                     "result_payload": {
                         "pull_request": 22,
                         "usage": {"total_tokens": 320},
@@ -438,6 +441,43 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
             assert comments[0].payload["status"] == "succeeded"
             assert comments[0].payload["pull_request"] == 22
             assert comments[0].payload["total_tokens"] == 320
+            assert comments[0].payload["issue_identifier"] == "MC-live-2"
+            assert comments[0].payload["completion_kind"] == "normal"
+            assert comments[0].payload["duration_ms"] == 65000
+    finally:
+        settings.symphony_callback_token = original_callback_token
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_symphony_callback_rejects_contract_payload_shape_mismatches() -> None:
+    engine, session_maker = await _make_engine()
+    original_callback_token = settings.symphony_callback_token
+    settings.symphony_callback_token = "callback-token"
+    async with session_maker() as session:
+        ctx, board, task, silo, _lead = await _seed_context(session)
+        service = TaskExecutionRunService(session)
+        created = await service.create_run(
+            board=board,
+            task=task,
+            payload=TaskExecutionRunCreate(silo_slug=silo.slug),
+        )
+    app = _build_test_app(session_maker, ctx)
+
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.post(
+                f"/api/v1/task-execution-runs/{created.id}/callbacks/symphony",
+                headers={"X-Symphony-Token": "callback-token"},
+                json={
+                    "status": "running",
+                    "summary": "Worker picked up the run.",
+                    "unexpected": "nope",
+                },
+            )
+
+        assert response.status_code == 422
+        assert "unexpected properties" in response.json()["detail"]
     finally:
         settings.symphony_callback_token = original_callback_token
         await engine.dispose()

@@ -49,6 +49,9 @@ class TaskExecutionRunUpdate(SQLModel):
     pr_url: str | None = None
     summary: str | None = None
     error_message: str | None = None
+    issue_identifier: str | None = None
+    completion_kind: str | None = None
+    duration_ms: int | None = None
     result_payload: dict[str, Any] | None = None
 
     @field_validator(
@@ -58,6 +61,8 @@ class TaskExecutionRunUpdate(SQLModel):
         "pr_url",
         "summary",
         "error_message",
+        "issue_identifier",
+        "completion_kind",
         mode="before",
     )
     @classmethod
@@ -108,6 +113,9 @@ class TaskExecutionRunCallback(SQLModel):
     pr_url: str | None = None
     summary: str | None = None
     error_message: str | None = None
+    issue_identifier: str | None = None
+    completion_kind: str | None = None
+    duration_ms: int | None = None
     result_payload: dict[str, Any] | None = None
 
     @field_validator(
@@ -117,6 +125,8 @@ class TaskExecutionRunCallback(SQLModel):
         "pr_url",
         "summary",
         "error_message",
+        "issue_identifier",
+        "completion_kind",
         mode="before",
     )
     @classmethod
@@ -125,4 +135,12 @@ class TaskExecutionRunCallback(SQLModel):
         if isinstance(value, str):
             trimmed = value.strip()
             return trimmed or None
+        return value
+
+    @field_validator("duration_ms")
+    @classmethod
+    def validate_duration_ms(cls, value: int | None) -> int | None:
+        """Reject negative callback durations."""
+        if value is not None and value < 0:
+            raise ValueError("duration_ms must be >= 0")
         return value
