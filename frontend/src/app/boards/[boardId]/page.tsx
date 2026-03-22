@@ -136,6 +136,11 @@ import {
 } from "@/lib/silo-spawn-requests";
 import { fetchSilos } from "@/lib/silos";
 import {
+  buildSiloDispatchCandidate,
+  buildTaskDemandProfile,
+  dispatchReasonClass,
+} from "@/lib/silo-dispatch";
+import {
   canAcknowledgeRuntimeRun,
   canCancelRuntimeRun,
   canEscalateRuntimeRun,
@@ -208,115 +213,11 @@ type LiveFeedOpsSummary = {
   failureCount: number;
 };
 
-type SymphonyDispatchSilo = Awaited<ReturnType<typeof fetchSilos>>[number];
-
-type SiloDispatchCandidate = {
-  silo: SymphonyDispatchSilo;
-  readinessLabel: string;
-  tone: "success" | "warning" | "danger" | "neutral";
-  guidance: string;
-  score: number;
-};
-
-type TaskDemandProfile = {
-  label: string;
-  tone: "success" | "warning" | "danger" | "neutral";
-  guidance: string;
-};
-
 const siloRequestPriorityClass = (priority: string): string => {
   if (priority === "urgent") return "bg-rose-50 text-rose-700 border border-rose-200";
   if (priority === "high") return "bg-amber-50 text-amber-700 border border-amber-200";
   if (priority === "low") return "bg-slate-100 text-slate-600 border border-slate-200";
   return "bg-blue-50 text-blue-700 border border-blue-200";
-};
-
-const buildSiloDispatchCandidate = (
-  silo: SymphonyDispatchSilo,
-  task: Task | null,
-): SiloDispatchCandidate => {
-  const hasPressure = silo.blocked_run_count > 0 || silo.failed_run_count > 0;
-  const isBusy = silo.active_run_count > 0;
-  const taskNeedsUrgentAttention = Boolean(
-    task && (task.approvals_pending_count > 0 || task.is_blocked || task.priority === "high"),
-  );
-
-  if (hasPressure) {
-    return {
-      silo,
-      readinessLabel: "Needs attention",
-      tone: "danger",
-      guidance: "Recent blocked or failed runtime work should be resolved before dispatching more work here.",
-      score: 300 + silo.blocked_run_count * 10 + silo.failed_run_count * 10,
-    };
-  }
-
-  if (silo.status !== "active") {
-    return {
-      silo,
-      readinessLabel: silo.status === "provisioning" ? "Applying" : "Needs setup",
-      tone: "warning",
-      guidance: "This silo is not yet in a steady operating state. Verify readiness before dispatching work.",
-      score: 200,
-    };
-  }
-
-  if (isBusy) {
-    return {
-      silo,
-      readinessLabel: "Available but busy",
-      tone: taskNeedsUrgentAttention ? "warning" : "neutral",
-      guidance: taskNeedsUrgentAttention
-        ? "This silo can run work, but it already has active load and may not be ideal for urgent follow-up."
-        : "This silo is healthy but already carrying active work.",
-      score: 100 + silo.active_run_count * 10,
-    };
-  }
-
-  return {
-    silo,
-    readinessLabel: "Ready now",
-    tone: "success",
-    guidance: "Healthy, idle, and ready to accept a new runtime run.",
-    score: 0,
-  };
-};
-
-const buildTaskDemandProfile = (task: Task | null): TaskDemandProfile | null => {
-  if (!task) return null;
-  if (task.approvals_pending_count > 0) {
-    return {
-      label: "Approval pressure",
-      tone: "warning",
-      guidance: "This task is waiting on an approval decision. Prefer a healthy silo that can resume quickly once the gate clears.",
-    };
-  }
-  if (task.is_blocked) {
-    return {
-      label: "Blocked dependencies",
-      tone: "warning",
-      guidance: "The task has unresolved dependencies. Avoid assigning a busy or degraded silo until the block is cleared.",
-    };
-  }
-  if (task.priority === "high") {
-    return {
-      label: "High-priority workload",
-      tone: "danger",
-      guidance: "Use the healthiest, least-busy silo available so the task can move immediately.",
-    };
-  }
-  if (task.status === "in_progress" || task.status === "review") {
-    return {
-      label: "Active follow-up",
-      tone: "neutral",
-      guidance: "This task is already in motion. Favor a ready silo that can continue work without more setup.",
-    };
-  }
-  return {
-    label: "Standard demand",
-    tone: "success",
-    guidance: "Any ready silo can take this work. Prefer an idle silo if one is available.",
-  };
 };
 
 const describeBoardSiloRequestPressure = (
@@ -5405,6 +5306,19 @@ export default function BoardDetailPage() {
                       <p className="mt-2 text-xs text-slate-600">
                         {selectedTaskDemandProfile.guidance}
                       </p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                        {selectedTaskDemandProfile.reasons.map((reason) => (
+                          <span
+                            key={`task-demand-${reason.label}`}
+                            className={cn(
+                              "rounded-full px-2.5 py-1",
+                              dispatchReasonClass(reason.tone),
+                            )}
+                          >
+                            {reason.label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   ) : null}
                   {selectedDispatchCandidate ? (
@@ -5438,6 +5352,17 @@ export default function BoardDetailPage() {
                         {selectedDispatchCandidate.guidance}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                        {selectedDispatchCandidate.reasons.map((reason) => (
+                          <span
+                            key={`${selectedDispatchCandidate.silo.slug}-${reason.label}`}
+                            className={cn(
+                              "rounded-full px-2.5 py-1",
+                              dispatchReasonClass(reason.tone),
+                            )}
+                          >
+                            {reason.label}
+                          </span>
+                        ))}
                         <span className="rounded-full bg-slate-100 px-2.5 py-1">
                           Active {selectedDispatchCandidate.silo.active_run_count}
                         </span>
