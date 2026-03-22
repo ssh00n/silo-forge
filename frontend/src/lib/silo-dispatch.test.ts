@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SiloSummary } from "@/lib/silos";
 import {
+  buildSiloHealthModel,
   buildSiloDispatchCandidate,
   buildSiloOverviewPosture,
   buildTaskDemandProfile,
@@ -35,6 +36,7 @@ describe("silo-dispatch helpers", () => {
     });
 
     expect(candidate.readinessLabel).toBe("Ready now");
+    expect(candidate.health.label).toBe("Healthy");
     expect(candidate.score).toBe(0);
     expect(candidate.reasons.some((reason) => reason.label === "Fits urgent work")).toBe(true);
   });
@@ -52,14 +54,23 @@ describe("silo-dispatch helpers", () => {
 
     expect(candidate.readinessLabel).toBe("Needs attention");
     expect(candidate.tone).toBe("danger");
-    expect(candidate.reasons[0]?.label).toBe("Blocked or failed runs present");
+    expect(candidate.health.key).toBe("blocked");
+    expect(candidate.reasons[0]?.label).toBe("Blocked runs present");
   });
 
   it("derives overview posture without task demand", () => {
     const posture = buildSiloOverviewPosture(buildSilo({ active_run_count: 2 }));
 
     expect(posture.readinessLabel).toBe("Available but busy");
+    expect(posture.health.label).toBe("Busy");
     expect(posture.reasons.some((reason) => reason.label === "Active load 2")).toBe(true);
+  });
+
+  it("derives a degraded health model for recent failures", () => {
+    const health = buildSiloHealthModel(buildSilo({ failed_run_count: 1 }));
+
+    expect(health.key).toBe("degraded");
+    expect(health.label).toBe("Degraded");
   });
 
   it("summarizes silo health using shared posture vocabulary", () => {
@@ -67,13 +78,15 @@ describe("silo-dispatch helpers", () => {
       buildSilo(),
       buildSilo({ active_run_count: 1 }),
       buildSilo({ blocked_run_count: 1 }),
+      buildSilo({ failed_run_count: 1 }),
       buildSilo({ status: "draft" }),
     ]);
 
-    expect(summary.totalCount).toBe(4);
-    expect(summary.readyCount).toBe(1);
+    expect(summary.totalCount).toBe(5);
+    expect(summary.healthyCount).toBe(1);
     expect(summary.busyCount).toBe(1);
-    expect(summary.needsAttentionCount).toBe(1);
+    expect(summary.blockedCount).toBe(1);
+    expect(summary.degradedCount).toBe(1);
     expect(summary.needsSetupCount).toBe(1);
   });
 

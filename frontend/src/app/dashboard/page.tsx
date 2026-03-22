@@ -1230,8 +1230,11 @@ export default function DashboardPage() {
     if (siloHealthSummary.totalCount === 0) {
       return { text: "No silos", tone: "neutral" as const };
     }
-    if (siloHealthSummary.needsAttentionCount > 0) {
-      return { text: "Needs attention", tone: "offline" as const };
+    if (siloHealthSummary.blockedCount > 0) {
+      return { text: "Blocked", tone: "offline" as const };
+    }
+    if (siloHealthSummary.degradedCount > 0) {
+      return { text: "Degraded", tone: "neutral" as const };
     }
     if (siloHealthSummary.needsSetupCount > 0) {
       return { text: "Needs setup", tone: "neutral" as const };
@@ -1239,7 +1242,7 @@ export default function DashboardPage() {
     if (siloHealthSummary.busyCount > 0) {
       return { text: "Operational", tone: "neutral" as const };
     }
-    return { text: "Ready", tone: "online" as const };
+    return { text: "Healthy", tone: "online" as const };
   }, [siloHealthSummary]);
   const siloHealthContextHref = useMemo(() => {
     const silos = silosQuery.data ?? [];
@@ -1825,11 +1828,12 @@ export default function DashboardPage() {
                 infoText="Core operating posture for the silos that can take work now."
                 badge={siloHealthBadge}
                 rows={[
-                  { label: "Ready now", value: formatCount(siloHealthSummary.readyCount) },
+                  { label: "Healthy", value: formatCount(siloHealthSummary.healthyCount) },
                   { label: "Busy", value: formatCount(siloHealthSummary.busyCount) },
+                  { label: "Blocked", value: formatCount(siloHealthSummary.blockedCount) },
                   {
-                    label: "Needs attention",
-                    value: formatCount(siloHealthSummary.needsAttentionCount),
+                    label: "Degraded",
+                    value: formatCount(siloHealthSummary.degradedCount),
                   },
                   { label: "Needs setup", value: formatCount(siloHealthSummary.needsSetupCount) },
                 ]}

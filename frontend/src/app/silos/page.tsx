@@ -34,12 +34,13 @@ export default function SilosPage() {
   const siloSummary = useMemo(
     () => ({
       total: siloHealthSummary.totalCount,
-      ready: siloHealthSummary.readyCount,
+      healthy: siloHealthSummary.healthyCount,
+      busy: siloHealthSummary.busyCount,
+      blocked: siloHealthSummary.blockedCount,
+      degraded: siloHealthSummary.degradedCount,
       needsSetup: siloHealthSummary.needsSetupCount,
-      activeWork: silos.filter((silo) => silo.active_run_count > 0).length,
-      needsAttention: siloHealthSummary.needsAttentionCount,
     }),
-    [siloHealthSummary, silos],
+    [siloHealthSummary],
   );
 
   return (
@@ -92,7 +93,7 @@ export default function SilosPage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <Card>
               <CardHeader>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Total silos</p>
@@ -103,10 +104,34 @@ export default function SilosPage() {
             </Card>
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Ready</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Healthy</p>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold text-emerald-700">{siloSummary.ready}</p>
+                <p className="text-3xl font-semibold text-emerald-700">{siloSummary.healthy}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Busy</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-slate-900">{siloSummary.busy}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Blocked</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-rose-700">{siloSummary.blocked}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Degraded</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-amber-700">{siloSummary.degraded}</p>
               </CardContent>
             </Card>
             <Card>
@@ -114,33 +139,7 @@ export default function SilosPage() {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Needs setup</p>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold text-amber-700">
-                  {siloSummary.needsSetup}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  Active work
-                </p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold text-blue-700">
-                  {siloSummary.activeWork}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  Needs attention
-                </p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold text-rose-700">
-                  {siloSummary.needsAttention}
-                </p>
+                <p className="text-3xl font-semibold text-slate-700">{siloSummary.needsSetup}</p>
               </CardContent>
             </Card>
           </div>

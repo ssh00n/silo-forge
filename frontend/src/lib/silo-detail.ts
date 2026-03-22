@@ -1,5 +1,8 @@
 import type { SiloDetail } from "@/lib/silos";
-import { buildSiloOverviewPosture } from "@/lib/silo-dispatch";
+import {
+  buildSiloHealthModel,
+  buildSiloOverviewPosture,
+} from "@/lib/silo-dispatch";
 
 export const UNASSIGNED_GATEWAY = "__unassigned__";
 
@@ -117,56 +120,53 @@ export function getSiloHealthSummary(detail: SiloDetail): {
   tone: "success" | "warning" | "danger" | "neutral";
   guidance: string;
 } {
+  const baseHealth = buildSiloHealthModel(detail.silo);
   const overviewPosture = buildSiloOverviewPosture(detail.silo);
   const warningCount = collectSiloWarnings(detail).length;
   const blockedTargets = getBlockedProvisionTargetCount(detail);
   const gatewayRoleCount = getGatewayRuntimeRoleCount(detail);
   const assignedGatewayRoles = getAssignedGatewayRoleCount(detail);
-  const latestRuntime = detail.latest_runtime_operation;
 
   if (blockedTargets > 0 || warningCount > 0) {
     return {
-      label: "Needs attention",
+      label: blockedTargets > 0 ? "Blocked" : "Degraded",
       tone: blockedTargets > 0 ? "danger" : "warning",
-      guidance: "Resolve runtime warnings or blocked targets before trusting this silo.",
+      guidance:
+        blockedTargets > 0
+          ? "Resolve blocked runtime targets before trusting this silo with more work."
+          : "Resolve runtime warnings before trusting this silo with more work.",
     };
   }
 
   if (gatewayRoleCount > 0 && assignedGatewayRoles < gatewayRoleCount) {
     return {
-      label: "Incomplete",
+      label: "Needs setup",
       tone: "warning",
       guidance: "Assign gateway-backed roles before expecting healthy execution.",
     };
   }
 
-  if (latestRuntime?.mode === "apply" && getLatestRuntimeBlockedCount(detail) === 0) {
-    return {
-      label: overviewPosture.readinessLabel,
-      tone: overviewPosture.tone,
-      guidance:
-        overviewPosture.tone === "success"
-          ? "The latest runtime apply completed without blocked targets."
-          : overviewPosture.guidance,
-    };
-  }
-
   if (getReadyProvisionTargetCount(detail) > 0) {
     return {
-      label:
-        overviewPosture.tone === "danger" ? overviewPosture.readinessLabel : "Ready to apply",
-      tone: overviewPosture.tone === "danger" ? "danger" : "neutral",
+      label: baseHealth.label,
+      tone: baseHealth.tone,
       guidance:
-        overviewPosture.tone === "danger"
-          ? overviewPosture.guidance
-          : "The silo is configured enough to validate or apply runtime.",
+        detail.latest_runtime_operation?.mode === "apply" &&
+        getLatestRuntimeBlockedCount(detail) === 0
+          ? "The latest runtime apply completed without blocked targets."
+          : baseHealth.key === "needs_setup"
+            ? "The silo is configured enough to validate or apply runtime."
+            : baseHealth.guidance,
     };
   }
 
   return {
-    label: "Draft",
-    tone: "neutral",
-    guidance: "This silo exists, but it has not been driven into an operational state yet.",
+    label: overviewPosture.health.label,
+    tone: overviewPosture.health.tone,
+    guidance:
+      overviewPosture.health.key === "needs_setup"
+        ? "This silo exists, but it has not been driven into an operational state yet."
+        : overviewPosture.health.guidance,
   };
 }
 

@@ -5332,21 +5332,38 @@ export default function BoardDetailPage() {
                             {selectedDispatchCandidate.silo.name}
                           </p>
                         </div>
-                        <span
-                          className={cn(
-                            "rounded-full px-2.5 py-1 text-xs font-medium",
-                            selectedDispatchCandidate.tone === "success" &&
-                              "bg-emerald-100 text-emerald-700",
-                            selectedDispatchCandidate.tone === "warning" &&
-                              "bg-amber-100 text-amber-700",
-                            selectedDispatchCandidate.tone === "danger" &&
-                              "bg-rose-100 text-rose-700",
-                            selectedDispatchCandidate.tone === "neutral" &&
-                              "bg-slate-100 text-slate-700",
-                          )}
-                        >
-                          {selectedDispatchCandidate.readinessLabel}
-                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          <span
+                            className={cn(
+                              "rounded-full px-2.5 py-1 text-xs font-medium",
+                              selectedDispatchCandidate.tone === "success" &&
+                                "bg-emerald-100 text-emerald-700",
+                              selectedDispatchCandidate.tone === "warning" &&
+                                "bg-amber-100 text-amber-700",
+                              selectedDispatchCandidate.tone === "danger" &&
+                                "bg-rose-100 text-rose-700",
+                              selectedDispatchCandidate.tone === "neutral" &&
+                                "bg-slate-100 text-slate-700",
+                            )}
+                          >
+                            {selectedDispatchCandidate.readinessLabel}
+                          </span>
+                          <span
+                            className={cn(
+                              "rounded-full px-2.5 py-1 text-xs font-medium",
+                              selectedDispatchCandidate.health.tone === "success" &&
+                                "bg-emerald-50 text-emerald-700",
+                              selectedDispatchCandidate.health.tone === "warning" &&
+                                "bg-amber-50 text-amber-700",
+                              selectedDispatchCandidate.health.tone === "danger" &&
+                                "bg-rose-50 text-rose-700",
+                              selectedDispatchCandidate.health.tone === "neutral" &&
+                                "bg-slate-100 text-slate-700",
+                            )}
+                          >
+                            Health {selectedDispatchCandidate.health.label}
+                          </span>
+                        </div>
                       </div>
                       <p className="mt-2 text-xs text-slate-600">
                         {selectedDispatchCandidate.guidance}
