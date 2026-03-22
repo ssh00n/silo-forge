@@ -39,6 +39,7 @@ Start with the narrowest high-value surface:
 2. Symphony dispatch acceptance
 3. Symphony callback payload
 4. execution-run activity payload used by frontend surfaces
+5. task and approval activity payloads used across feed surfaces
 
 Do not try to centralize every model at once.
 
@@ -124,6 +125,7 @@ Current status:
 - generation script exists for frontend/backend schema snapshots
 - sibling `silo-forge-symphony` can also consume generated schema snapshots from the same source
 - backend callback ingest already validates against the generated execution callback schema
+- task and approval activity payloads now use the same schema + finalizer pattern
 - next step is runtime-side callback validation and wider type adoption on top of generated artifacts
 
 ### Phase 2: backend and frontend adoption

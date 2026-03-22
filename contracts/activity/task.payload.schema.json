@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/activity/task.payload.schema.json",
+  "title": "SiloForgeTaskActivityPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "board_id", "task_title", "status"],
+  "properties": {
+    "task_id": { "type": "string", "minLength": 1 },
+    "board_id": { "type": "string", "minLength": 1 },
+    "task_title": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "minLength": 1 },
+    "assigned_agent_id": { "type": ["string", "null"] },
+    "priority": { "type": ["string", "integer", "null"] },
+    "previous_status": { "type": ["string", "null"] },
+    "reason": { "type": ["string", "null"] },
+    "dependency_task_id": { "type": ["string", "null"] },
+    "dependency_task_title": { "type": ["string", "null"] },
+    "dependency_task_status": { "type": ["string", "null"] },
+    "target_agent_id": { "type": ["string", "null"] },
+    "target_agent_name": { "type": ["string", "null"] },
+    "notification_kind": { "type": ["string", "null"] },
+    "notification_status": { "type": ["string", "null"] },
+    "error": { "type": ["string", "null"] }
+  }
+}

@@ -17,3 +17,4 @@
 - [Fork branding checklist](./fork-branding-checklist.md)
 - [Branding rename strategy](./branding-rename-strategy.md)
 - [Contracts package plan](./contracts-package-plan.md)
+- [OpenAPI vs Contracts Boundary](./openapi-vs-contracts-boundary.md)

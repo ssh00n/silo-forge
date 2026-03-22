@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/activity/approval.payload.schema.json",
+  "title": "SiloForgeApprovalActivityPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["approval_id", "board_id", "action_type", "approval_status", "notification_status"],
+  "properties": {
+    "approval_id": { "type": "string", "minLength": 1 },
+    "board_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": ["string", "null"] },
+    "agent_id": { "type": ["string", "null"] },
+    "action_type": { "type": "string", "minLength": 1 },
+    "approval_status": { "type": "string", "minLength": 1 },
+    "notification_status": { "type": "string", "minLength": 1 },
+    "lead_agent_id": { "type": ["string", "null"] },
+    "error": { "type": ["string", "null"] }
+  }
+}

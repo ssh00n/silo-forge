@@ -24,6 +24,7 @@ from app.api.deps import (
     require_user_or_agent,
 )
 from app.core.time import utcnow
+from app.contracts.activity import finalize_task_activity_payload
 from app.db import crud
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
@@ -2263,7 +2264,7 @@ def _task_activity_payload(
         payload["dependency_task_id"] = str(dependency_task.id)
         payload["dependency_task_title"] = dependency_task.title
         payload["dependency_task_status"] = dependency_task.status
-    return payload
+    return finalize_task_activity_payload(payload)
 
 
 def _task_notification_payload(
@@ -2286,7 +2287,7 @@ def _task_notification_payload(
     }
     if error:
         payload["error"] = error
-    return payload
+    return finalize_task_activity_payload(payload)
 
 
 async def _lead_notify_new_assignee(

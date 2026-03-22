@@ -8,6 +8,22 @@ from __future__ import annotations
 from typing import Literal, TypeAlias
 
 SCHEMAS = {
+    "activity__approval_payload_schema_json":
+    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
+     '$id': 'https://schemas.silo-forge.dev/activity/approval.payload.schema.json',
+     'title': 'SiloForgeApprovalActivityPayload',
+     'type': 'object',
+     'additionalProperties': False,
+     'required': ['approval_id', 'board_id', 'action_type', 'approval_status', 'notification_status'],
+     'properties': {'approval_id': {'type': 'string', 'minLength': 1},
+                    'board_id': {'type': 'string', 'minLength': 1},
+                    'task_id': {'type': ['string', 'null']},
+                    'agent_id': {'type': ['string', 'null']},
+                    'action_type': {'type': 'string', 'minLength': 1},
+                    'approval_status': {'type': 'string', 'minLength': 1},
+                    'notification_status': {'type': 'string', 'minLength': 1},
+                    'lead_agent_id': {'type': ['string', 'null']},
+                    'error': {'type': ['string', 'null']}}},
     "activity__execution_run_payload_schema_json":
     {'$schema': 'https://json-schema.org/draft/2020-12/schema',
      '$id': 'https://schemas.silo-forge.dev/activity/execution-run.payload.schema.json',
@@ -52,6 +68,29 @@ SCHEMAS = {
                     'duration_ms': {'type': 'integer', 'minimum': 0},
                     'has_prompt_override': {'type': 'boolean'},
                     'retried_from_run_id': {'type': 'string'}}},
+    "activity__task_payload_schema_json":
+    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
+     '$id': 'https://schemas.silo-forge.dev/activity/task.payload.schema.json',
+     'title': 'SiloForgeTaskActivityPayload',
+     'type': 'object',
+     'additionalProperties': False,
+     'required': ['task_id', 'board_id', 'task_title', 'status'],
+     'properties': {'task_id': {'type': 'string', 'minLength': 1},
+                    'board_id': {'type': 'string', 'minLength': 1},
+                    'task_title': {'type': 'string', 'minLength': 1},
+                    'status': {'type': 'string', 'minLength': 1},
+                    'assigned_agent_id': {'type': ['string', 'null']},
+                    'priority': {'type': ['string', 'integer', 'null']},
+                    'previous_status': {'type': ['string', 'null']},
+                    'reason': {'type': ['string', 'null']},
+                    'dependency_task_id': {'type': ['string', 'null']},
+                    'dependency_task_title': {'type': ['string', 'null']},
+                    'dependency_task_status': {'type': ['string', 'null']},
+                    'target_agent_id': {'type': ['string', 'null']},
+                    'target_agent_name': {'type': ['string', 'null']},
+                    'notification_kind': {'type': ['string', 'null']},
+                    'notification_status': {'type': ['string', 'null']},
+                    'error': {'type': ['string', 'null']}}},
     "execution__callback_payload_schema_json":
     {'$schema': 'https://json-schema.org/draft/2020-12/schema',
      '$id': 'https://schemas.silo-forge.dev/execution/callback.payload.schema.json',
@@ -177,7 +216,9 @@ SCHEMAS = {
                                                             'format': 'date-time'}}}}},
 }
 
+ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__approval_payload_schema_json"]
 ACTIVITY__EXECUTION_RUN_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__execution_run_payload_schema_json"]
+ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__task_payload_schema_json"]
 EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON = SCHEMAS["execution__callback_payload_schema_json"]
 EXECUTION__DISPATCH_ACCEPTANCE_SCHEMA_JSON = SCHEMAS["execution__dispatch_acceptance_schema_json"]
 EXECUTION__DISPATCH_REQUEST_SCHEMA_JSON = SCHEMAS["execution__dispatch_request_schema_json"]

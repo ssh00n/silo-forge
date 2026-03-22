@@ -22,6 +22,7 @@ from app.api.deps import (
 )
 from app.core.logging import get_logger
 from app.core.time import utcnow
+from app.contracts.activity import finalize_approval_activity_payload
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
 from app.models.agents import Agent
@@ -310,7 +311,7 @@ def _approval_activity_payload(
     }
     if error:
         payload["error"] = error
-    return payload
+    return finalize_approval_activity_payload(payload)
 
 
 async def _fetch_approval_events(

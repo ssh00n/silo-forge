@@ -1,5 +1,9 @@
 "use client";
 
+import type {
+  ApprovalActivityPayload,
+  TaskActivityPayload,
+} from "@/contracts/generated/schemas";
 import {
   type RuntimeRunActivityPayload,
   type RuntimeRunStatus,
@@ -26,6 +30,18 @@ export type ActivityCategory =
 const toRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || Array.isArray(value) || typeof value !== "object") return null;
   return value as Record<string, unknown>;
+};
+
+const parseTaskActivityPayload = (payload: unknown): Partial<TaskActivityPayload> | null => {
+  const record = toRecord(payload);
+  return record as Partial<TaskActivityPayload> | null;
+};
+
+const parseApprovalActivityPayload = (
+  payload: unknown,
+): Partial<ApprovalActivityPayload> | null => {
+  const record = toRecord(payload);
+  return record as Partial<ApprovalActivityPayload> | null;
 };
 
 const readString = (
@@ -66,11 +82,12 @@ export const resolveActivityFeedContent = (
     eventType === "task.updated" ||
     eventType === "task.status_changed"
   ) {
-    const taskTitle = readString(normalizedPayload, ["task_title"]) ?? "Task";
-    const status = readString(normalizedPayload, ["status"]);
-    const previousStatus = readString(normalizedPayload, ["previous_status"]);
-    const reason = readString(normalizedPayload, ["reason"]);
-    const dependencyTaskTitle = readString(normalizedPayload, ["dependency_task_title"]);
+    const taskPayload = parseTaskActivityPayload(normalizedPayload);
+    const taskTitle = taskPayload?.task_title?.trim() || "Task";
+    const status = taskPayload?.status?.trim() || null;
+    const previousStatus = taskPayload?.previous_status?.trim() || null;
+    const reason = taskPayload?.reason?.trim() || null;
+    const dependencyTaskTitle = taskPayload?.dependency_task_title?.trim() || null;
 
     const details: ActivityDetailRow[] = [];
     if (status) details.push({ label: "Status", value: status });
@@ -90,10 +107,11 @@ export const resolveActivityFeedContent = (
   }
 
   if (eventType.startsWith("approval.")) {
-    const approvalStatus = readString(normalizedPayload, ["approval_status"]);
-    const actionType = readString(normalizedPayload, ["action_type"]);
-    const notificationStatus = readString(normalizedPayload, ["notification_status"]);
-    const error = readString(normalizedPayload, ["error"]);
+    const approvalPayload = parseApprovalActivityPayload(normalizedPayload);
+    const approvalStatus = approvalPayload?.approval_status?.trim() || null;
+    const actionType = approvalPayload?.action_type?.trim() || null;
+    const notificationStatus = approvalPayload?.notification_status?.trim() || null;
+    const error = approvalPayload?.error?.trim() || null;
     const details: ActivityDetailRow[] = [];
     if (approvalStatus) details.push({ label: "Decision", value: approvalStatus });
     if (actionType) details.push({ label: "Action", value: actionType });
@@ -133,12 +151,13 @@ export const resolveActivityFeedContent = (
   }
 
   if (eventType.startsWith("task.") && normalizedPayload) {
-    const taskTitle = readString(normalizedPayload, ["task_title"]);
-    const targetAgentName = readString(normalizedPayload, ["target_agent_name"]);
-    const notificationKind = readString(normalizedPayload, ["notification_kind"]);
-    const notificationStatus = readString(normalizedPayload, ["notification_status"]);
-    const error = readString(normalizedPayload, ["error"]);
-    const status = readString(normalizedPayload, ["status"]);
+    const taskPayload = parseTaskActivityPayload(normalizedPayload);
+    const taskTitle = taskPayload?.task_title?.trim() || null;
+    const targetAgentName = taskPayload?.target_agent_name?.trim() || null;
+    const notificationKind = taskPayload?.notification_kind?.trim() || null;
+    const notificationStatus = taskPayload?.notification_status?.trim() || null;
+    const error = taskPayload?.error?.trim() || null;
+    const status = taskPayload?.status?.trim() || null;
     const details: ActivityDetailRow[] = [];
     if (taskTitle) details.push({ label: "Task", value: taskTitle });
     if (targetAgentName) details.push({ label: "Agent", value: targetAgentName });
