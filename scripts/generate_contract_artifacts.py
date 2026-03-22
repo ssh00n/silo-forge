@@ -11,6 +11,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS_DIR = REPO_ROOT / "contracts"
 FRONTEND_OUT = REPO_ROOT / "frontend" / "src" / "contracts" / "generated" / "schemas.ts"
 BACKEND_OUT = REPO_ROOT / "backend" / "app" / "contracts" / "generated_schemas.py"
+SYMPHONY_OUT = (
+    REPO_ROOT.parent / "symphony" / "src" / "contracts" / "generated" / "schemas.ts"
+)
 
 
 def _schema_key(path: Path) -> str:
@@ -77,7 +80,14 @@ def main() -> None:
     BACKEND_OUT.parent.mkdir(parents=True, exist_ok=True)
     FRONTEND_OUT.write_text(render_frontend(schemas), encoding="utf-8")
     BACKEND_OUT.write_text(render_backend(schemas), encoding="utf-8")
-    print(f"Generated {len(schemas)} contract artifacts.")
+    outputs = [FRONTEND_OUT, BACKEND_OUT]
+    if SYMPHONY_OUT.parent.parent.exists():
+        SYMPHONY_OUT.parent.mkdir(parents=True, exist_ok=True)
+        SYMPHONY_OUT.write_text(render_frontend(schemas), encoding="utf-8")
+        outputs.append(SYMPHONY_OUT)
+    print(f"Generated {len(schemas)} contract artifacts across {len(outputs)} outputs.")
+    for output in outputs:
+        print(f" - {output.relative_to(REPO_ROOT) if output.is_relative_to(REPO_ROOT) else output}")
 
 
 if __name__ == "__main__":

@@ -145,6 +145,10 @@ frontend-build: frontend-tooling ## Build frontend (next build)
 api-gen: frontend-tooling ## Regenerate TS API client (requires backend running at 127.0.0.1:8000)
 	$(NODE_WRAP) --cwd $(FRONTEND_DIR) npm run api:gen
 
+.PHONY: contracts-gen
+contracts-gen: ## Regenerate shared contract artifacts for backend/frontend/(optional) sibling symphony
+	python3 scripts/generate_contract_artifacts.py
+
 .PHONY: docker-up
 docker-up: ## Start full Docker stack with image rebuild
 	docker compose -f compose.yml --env-file .env up -d --build

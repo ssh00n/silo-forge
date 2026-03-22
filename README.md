@@ -161,6 +161,9 @@ Environment templates:
 
 Complete guides for deployment, production, troubleshooting, and testing are in [`/docs`](./docs/).
 
+Contract source-of-truth for cross-service execution flows lives in [`contracts/`](./contracts/).
+Run `make contracts-gen` to refresh generated artifacts for the backend, frontend, and the optional sibling [`silo-forge-symphony`](https://github.com/ssh00n/silo-forge-symphony) checkout.
+
 ## Project status
 
 Silo Forge is under active development.

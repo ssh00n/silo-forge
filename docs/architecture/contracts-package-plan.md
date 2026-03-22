@@ -122,7 +122,9 @@ Current status:
 - initial `contracts/` directory exists in the main repo
 - first draft schemas exist for dispatch, acceptance, callback, and execution-run activity payloads
 - generation script exists for frontend/backend schema snapshots
-- next step is service adoption on top of generated artifacts
+- sibling `silo-forge-symphony` can also consume generated schema snapshots from the same source
+- backend callback ingest already validates against the generated execution callback schema
+- next step is runtime-side callback validation and wider type adoption on top of generated artifacts
 
 ### Phase 2: backend and frontend adoption
 
@@ -134,6 +136,7 @@ Current status:
 
 - replace local `MissionControlDispatch*` interfaces with generated artifacts
 - remove drift between `backend` and `symphony` callback fields
+- validate outgoing callback payloads against the shared schema before POST
 
 ### Phase 4: CI enforcement
 
@@ -178,3 +181,9 @@ These are already flowing through the system and should be preserved in the init
 
 The current repo is still the best place to incubate the contract source-of-truth.
 Once the execution contract stops shifting, it can graduate into a standalone package.
+
+## Operational note
+
+Use `make contracts-gen` in `silo-forge` to refresh generated contract snapshots.
+If a sibling checkout exists at `../symphony`, the same command also refreshes
+`silo-forge-symphony/src/contracts/generated/schemas.ts`.
