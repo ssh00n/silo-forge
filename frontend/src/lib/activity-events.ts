@@ -34,28 +34,61 @@ const toRecord = (value: unknown): Record<string, unknown> | null => {
   return value as Record<string, unknown>;
 };
 
+const hasString = (record: Record<string, unknown>, key: string): boolean => {
+  const value = record[key];
+  return typeof value === "string" && value.trim().length > 0;
+};
+
 const parseTaskActivityPayload = (payload: unknown): Partial<TaskActivityPayload> | null => {
   const record = toRecord(payload);
-  return record as Partial<TaskActivityPayload> | null;
+  if (!record) return null;
+  if (!hasString(record, "task_title") && !hasString(record, "status")) {
+    return null;
+  }
+  return record as Partial<TaskActivityPayload>;
 };
 
 const parseApprovalActivityPayload = (
   payload: unknown,
 ): Partial<ApprovalActivityPayload> | null => {
   const record = toRecord(payload);
-  return record as Partial<ApprovalActivityPayload> | null;
+  if (!record) return null;
+  if (
+    !hasString(record, "action_type") &&
+    !hasString(record, "approval_status") &&
+    !hasString(record, "notification_status")
+  ) {
+    return null;
+  }
+  return record as Partial<ApprovalActivityPayload>;
 };
 
 const parseBoardActivityPayload = (payload: unknown): Partial<BoardActivityPayload> | null => {
   const record = toRecord(payload);
-  return record as Partial<BoardActivityPayload> | null;
+  if (!record) return null;
+  if (
+    !hasString(record, "notification_kind") &&
+    !hasString(record, "board_name") &&
+    !hasString(record, "target_agent_name")
+  ) {
+    return null;
+  }
+  return record as Partial<BoardActivityPayload>;
 };
 
 const parseGatewayActivityPayload = (
   payload: unknown,
 ): Partial<GatewayActivityPayload> | null => {
   const record = toRecord(payload);
-  return record as Partial<GatewayActivityPayload> | null;
+  if (!record) return null;
+  if (
+    !hasString(record, "notification_kind") &&
+    !hasString(record, "gateway_name") &&
+    !hasString(record, "action")
+  ) {
+    return null;
+  }
+  return record as Partial<GatewayActivityPayload>;
 };
 
 const resolveBoardActivityContent = (
