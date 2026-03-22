@@ -39,8 +39,11 @@ class _SequentialSession:
 @pytest.mark.asyncio
 async def test_telemetry_ops_metrics_maps_worker_and_webhook_snapshots() -> None:
     board_id = uuid4()
+    task_id = uuid4()
     worker_recent = ActivityEvent(
         event_type="queue.worker.success",
+        board_id=board_id,
+        task_id=task_id,
         payload={
             "queue_name": "default",
             "task_type": "task_execution_dispatch",
@@ -88,13 +91,15 @@ async def test_telemetry_ops_metrics_maps_worker_and_webhook_snapshots() -> None
     assert snapshot.worker.latest_queue_name == "default"
     assert snapshot.worker.latest_task_type == "task_execution_dispatch"
     assert snapshot.worker.latest_attempt == 0
+    assert snapshot.worker.latest_board_id == board_id
+    assert snapshot.worker.latest_task_id == task_id
     assert snapshot.worker.success_count_7d == 5
     assert snapshot.worker.failure_count_7d == 1
     assert snapshot.worker.dequeue_failure_count_7d == 2
 
     assert snapshot.webhook.latest_event_type == "webhook.dispatch.failed"
     assert snapshot.webhook.latest_attempt == 2
+    assert snapshot.webhook.latest_board_id == board_id
     assert snapshot.webhook.success_count_7d == 8
     assert snapshot.webhook.failure_count_7d == 3
     assert snapshot.webhook.retried_count_7d == 4
-

@@ -137,6 +137,8 @@ type TelemetryOpsSnapshot = {
     latest_queue_name: string | null;
     latest_task_type: string | null;
     latest_attempt: number | null;
+    latest_board_id: string | null;
+    latest_task_id: string | null;
     success_count_7d: number;
     failure_count_7d: number;
     dequeue_failure_count_7d: number;
@@ -146,6 +148,7 @@ type TelemetryOpsSnapshot = {
     latest_at: string | null;
     latest_payload_id: string | null;
     latest_attempt: number | null;
+    latest_board_id: string | null;
     success_count_7d: number;
     failure_count_7d: number;
     retried_count_7d: number;
@@ -846,6 +849,8 @@ function InfoBlock({
   rows,
   actionHref,
   actionLabel,
+  secondaryActionHref,
+  secondaryActionLabel,
 }: {
   title: string;
   badge?: { text: string; tone: "online" | "offline" | "neutral" };
@@ -853,6 +858,8 @@ function InfoBlock({
   rows: SummaryRow[];
   actionHref?: string;
   actionLabel?: string;
+  secondaryActionHref?: string;
+  secondaryActionLabel?: string;
 }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
@@ -876,6 +883,15 @@ function InfoBlock({
               className="inline-flex items-center gap-1 text-xs text-slate-500 transition hover:text-slate-700"
             >
               {actionLabel}
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : null}
+          {secondaryActionHref && secondaryActionLabel ? (
+            <Link
+              href={secondaryActionHref}
+              className="inline-flex items-center gap-1 text-xs text-slate-500 transition hover:text-slate-700"
+            >
+              {secondaryActionLabel}
               <ArrowUpRight className="h-3.5 w-3.5" />
             </Link>
           ) : null}
@@ -1455,6 +1471,20 @@ export default function DashboardPage() {
   }, [activityCategory]);
   const workerFeedHref = useMemo(() => "/activity?category=runtime", []);
   const webhookFeedHref = useMemo(() => "/activity?category=gateway", []);
+  const workerContextHref = useMemo(() => {
+    const boardId = telemetryOpsMetrics?.worker.latest_board_id;
+    const taskId = telemetryOpsMetrics?.worker.latest_task_id;
+    if (!boardId) return null;
+    if (taskId) {
+      return `/boards/${encodeURIComponent(boardId)}?taskId=${encodeURIComponent(taskId)}`;
+    }
+    return `/boards/${encodeURIComponent(boardId)}`;
+  }, [telemetryOpsMetrics]);
+  const webhookContextHref = useMemo(() => {
+    const boardId = telemetryOpsMetrics?.webhook.latest_board_id;
+    if (!boardId) return null;
+    return `/boards/${encodeURIComponent(boardId)}`;
+  }, [telemetryOpsMetrics]);
 
   const shouldIgnoreRowNavigation = (target: EventTarget | null): boolean => {
     if (!(target instanceof HTMLElement)) return false;
@@ -1607,6 +1637,8 @@ export default function DashboardPage() {
                 rows={workerTelemetrySummary.rows}
                 actionHref={workerFeedHref}
                 actionLabel="Open feed"
+                secondaryActionHref={workerContextHref ?? undefined}
+                secondaryActionLabel={workerContextHref ? "Open task" : undefined}
               />
               <InfoBlock
                 title="Webhook Telemetry"
@@ -1615,6 +1647,8 @@ export default function DashboardPage() {
                 rows={webhookTelemetrySummary.rows}
                 actionHref={webhookFeedHref}
                 actionLabel="Open feed"
+                secondaryActionHref={webhookContextHref ?? undefined}
+                secondaryActionLabel={webhookContextHref ? "Open board" : undefined}
               />
             </div>
 
