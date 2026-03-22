@@ -19,6 +19,7 @@ from app.models.board_webhooks import BoardWebhook
 from app.models.boards import Board
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.queue import QueuedTask
+from app.services.telemetry_activity import record_telemetry_activity
 from app.services.webhooks.queue import (
     QueuedInboundDelivery,
     decode_webhook_task,
@@ -250,10 +251,20 @@ async def flush_webhook_delivery_queue(*, block: bool = False, block_timeout: fl
                 "webhook.dispatch.success",
                 extra=_webhook_delivery_telemetry(item=item, status="succeeded"),
             )
+            await record_telemetry_activity(
+                event_type="webhook.dispatch.success",
+                payload=_webhook_delivery_telemetry(item=item, status="succeeded"),
+                board_id=item.board_id,
+            )
         except Exception as exc:
             logger.exception(
                 "webhook.dispatch.failed",
                 extra=_webhook_delivery_telemetry(item=item, status="failed", error=exc),
+            )
+            await record_telemetry_activity(
+                event_type="webhook.dispatch.failed",
+                payload=_webhook_delivery_telemetry(item=item, status="failed", error=exc),
+                board_id=item.board_id,
             )
             delay = _compute_webhook_retry_delay(item.attempts)
             jitter = _compute_webhook_retry_jitter(delay)
@@ -267,23 +278,37 @@ async def flush_webhook_delivery_queue(*, block: bool = False, block_timeout: fl
                         retry_delay_seconds=delay + jitter,
                     ),
                 )
+                await record_telemetry_activity(
+                    event_type="webhook.dispatch.requeued",
+                    payload=_webhook_delivery_telemetry(
+                        item=item,
+                        status="requeued",
+                        retry_delay_seconds=delay + jitter,
+                    ),
+                    board_id=item.board_id,
+                )
             except TypeError:
                 requeue_if_failed(item)
         time.sleep(0.0)
         await asyncio.sleep(settings.rq_dispatch_throttle_seconds)
     if processed > 0:
+        batch_payload = finalize_webhook_delivery_result_payload(
+            {
+                "board_id": None,
+                "webhook_id": None,
+                "payload_id": None,
+                "attempt": 0,
+                "status": "batch_complete",
+                "count": processed,
+            }
+        )
         logger.info(
             "webhook.dispatch.batch_complete",
-            extra=finalize_webhook_delivery_result_payload(
-                {
-                    "board_id": None,
-                    "webhook_id": None,
-                    "payload_id": None,
-                    "attempt": 0,
-                    "status": "batch_complete",
-                    "count": processed,
-                }
-            ),
+            extra=batch_payload,
+        )
+        await record_telemetry_activity(
+            event_type="webhook.dispatch.batch_complete",
+            payload=batch_payload,
         )
     return processed
 
@@ -318,32 +343,46 @@ def dequeue_webhook_delivery_task(
 
 def run_flush_webhook_delivery_queue() -> None:
     """RQ entrypoint for running the async queue flush from worker jobs."""
+    started_payload = finalize_webhook_delivery_result_payload(
+        {
+            "board_id": None,
+            "webhook_id": None,
+            "payload_id": None,
+            "attempt": 0,
+            "status": "batch_started",
+            "throttle_seconds": settings.rq_dispatch_throttle_seconds,
+        }
+    )
     logger.info(
         "webhook.dispatch.batch_started",
-        extra=finalize_webhook_delivery_result_payload(
-            {
-                "board_id": None,
-                "webhook_id": None,
-                "payload_id": None,
-                "attempt": 0,
-                "status": "batch_started",
-                "throttle_seconds": settings.rq_dispatch_throttle_seconds,
-            }
-        ),
+        extra=started_payload,
+    )
+    asyncio.run(
+        record_telemetry_activity(
+            event_type="webhook.dispatch.batch_started",
+            payload=started_payload,
+        )
     )
     start = time.time()
     asyncio.run(flush_webhook_delivery_queue())
     elapsed_ms = int((time.time() - start) * 1000)
+    finished_payload = finalize_webhook_delivery_result_payload(
+        {
+            "board_id": None,
+            "webhook_id": None,
+            "payload_id": None,
+            "attempt": 0,
+            "status": "batch_finished",
+            "duration_ms": elapsed_ms,
+        }
+    )
     logger.info(
         "webhook.dispatch.batch_finished",
-        extra=finalize_webhook_delivery_result_payload(
-            {
-                "board_id": None,
-                "webhook_id": None,
-                "payload_id": None,
-                "attempt": 0,
-                "status": "batch_finished",
-                "duration_ms": elapsed_ms,
-            }
-        ),
+        extra=finished_payload,
+    )
+    asyncio.run(
+        record_telemetry_activity(
+            event_type="webhook.dispatch.batch_finished",
+            payload=finished_payload,
+        )
     )

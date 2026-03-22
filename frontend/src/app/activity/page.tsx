@@ -281,6 +281,12 @@ const eventLabel = (eventType: FeedEventType): string => {
   if (eventType === "approval.rejected") return "Rejected";
   if (eventType === "silo.runtime.validate") return "Runtime validate";
   if (eventType === "silo.runtime.apply") return "Runtime apply";
+  if (eventType === "queue.worker.batch_started") return "Worker start";
+  if (eventType === "queue.worker.batch_complete") return "Worker batch";
+  if (eventType === "queue.worker.stopped") return "Worker stopped";
+  if (eventType === "queue.worker.success") return "Worker success";
+  if (eventType === "queue.worker.failed") return "Worker failed";
+  if (eventType.startsWith("queue.worker.")) return "Worker";
   if (eventType.startsWith("board.group.") && eventType.endsWith(".notified")) return "Group notified";
   if (eventType.startsWith("board.group.") && eventType.endsWith(".notify_failed")) return "Group failed";
   if (eventType === "board.lead_notified") return "Board lead";
@@ -293,6 +299,12 @@ const eventLabel = (eventType: FeedEventType): string => {
   if (eventType === "gateway.main.lead_message.sent") return "Lead message";
   if (eventType === "gateway.main.lead_message.failed") return "Lead message failed";
   if (eventType === "gateway.main.lead_broadcast.sent") return "Lead broadcast";
+  if (eventType === "webhook.dispatch.batch_started") return "Webhook batch";
+  if (eventType === "webhook.dispatch.batch_complete") return "Webhook batch";
+  if (eventType === "webhook.dispatch.batch_finished") return "Webhook finished";
+  if (eventType === "webhook.dispatch.success") return "Webhook sent";
+  if (eventType === "webhook.dispatch.failed") return "Webhook failed";
+  if (eventType === "webhook.dispatch.requeued") return "Webhook retried";
   return "Updated";
 };
 
@@ -395,6 +407,27 @@ const eventPillClass = (eventType: FeedEventType): string => {
   }
   if (eventType === "silo.runtime.apply") {
     return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType === "queue.worker.success" || eventType === "queue.worker.batch_complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "queue.worker.failed" || eventType === "queue.worker.dequeue_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType.startsWith("queue.worker.")) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
+  }
+  if (eventType === "webhook.dispatch.success" || eventType === "webhook.dispatch.batch_complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "webhook.dispatch.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "webhook.dispatch.requeued") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType.startsWith("webhook.dispatch.")) {
+    return "border-sky-200 bg-sky-50 text-sky-700";
   }
   if (eventType.startsWith("board.group.") && eventType.endsWith(".notified")) {
     return "border-teal-200 bg-teal-50 text-teal-700";

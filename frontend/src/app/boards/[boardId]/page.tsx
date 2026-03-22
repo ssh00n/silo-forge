@@ -229,6 +229,11 @@ const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "gateway.main.lead_message.sent",
   "gateway.main.lead_message.failed",
   "gateway.main.lead_broadcast.sent",
+  "webhook.dispatch.success",
+  "webhook.dispatch.failed",
+  "webhook.dispatch.requeued",
+  "webhook.dispatch.batch_complete",
+  "webhook.dispatch.batch_finished",
   "silo.runtime.validate",
   "silo.runtime.apply",
 ]);
@@ -556,6 +561,11 @@ const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "gateway.main.lead_message.sent") return "Lead message";
   if (eventType === "gateway.main.lead_message.failed") return "Lead message failed";
   if (eventType === "gateway.main.lead_broadcast.sent") return "Lead broadcast";
+  if (eventType === "webhook.dispatch.success") return "Webhook sent";
+  if (eventType === "webhook.dispatch.failed") return "Webhook failed";
+  if (eventType === "webhook.dispatch.requeued") return "Webhook retried";
+  if (eventType === "webhook.dispatch.batch_complete") return "Webhook batch";
+  if (eventType === "webhook.dispatch.batch_finished") return "Webhook finished";
   if (eventType === "silo.runtime.validate") return "Runtime validate";
   if (eventType === "silo.runtime.apply") return "Runtime apply";
   return "Updated";
@@ -687,6 +697,18 @@ const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   }
   if (eventType === "gateway.main.lead_broadcast.sent") {
     return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType === "webhook.dispatch.success" || eventType === "webhook.dispatch.batch_complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "webhook.dispatch.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "webhook.dispatch.requeued") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType.startsWith("webhook.dispatch.")) {
+    return "border-sky-200 bg-sky-50 text-sky-700";
   }
   if (eventType === "silo.runtime.validate") {
     return "border-sky-200 bg-sky-50 text-sky-700";

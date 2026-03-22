@@ -216,3 +216,36 @@ async def test_fetch_activity_events_returns_serialized_activity():
         assert rows[0].route_name == "board"
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_fetch_activity_events_includes_global_worker_telemetry() -> None:
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+    session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    board = _make_board()
+    event = ActivityEvent(
+        event_type="queue.worker.batch_complete",
+        message="Queue worker batch_complete.",
+        payload={"queue_name": "default", "status": "batch_complete", "count": 1},
+    )
+    try:
+        async with session_maker() as session:
+            session.add(board)
+            session.add(event)
+            await session.commit()
+
+            rows = await _fetch_activity_events(
+                session,
+                since=event.created_at,
+                board_ids={board.id},
+            )
+
+        assert len(rows) == 1
+        assert rows[0].id == event.id
+        assert rows[0].board_id is None
+        assert rows[0].route_name == "activity"
+    finally:
+        await engine.dispose()

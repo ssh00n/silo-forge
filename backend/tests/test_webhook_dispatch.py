@@ -157,7 +157,11 @@ async def test_dispatch_flush_processes_items_and_throttles(
     async def _process(item: QueuedInboundDelivery) -> None:
         processed.append(item.payload_id)
 
+    async def _noop_record(**_: object) -> None:
+        return None
+
     monkeypatch.setattr(dispatch, "_process_single_item", _process)
+    monkeypatch.setattr(dispatch, "record_telemetry_activity", _noop_record)
     monkeypatch.setattr(dispatch.settings, "rq_dispatch_throttle_seconds", 0)
     monkeypatch.setattr(dispatch.time, "sleep", lambda seconds: throttles.append(seconds))
 
@@ -181,8 +185,12 @@ async def test_dispatch_flush_requeues_on_process_error(monkeypatch: pytest.Monk
         requeued.append(payload)
         return True
 
+    async def _noop_record(**_: object) -> None:
+        return None
+
     monkeypatch.setattr(dispatch, "_process_single_item", _process)
     monkeypatch.setattr(dispatch, "requeue_if_failed", _requeue)
+    monkeypatch.setattr(dispatch, "record_telemetry_activity", _noop_record)
     monkeypatch.setattr(dispatch.settings, "rq_dispatch_throttle_seconds", 0)
     monkeypatch.setattr(dispatch.time, "sleep", lambda seconds: None)
 
@@ -214,7 +222,11 @@ async def test_dispatch_flush_recovers_from_dequeue_error(monkeypatch: pytest.Mo
         nonlocal processed
         processed += 1
 
+    async def _noop_record(**_: object) -> None:
+        return None
+
     monkeypatch.setattr(dispatch, "_process_single_item", _process)
+    monkeypatch.setattr(dispatch, "record_telemetry_activity", _noop_record)
     monkeypatch.setattr(dispatch.settings, "rq_dispatch_throttle_seconds", 0)
     monkeypatch.setattr(dispatch.time, "sleep", lambda seconds: None)
 
@@ -352,7 +364,11 @@ def test_dispatch_run_entrypoint_calls_async_flush(monkeypatch: pytest.MonkeyPat
     async def _flush() -> None:
         called.append(True)
 
+    async def _noop_record(**_: object) -> None:
+        return None
+
     monkeypatch.setattr(dispatch, "flush_webhook_delivery_queue", _flush)
+    monkeypatch.setattr(dispatch, "record_telemetry_activity", _noop_record)
 
     dispatch.run_flush_webhook_delivery_queue()
 
