@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from app.contracts.activity import (
+    parse_board_activity_payload,
+    parse_gateway_activity_payload,
+)
 from app.api.boards import _board_notification_payload
 from app.models.agents import Agent
 from app.models.board_groups import BoardGroup
@@ -45,6 +49,9 @@ def test_board_notification_payload_matches_contract() -> None:
         "changed_fields": ["gateway_id", "board_group_id"],
         "error": "gateway unavailable",
     }
+    parsed = parse_board_activity_payload(payload)
+    assert parsed.board_name == "Ops Board"
+    assert parsed.notification_kind == "board_group_join"
 
 
 def test_gateway_activity_payload_matches_contract() -> None:
@@ -85,3 +92,6 @@ def test_gateway_activity_payload_matches_contract() -> None:
         "workspace_path": "/tmp/demo",
         "session_key": "agent:session",
     }
+    parsed = parse_gateway_activity_payload(payload)
+    assert parsed.gateway_name == "Demo Gateway"
+    assert parsed.action == "lead_message"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
@@ -13,6 +13,8 @@ from app.contracts.generated_schemas import (
     ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON,
 )
 from app.contracts.json_schema import validate_contract_payload
+
+_ActivityContractT = TypeVar("_ActivityContractT", bound=BaseModel)
 
 
 class TaskActivityPayloadContract(BaseModel):
@@ -87,21 +89,86 @@ class GatewayActivityPayloadContract(BaseModel):
     error: str | None = None
 
 
+def _parse_activity_payload(
+    *,
+    schema: dict[str, Any],
+    payload: dict[str, Any],
+    model: type[_ActivityContractT],
+) -> _ActivityContractT:
+    validate_contract_payload(schema=schema, payload=payload)
+    return model.model_validate(payload)
+
+
+def _finalize_activity_payload(
+    *,
+    schema: dict[str, Any],
+    payload: dict[str, Any],
+    model: type[_ActivityContractT],
+) -> dict[str, Any]:
+    return _parse_activity_payload(schema=schema, payload=payload, model=model).model_dump(
+        exclude_unset=True
+    )
+
+
+def parse_task_activity_payload(payload: dict[str, Any]) -> TaskActivityPayloadContract:
+    return _parse_activity_payload(
+        schema=ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=TaskActivityPayloadContract,
+    )
+
+
 def finalize_task_activity_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    validate_contract_payload(schema=ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON, payload=payload)
-    return TaskActivityPayloadContract.model_validate(payload).model_dump(exclude_unset=True)
+    return _finalize_activity_payload(
+        schema=ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=TaskActivityPayloadContract,
+    )
+
+
+def parse_approval_activity_payload(payload: dict[str, Any]) -> ApprovalActivityPayloadContract:
+    return _parse_activity_payload(
+        schema=ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=ApprovalActivityPayloadContract,
+    )
 
 
 def finalize_approval_activity_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    validate_contract_payload(schema=ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON, payload=payload)
-    return ApprovalActivityPayloadContract.model_validate(payload).model_dump(exclude_unset=True)
+    return _finalize_activity_payload(
+        schema=ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=ApprovalActivityPayloadContract,
+    )
+
+
+def parse_board_activity_payload(payload: dict[str, Any]) -> BoardActivityPayloadContract:
+    return _parse_activity_payload(
+        schema=ACTIVITY__BOARD_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=BoardActivityPayloadContract,
+    )
 
 
 def finalize_board_activity_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    validate_contract_payload(schema=ACTIVITY__BOARD_PAYLOAD_SCHEMA_JSON, payload=payload)
-    return BoardActivityPayloadContract.model_validate(payload).model_dump(exclude_unset=True)
+    return _finalize_activity_payload(
+        schema=ACTIVITY__BOARD_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=BoardActivityPayloadContract,
+    )
+
+
+def parse_gateway_activity_payload(payload: dict[str, Any]) -> GatewayActivityPayloadContract:
+    return _parse_activity_payload(
+        schema=ACTIVITY__GATEWAY_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=GatewayActivityPayloadContract,
+    )
 
 
 def finalize_gateway_activity_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    validate_contract_payload(schema=ACTIVITY__GATEWAY_PAYLOAD_SCHEMA_JSON, payload=payload)
-    return GatewayActivityPayloadContract.model_validate(payload).model_dump(exclude_unset=True)
+    return _finalize_activity_payload(
+        schema=ACTIVITY__GATEWAY_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=GatewayActivityPayloadContract,
+    )

@@ -55,7 +55,7 @@ frontend-format-check: frontend-tooling ## Check frontend formatting (prettier)
 	$(NODE_WRAP) --cwd $(FRONTEND_DIR) npx prettier --check "src/**/*.{ts,tsx,js,jsx,json,css,md}" "*.{ts,js,json,md,mdx}"
 
 .PHONY: lint
-lint: backend-lint frontend-lint docs-lint ## Lint backend + frontend + docs
+lint: contracts-check backend-lint frontend-lint docs-lint ## Lint backend + frontend + docs
 
 .PHONY: backend-lint
 backend-lint: backend-format-check backend-typecheck ## Lint backend (isort/black checks + flake8 + mypy)
