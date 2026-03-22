@@ -21,6 +21,7 @@ from app.models.approvals import Approval
 from app.models.boards import Board
 from app.models.task_execution_runs import TaskExecutionRun
 from app.models.tasks import Task
+from app.models.silos import Silo
 from app.schemas.metrics import (
     DashboardBucketKey,
     DashboardKpis,
@@ -541,16 +542,17 @@ async def _runtime_execution_metrics(
 
     recent_rows = (
         await session.exec(
-            select(TaskExecutionRun, Task, Board)
+            select(TaskExecutionRun, Task, Board, Silo)
             .join(Task, col(Task.id) == col(TaskExecutionRun.task_id))
             .join(Board, col(Board.id) == col(TaskExecutionRun.board_id))
+            .join(Silo, col(Silo.id) == col(TaskExecutionRun.silo_id))
             .where(col(TaskExecutionRun.board_id).in_(board_ids))
             .order_by(col(TaskExecutionRun.updated_at).desc())
             .limit(limit)
         )
     ).all()
 
-    task_ids = list({task.id for _, task, _board in recent_rows})
+    task_ids = list({task.id for _, task, _board, _silo in recent_rows})
     approval_rows = (
         await session.exec(
             select(Approval)
@@ -573,7 +575,7 @@ async def _runtime_execution_metrics(
         latest_resolved_approval_by_task.setdefault(approval.task_id, approval)
 
     recent_runs: list[DashboardRuntimeRunRead] = []
-    for run, task, board in recent_rows:
+    for run, task, board, silo in recent_rows:
         input_tokens, output_tokens, total_tokens = _usage_triplet(run.result_payload)
         latest_resolved_approval = latest_resolved_approval_by_task.get(task.id)
         recent_runs.append(
@@ -583,6 +585,9 @@ async def _runtime_execution_metrics(
                 board_name=board.name,
                 task_id=task.id,
                 task_title=task.title,
+                silo_id=silo.id,
+                silo_slug=silo.slug,
+                silo_name=silo.name,
                 status=run.status,
                 created_at=run.created_at,
                 started_at=run.started_at,

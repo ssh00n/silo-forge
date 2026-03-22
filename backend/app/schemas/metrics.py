@@ -100,6 +100,9 @@ class DashboardRuntimeRunRead(SQLModel):
     board_name: str
     task_id: UUID
     task_title: str
+    silo_id: UUID
+    silo_slug: str
+    silo_name: str
     status: str
     created_at: datetime
     started_at: datetime | None = None

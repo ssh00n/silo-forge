@@ -127,6 +127,9 @@ type DashboardRuntimeRunSnapshot = RuntimeRunSnapshot & {
   run_id: string;
   board_name: string;
   task_title: string;
+  silo_id: string;
+  silo_slug: string;
+  silo_name: string;
   issue_identifier?: string | null;
   runner_kind?: string | null;
   completion_kind?: string | null;
@@ -159,6 +162,15 @@ type RuntimeMetricsResponse = {
   data: RuntimeMetricsSnapshot;
   status: number;
   headers: Headers;
+};
+
+type DashboardAssignmentSummary = {
+  siloSlug: string;
+  siloName: string;
+  activeCount: number;
+  blockedCount: number;
+  latestTaskTitle: string;
+  latestBoardName: string;
 };
 
 type TelemetryOpsSnapshot = {
@@ -684,6 +696,37 @@ const formatPerDay = (total: number, days: number): string => {
   return `${(total / days).toFixed(1)}/day`;
 };
 
+const ACTIVE_ASSIGNMENT_STATUSES = new Set(["queued", "dispatching", "running", "blocked"]);
+
+const buildDashboardAssignmentSummaries = (
+  runtimeMetrics: RuntimeMetricsSnapshot | null,
+): DashboardAssignmentSummary[] => {
+  if (!runtimeMetrics) return [];
+  const grouped = new Map<string, DashboardAssignmentSummary>();
+
+  for (const run of runtimeMetrics.recent_runs) {
+    if (!ACTIVE_ASSIGNMENT_STATUSES.has(run.status)) continue;
+    const existing = grouped.get(run.silo_slug);
+    if (existing) {
+      existing.activeCount += 1;
+      if (run.status === "blocked") existing.blockedCount += 1;
+      continue;
+    }
+    grouped.set(run.silo_slug, {
+      siloSlug: run.silo_slug,
+      siloName: run.silo_name,
+      activeCount: 1,
+      blockedCount: run.status === "blocked" ? 1 : 0,
+      latestTaskTitle: run.task_title,
+      latestBoardName: run.board_name,
+    });
+  }
+
+  return [...grouped.values()]
+    .sort((left, right) => right.blockedCount - left.blockedCount || right.activeCount - left.activeCount)
+    .slice(0, 3);
+};
+
 const toSessionSummaries = (
   sessions: unknown[] | null | undefined,
   mainSession: unknown,
@@ -1186,6 +1229,10 @@ export default function DashboardPage() {
   const metrics = metricsQuery.data?.status === 200 ? metricsQuery.data.data : null;
   const runtimeMetrics = runtimeMetricsQuery.data ?? null;
   const telemetryOpsMetrics = telemetryOpsQuery.data ?? null;
+  const assignmentSummaries = useMemo(
+    () => buildDashboardAssignmentSummaries(runtimeMetrics),
+    [runtimeMetrics],
+  );
   const siloRequestsSummary = useMemo<SiloRequestsSummary>(() => {
     const now = Date.now();
     const requests = siloRequestsQuery.data ?? [];
@@ -2149,6 +2196,44 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 </div>
+                {assignmentSummaries.length > 0 ? (
+                  <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Active assignments
+                      </p>
+                      <span className="text-[11px] text-slate-500">
+                        Current silo ownership
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                      {assignmentSummaries.map((assignment) => (
+                        <Link
+                          key={assignment.siloSlug}
+                          href={`/silos/${assignment.siloSlug}`}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-3 transition hover:border-slate-300"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">
+                                {assignment.siloName}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {assignment.latestBoardName} · {assignment.latestTaskTitle}
+                              </p>
+                            </div>
+                            <div className="text-right text-[11px] text-slate-500">
+                              <p>Active {assignment.activeCount}</p>
+                              {assignment.blockedCount > 0 ? (
+                                <p className="text-rose-700">Blocked {assignment.blockedCount}</p>
+                              ) : null}
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="max-h-[280px] space-y-2 overflow-x-hidden overflow-y-auto pr-1">
                   {runtimeMetricsQuery.isLoading ? (
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">

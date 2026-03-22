@@ -8,6 +8,7 @@ import pytest
 from app.api import metrics as metrics_api
 from app.models.boards import Board
 from app.models.approvals import Approval
+from app.models.silos import Silo
 from app.models.task_execution_runs import TaskExecutionRun
 from app.models.tasks import Task
 
@@ -44,14 +45,27 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
     board_id = uuid4()
     task_id = uuid4()
     run_id = uuid4()
+    silo_id = uuid4()
     board = Board(id=board_id, organization_id=uuid4(), name="Delivery", slug="delivery")
     task = Task(id=task_id, board_id=board_id, title="Wire runtime dashboard")
+    silo = Silo(
+        id=silo_id,
+        organization_id=board.organization_id,
+        slug="launch-crew",
+        name="Launch Crew",
+        blueprint_slug="default-four-agent",
+        blueprint_version="0.1.0",
+        desired_state={},
+        status="active",
+        enable_symphony=True,
+        enable_telemetry=True,
+    )
     run = TaskExecutionRun(
         id=run_id,
         organization_id=board.organization_id,
         board_id=board_id,
         task_id=task_id,
-        silo_id=uuid4(),
+        silo_id=silo_id,
         role_slug="symphony",
         status="succeeded",
         summary="Opened PR with dashboard metrics.",
@@ -104,7 +118,7 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
         [
             _ExecOneResult(2),
             _ExecOneResult(1),
-            _ExecAllResult([(run, task, board)]),
+            _ExecAllResult([(run, task, board, silo)]),
             _ExecAllResult([pending_approval, approval]),
             _ExecAllResult([run]),
         ]
@@ -125,6 +139,9 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
     assert recent.run_id == run_id
     assert recent.task_title == "Wire runtime dashboard"
     assert recent.board_name == "Delivery"
+    assert recent.silo_id == silo_id
+    assert recent.silo_slug == "launch-crew"
+    assert recent.silo_name == "Launch Crew"
     assert recent.total_tokens == 200
     assert recent.pr_url == "https://github.com/example/repo/pull/9"
     assert recent.issue_identifier == "MC-9"
