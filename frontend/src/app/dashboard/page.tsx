@@ -65,7 +65,9 @@ import {
 } from "@/lib/formatters";
 import {
   formatRuntimeDurationMs,
+  runtimeRunOperatorState,
   type RuntimeRunSnapshot,
+  runtimeRunOperatorGuidance,
   runtimeRunTimingLabel,
 } from "@/lib/runtime-runs";
 
@@ -1965,10 +1967,16 @@ export default function DashboardPage() {
                     runtimeMetrics.recent_runs.map((run) => (
                       (() => {
                         const duration = runtimeRunTimingLabel(run);
+                        const operatorState = runtimeRunOperatorState(run);
+                        const guidance = runtimeRunOperatorGuidance(run);
                         const detailRows = [
                           run.issue_identifier ? { label: "Issue", value: run.issue_identifier } : null,
                           run.runner_kind ? { label: "Runner", value: run.runner_kind } : null,
                           run.completion_kind ? { label: "Completion", value: run.completion_kind } : null,
+                          run.failure_reason ? { label: "Failure reason", value: run.failure_reason } : null,
+                          run.block_reason ? { label: "Block reason", value: run.block_reason } : null,
+                          run.cancel_reason ? { label: "Cancel reason", value: run.cancel_reason } : null,
+                          run.stall_reason ? { label: "Stall reason", value: run.stall_reason } : null,
                           run.turn_count != null ? { label: "Turns", value: String(run.turn_count) } : null,
                           run.session_id ? { label: "Session", value: run.session_id } : null,
                           run.last_event ? { label: "Event", value: run.last_event } : null,
@@ -2009,11 +2017,50 @@ export default function DashboardPage() {
                                   <span className="inline-flex align-middle">
                                     <RuntimeRunStatusChip status={run.status} />
                                   </span>
+                                  {" "}
+                                  <span
+                                    className={cn(
+                                      "ml-1 inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-medium align-middle",
+                                      operatorState.tone === "success" &&
+                                        "border-emerald-200 bg-emerald-50 text-emerald-700",
+                                      operatorState.tone === "warning" &&
+                                        "border-amber-200 bg-amber-50 text-amber-700",
+                                      operatorState.tone === "danger" &&
+                                        "border-rose-200 bg-rose-50 text-rose-700",
+                                      operatorState.tone === "neutral" &&
+                                        "border-slate-200 bg-slate-50 text-slate-700",
+                                    )}
+                                  >
+                                    {operatorState.label}
+                                  </span>
                                   {run.branch_name ? ` · ${run.branch_name}` : ""}
                                 </p>
                                 <p className="mt-1 line-clamp-2 text-xs text-slate-600">
                                   {run.summary?.trim() || "No runtime summary yet."}
                                 </p>
+                                <div
+                                  className={cn(
+                                    "mt-2 rounded-md border px-2 py-2 text-left",
+                                    guidance.tone === "success" &&
+                                      "border-emerald-200 bg-emerald-50",
+                                    guidance.tone === "warning" &&
+                                      "border-amber-200 bg-amber-50",
+                                    guidance.tone === "danger" &&
+                                      "border-rose-200 bg-rose-50",
+                                    guidance.tone === "neutral" &&
+                                      "border-slate-200 bg-slate-50",
+                                  )}
+                                >
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                    What next
+                                  </p>
+                                  <p className="mt-1 text-xs font-medium text-slate-900">
+                                    {guidance.title}
+                                  </p>
+                                  <p className="mt-1 line-clamp-2 text-[11px] text-slate-600">
+                                    {guidance.detail}
+                                  </p>
+                                </div>
                                 <RuntimeRunMetaGrid details={detailRows} itemKey={run.run_id} />
                               </div>
                               <div className="shrink-0 text-right">

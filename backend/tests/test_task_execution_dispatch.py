@@ -430,6 +430,10 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
                         "issue_identifier": "MC-live-2",
                         "runner_kind": "codex",
                         "completion_kind": "normal",
+                        "failure_reason": None,
+                        "block_reason": None,
+                        "cancel_reason": None,
+                        "stall_reason": None,
                         "last_event": "turn_completed",
                         "last_message": "Worker completed normally",
                         "session_id": "session-22",
@@ -445,6 +449,10 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
         assert response.json()["runner_kind"] == "codex"
         assert response.json()["issue_identifier"] == "MC-live-2"
         assert response.json()["completion_kind"] == "normal"
+        assert response.json()["failure_reason"] is None
+        assert response.json()["block_reason"] is None
+        assert response.json()["cancel_reason"] is None
+        assert response.json()["stall_reason"] is None
         assert response.json()["last_event"] == "turn_completed"
         assert response.json()["last_message"] == "Worker completed normally"
         assert response.json()["session_id"] == "session-22"
@@ -481,6 +489,51 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
             assert comments[0].payload["session_id"] == "session-22"
             assert comments[0].payload["turn_count"] == 2
             assert comments[0].payload["duration_ms"] == 65000
+    finally:
+        settings.symphony_callback_token = original_callback_token
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_symphony_callback_exposes_explicit_operator_reason_fields() -> None:
+    engine, session_maker = await _make_engine()
+    original_callback_token = settings.symphony_callback_token
+    settings.symphony_callback_token = "callback-token"
+    async with session_maker() as session:
+        ctx, board, task, silo, _lead = await _seed_context(session)
+        service = TaskExecutionRunService(session)
+        created = await service.create_run(
+            board=board,
+            task=task,
+            payload=TaskExecutionRunCreate(silo_slug=silo.slug),
+        )
+    app = _build_test_app(session_maker, ctx)
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            response = await client.post(
+                f"/api/v1/task-execution-runs/{created.id}/callbacks/symphony",
+                headers={"X-Symphony-Token": "callback-token"},
+                json={
+                    "status": "blocked",
+                    "summary": "Run is blocked on approval.",
+                    "result_payload": {
+                        "completion_kind": "approval_blocked",
+                        "block_reason": "Waiting for lead approval before continuing.",
+                        "last_event": "approval_required",
+                        "last_message": "Lead approval requested.",
+                    },
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["completion_kind"] == "approval_blocked"
+        assert body["block_reason"] == "Waiting for lead approval before continuing."
+        assert body["last_event"] == "approval_required"
+        assert body["last_message"] == "Lead approval requested."
     finally:
         settings.symphony_callback_token = original_callback_token
         await engine.dispose()

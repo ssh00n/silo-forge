@@ -135,7 +135,9 @@ import {
   type TaskExecutionRunResponse,
   type TaskExecutionRunSnapshot,
   type TaskExecutionRunsResponse,
+  runtimeRunOperatorState,
   type RuntimeRunStatus,
+  runtimeRunOperatorGuidance,
   runtimeRunTimingRows,
 } from "@/lib/runtime-runs";
 import {
@@ -951,6 +953,8 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   const summary = (run.summary ?? "").trim();
   const errorMessage = (run.error_message ?? "").trim();
   const canRetry = canRetryExecutionRun(run.status) && Boolean(onRetry);
+  const operatorState = runtimeRunOperatorState(run);
+  const guidance = runtimeRunOperatorGuidance(run);
   const detailRows = [
     ...runtimeRunTimingRows(run),
     pullRequestNumber
@@ -965,6 +969,10 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
     run.issue_identifier ? { label: "Issue", value: run.issue_identifier } : null,
     run.runner_kind ? { label: "Runner", value: run.runner_kind } : null,
     run.completion_kind ? { label: "Completion", value: run.completion_kind } : null,
+    run.failure_reason ? { label: "Failure reason", value: run.failure_reason } : null,
+    run.block_reason ? { label: "Block reason", value: run.block_reason } : null,
+    run.cancel_reason ? { label: "Cancel reason", value: run.cancel_reason } : null,
+    run.stall_reason ? { label: "Stall reason", value: run.stall_reason } : null,
     run.turn_count != null ? { label: "Turns", value: String(run.turn_count) } : null,
     run.session_id ? { label: "Session", value: run.session_id } : null,
     run.last_event ? { label: "Event", value: run.last_event } : null,
@@ -984,6 +992,17 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <RuntimeRunStatusChip status={run.status} />
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                operatorState.tone === "success" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                operatorState.tone === "warning" && "border-amber-200 bg-amber-50 text-amber-700",
+                operatorState.tone === "danger" && "border-rose-200 bg-rose-50 text-rose-700",
+                operatorState.tone === "neutral" && "border-slate-200 bg-slate-50 text-slate-700",
+              )}
+            >
+              {operatorState.label}
+            </span>
             <span>{run.role_slug}</span>
             <span className="text-slate-300">·</span>
             <span>{formatShortTimestamp(run.updated_at)}</span>
@@ -1023,6 +1042,21 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
           <Markdown content={summary} variant="basic" />
         </div>
       ) : null}
+      <div
+        className={cn(
+          "mt-3 rounded-lg border px-3 py-2",
+          guidance.tone === "success" && "border-emerald-200 bg-emerald-50",
+          guidance.tone === "warning" && "border-amber-200 bg-amber-50",
+          guidance.tone === "danger" && "border-rose-200 bg-rose-50",
+          guidance.tone === "neutral" && "border-slate-200 bg-slate-50",
+        )}
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+          What next
+        </p>
+        <p className="mt-1 text-sm font-medium text-slate-900">{guidance.title}</p>
+        <p className="mt-1 text-xs text-slate-600">{guidance.detail}</p>
+      </div>
       <RuntimeRunMetaGrid details={detailRows} itemKey={run.id} />
     </div>
   );

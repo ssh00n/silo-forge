@@ -94,6 +94,30 @@
             "null"
           ]
         },
+        "failure_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "block_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cancel_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stall_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "last_event": {
           "type": [
             "string",

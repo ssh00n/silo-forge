@@ -101,6 +101,18 @@
     "completion_kind": {
       "type": "string"
     },
+    "failure_reason": {
+      "type": "string"
+    },
+    "block_reason": {
+      "type": "string"
+    },
+    "cancel_reason": {
+      "type": "string"
+    },
+    "stall_reason": {
+      "type": "string"
+    },
     "last_event": {
       "type": "string"
     },

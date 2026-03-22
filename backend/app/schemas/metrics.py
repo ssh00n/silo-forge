@@ -111,6 +111,10 @@ class DashboardRuntimeRunRead(SQLModel):
     issue_identifier: str | None = None
     runner_kind: str | None = None
     completion_kind: str | None = None
+    failure_reason: str | None = None
+    block_reason: str | None = None
+    cancel_reason: str | None = None
+    stall_reason: str | None = None
     last_event: str | None = None
     last_message: str | None = None
     session_id: str | None = None

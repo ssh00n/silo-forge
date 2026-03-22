@@ -405,6 +405,10 @@ class TaskExecutionRunService:
                 issue_identifier=payload.issue_identifier,
                 runner_kind=payload.runner_kind,
                 completion_kind=payload.completion_kind,
+                failure_reason=payload.failure_reason,
+                block_reason=payload.block_reason,
+                cancel_reason=payload.cancel_reason,
+                stall_reason=payload.stall_reason,
                 last_event=payload.last_event,
                 last_message=payload.last_message,
                 session_id=payload.session_id,
@@ -428,6 +432,14 @@ class TaskExecutionRunService:
             result_payload["runner_kind"] = payload.runner_kind
         if payload.completion_kind is not None:
             result_payload["completion_kind"] = payload.completion_kind
+        if payload.failure_reason is not None:
+            result_payload["failure_reason"] = payload.failure_reason
+        if payload.block_reason is not None:
+            result_payload["block_reason"] = payload.block_reason
+        if payload.cancel_reason is not None:
+            result_payload["cancel_reason"] = payload.cancel_reason
+        if payload.stall_reason is not None:
+            result_payload["stall_reason"] = payload.stall_reason
         if payload.last_event is not None:
             result_payload["last_event"] = payload.last_event
         if payload.last_message is not None:
@@ -967,6 +979,10 @@ class TaskExecutionRunService:
             "issue_identifier",
             "runner_kind",
             "completion_kind",
+            "failure_reason",
+            "block_reason",
+            "cancel_reason",
+            "stall_reason",
             "last_event",
             "last_message",
             "session_id",
@@ -1015,6 +1031,18 @@ class TaskExecutionRunService:
             ),
             completion_kind=TaskExecutionRunService._extract_result_text(
                 run.result_payload, "completion_kind"
+            ),
+            failure_reason=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "failure_reason"
+            ),
+            block_reason=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "block_reason"
+            ),
+            cancel_reason=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "cancel_reason"
+            ),
+            stall_reason=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "stall_reason"
             ),
             last_event=TaskExecutionRunService._extract_result_text(run.result_payload, "last_event"),
             last_message=TaskExecutionRunService._extract_result_text(

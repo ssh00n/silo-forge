@@ -328,6 +328,18 @@ SCHEMAS = json.loads(
       "completion_kind": {
         "type": "string"
       },
+      "failure_reason": {
+        "type": "string"
+      },
+      "block_reason": {
+        "type": "string"
+      },
+      "cancel_reason": {
+        "type": "string"
+      },
+      "stall_reason": {
+        "type": "string"
+      },
       "last_event": {
         "type": "string"
       },
@@ -722,6 +734,30 @@ SCHEMAS = json.loads(
             ]
           },
           "completion_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failure_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "block_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancel_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stall_reason": {
             "type": [
               "string",
               "null"
@@ -1298,46 +1334,18 @@ ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__task_payload_schema_json
 EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON = SCHEMAS["execution__callback_payload_schema_json"]
 EXECUTION__DISPATCH_ACCEPTANCE_SCHEMA_JSON = SCHEMAS["execution__dispatch_acceptance_schema_json"]
 EXECUTION__DISPATCH_REQUEST_SCHEMA_JSON = SCHEMAS["execution__dispatch_request_schema_json"]
-QUEUE__AGENT_LIFECYCLE_RECONCILE_PAYLOAD_SCHEMA_JSON = SCHEMAS[
-    "queue__agent_lifecycle_reconcile_payload_schema_json"
-]
+QUEUE__AGENT_LIFECYCLE_RECONCILE_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__agent_lifecycle_reconcile_payload_schema_json"]
 QUEUE__TASK_ENVELOPE_SCHEMA_JSON = SCHEMAS["queue__task_envelope_schema_json"]
-QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON = SCHEMAS[
-    "queue__task_execution_dispatch_payload_schema_json"
-]
+QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__task_execution_dispatch_payload_schema_json"]
 QUEUE__WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__webhook_delivery_payload_schema_json"]
-TELEMETRY__QUEUE_WORKER_EVENT_PAYLOAD_SCHEMA_JSON = SCHEMAS[
-    "telemetry__queue_worker_event_payload_schema_json"
-]
-TELEMETRY__WEBHOOK_DELIVERY_RESULT_PAYLOAD_SCHEMA_JSON = SCHEMAS[
-    "telemetry__webhook_delivery_result_payload_schema_json"
-]
+TELEMETRY__QUEUE_WORKER_EVENT_PAYLOAD_SCHEMA_JSON = SCHEMAS["telemetry__queue_worker_event_payload_schema_json"]
+TELEMETRY__WEBHOOK_DELIVERY_RESULT_PAYLOAD_SCHEMA_JSON = SCHEMAS["telemetry__webhook_delivery_result_payload_schema_json"]
 
-ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS_VALUES = (
-    "queued",
-    "dispatching",
-    "running",
-    "succeeded",
-    "failed",
-    "cancelled",
-    "blocked",
-)
-ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS: TypeAlias = Literal[
-    "queued", "dispatching", "running", "succeeded", "failed", "cancelled", "blocked"
-]
-ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND_VALUES = ("symphony",)
-ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND: TypeAlias = Literal["symphony"]
-EXECUTION_CALLBACK_PAYLOAD_STATUS_VALUES = (
-    "queued",
-    "dispatching",
-    "running",
-    "succeeded",
-    "failed",
-    "cancelled",
-    "blocked",
-)
-EXECUTION_CALLBACK_PAYLOAD_STATUS: TypeAlias = Literal[
-    "queued", "dispatching", "running", "succeeded", "failed", "cancelled", "blocked"
-]
-EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE_VALUES = ("http", "stub")
-EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE: TypeAlias = Literal["http", "stub"]
+ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS_VALUES = ('queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked')
+ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS: TypeAlias = Literal['queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked']
+ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND_VALUES = ('symphony',)
+ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND: TypeAlias = Literal['symphony']
+EXECUTION_CALLBACK_PAYLOAD_STATUS_VALUES = ('queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked')
+EXECUTION_CALLBACK_PAYLOAD_STATUS: TypeAlias = Literal['queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked']
+EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE_VALUES = ('http', 'stub')
+EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE: TypeAlias = Literal['http', 'stub']

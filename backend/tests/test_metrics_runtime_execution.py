@@ -60,6 +60,10 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
             "issue_identifier": "MC-9",
             "runner_kind": "codex",
             "completion_kind": "normal",
+            "failure_reason": None,
+            "block_reason": None,
+            "cancel_reason": None,
+            "stall_reason": None,
             "last_event": "turn_completed",
             "last_message": "Worker completed normally",
             "session_id": "session-9",
@@ -105,6 +109,10 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
     assert recent.issue_identifier == "MC-9"
     assert recent.runner_kind == "codex"
     assert recent.completion_kind == "normal"
+    assert recent.failure_reason is None
+    assert recent.block_reason is None
+    assert recent.cancel_reason is None
+    assert recent.stall_reason is None
     assert recent.last_event == "turn_completed"
     assert recent.last_message == "Worker completed normally"
     assert recent.session_id == "session-9"

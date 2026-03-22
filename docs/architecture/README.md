@@ -18,3 +18,4 @@
 - [Branding rename strategy](./branding-rename-strategy.md)
 - [Contracts package plan](./contracts-package-plan.md)
 - [OpenAPI vs Contracts Boundary](./openapi-vs-contracts-boundary.md)
+- [Organism Control Plane Roadmap](./organism-control-plane-roadmap.md)
