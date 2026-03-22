@@ -119,6 +119,48 @@ describe("activity-events helpers", () => {
     });
   });
 
+  it("builds gateway summaries from structured payload when message is absent", () => {
+    expect(
+      resolveActivityFeedContent("gateway.main.lead_message.sent", "", {
+        notification_kind: "gateway_lead_message",
+        notification_status: "sent",
+        gateway_name: "Demo Gateway",
+        action: "lead_message",
+        target_kind: "lead",
+      }),
+    ).toEqual({
+      summary: "lead_message sent.",
+      details: [
+        { label: "Kind", value: "gateway_lead_message" },
+        { label: "Notify", value: "sent" },
+        { label: "Gateway", value: "Demo Gateway" },
+        { label: "Action", value: "lead_message" },
+        { label: "Target", value: "lead" },
+      ],
+      runtimeStatus: null,
+    });
+  });
+
+  it("builds board summaries from structured payload when message is absent", () => {
+    expect(
+      resolveActivityFeedContent("board.group.join.notified", "", {
+        notification_kind: "board_group_join",
+        notification_status: "sent",
+        board_name: "Ops Board",
+        target_agent_name: "Fox",
+      }),
+    ).toEqual({
+      summary: "board group join on Ops Board.",
+      details: [
+        { label: "Kind", value: "board_group_join" },
+        { label: "Notify", value: "sent" },
+        { label: "Agent", value: "Fox" },
+        { label: "Board", value: "Ops Board" },
+      ],
+      runtimeStatus: null,
+    });
+  });
+
   it("builds silo runtime details from payload", () => {
     expect(
       resolveActivityFeedContent("silo.runtime.validate", "Validated runtime bundle plan", {

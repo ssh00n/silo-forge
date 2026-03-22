@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.contracts.generated_schemas import (
     QUEUE__AGENT_LIFECYCLE_RECONCILE_PAYLOAD_SCHEMA_JSON,
+    QUEUE__TASK_ENVELOPE_SCHEMA_JSON,
     QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON,
     QUEUE__WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_JSON,
 )
@@ -41,6 +42,24 @@ class AgentLifecycleReconcileQueuePayloadContract(BaseModel):
     board_id: str | None = None
     generation: int
     checkin_deadline_at: datetime
+
+
+class QueuedTaskEnvelopeContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_type: str
+    payload: dict[str, Any]
+    created_at: datetime
+    attempts: int = 0
+
+
+def parse_queued_task_envelope(payload: dict[str, Any]) -> QueuedTaskEnvelopeContract:
+    validate_contract_payload(schema=QUEUE__TASK_ENVELOPE_SCHEMA_JSON, payload=payload)
+    return QueuedTaskEnvelopeContract.model_validate(payload)
+
+
+def finalize_queued_task_envelope(payload: dict[str, Any]) -> dict[str, Any]:
+    return parse_queued_task_envelope(payload).model_dump(mode="json")
 
 
 def parse_task_execution_dispatch_queue_payload(

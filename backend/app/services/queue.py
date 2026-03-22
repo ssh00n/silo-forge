@@ -10,6 +10,7 @@ from typing import Any, cast
 
 import redis
 
+from app.contracts.queue import finalize_queued_task_envelope, parse_queued_task_envelope
 from app.core.config import settings
 from app.core.logging import get_logger
 
@@ -29,15 +30,15 @@ class QueuedTask:
     attempts: int = 0
 
     def to_json(self) -> str:
-        return json.dumps(
+        normalized = finalize_queued_task_envelope(
             {
                 "task_type": self.task_type,
                 "payload": self.payload,
                 "created_at": self.created_at.isoformat(),
                 "attempts": self.attempts,
-            },
-            sort_keys=True,
+            }
         )
+        return json.dumps(normalized, sort_keys=True)
 
 
 def _redis_client(redis_url: str | None = None) -> redis.Redis:
@@ -240,11 +241,12 @@ def _decode_task(raw: str | bytes, queue_name: str) -> QueuedTask:
                 ),
                 attempts=int(payload.get("attempts", 0)),
             )
+        parsed = parse_queued_task_envelope(payload)
         return QueuedTask(
-            task_type=str(payload["task_type"]),
-            payload=payload["payload"],
-            created_at=datetime.fromisoformat(payload["created_at"]),
-            attempts=int(payload.get("attempts", 0)),
+            task_type=parsed.task_type,
+            payload=parsed.payload,
+            created_at=parsed.created_at,
+            attempts=parsed.attempts,
         )
     except Exception as exc:
         logger.error(

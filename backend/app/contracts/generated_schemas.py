@@ -272,6 +272,17 @@ SCHEMAS = {
                     'board_id': {'type': ['string', 'null']},
                     'generation': {'type': 'integer', 'minimum': 0},
                     'checkin_deadline_at': {'type': 'string', 'format': 'date-time'}}},
+    "queue__task_envelope_schema_json":
+    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
+     '$id': 'https://schemas.silo-forge.dev/queue/task-envelope.schema.json',
+     'title': 'SiloForgeQueuedTaskEnvelope',
+     'type': 'object',
+     'additionalProperties': False,
+     'required': ['task_type', 'payload', 'created_at'],
+     'properties': {'task_type': {'type': 'string', 'minLength': 1},
+                    'payload': {'type': 'object'},
+                    'created_at': {'type': 'string', 'format': 'date-time'},
+                    'attempts': {'type': 'integer', 'minimum': 0}}},
     "queue__task_execution_dispatch_payload_schema_json":
     {'$schema': 'https://json-schema.org/draft/2020-12/schema',
      '$id': 'https://schemas.silo-forge.dev/queue/task-execution-dispatch.payload.schema.json',
@@ -305,6 +316,7 @@ EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON = SCHEMAS["execution__callback_payload_s
 EXECUTION__DISPATCH_ACCEPTANCE_SCHEMA_JSON = SCHEMAS["execution__dispatch_acceptance_schema_json"]
 EXECUTION__DISPATCH_REQUEST_SCHEMA_JSON = SCHEMAS["execution__dispatch_request_schema_json"]
 QUEUE__AGENT_LIFECYCLE_RECONCILE_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__agent_lifecycle_reconcile_payload_schema_json"]
+QUEUE__TASK_ENVELOPE_SCHEMA_JSON = SCHEMAS["queue__task_envelope_schema_json"]
 QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__task_execution_dispatch_payload_schema_json"]
 QUEUE__WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__webhook_delivery_payload_schema_json"]
 

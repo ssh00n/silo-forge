@@ -58,6 +58,95 @@ const parseGatewayActivityPayload = (
   return record as Partial<GatewayActivityPayload> | null;
 };
 
+const resolveBoardActivityContent = (
+  eventType: string,
+  message: string,
+  payload: Partial<BoardActivityPayload> | null,
+): { summary: string; details: ActivityDetailRow[] } | null => {
+  if (!payload) return null;
+  const notificationKind = payload.notification_kind?.trim() || null;
+  const notificationStatus = payload.notification_status?.trim() || null;
+  const targetAgentName = payload.target_agent_name?.trim() || null;
+  const boardName = payload.board_name?.trim() || null;
+  const sourceBoardName = payload.source_board_name?.trim() || null;
+  const groupName = payload.board_group_name?.trim() || null;
+  const error = payload.error?.trim() || null;
+
+  const details: ActivityDetailRow[] = [];
+  if (notificationKind) details.push({ label: "Kind", value: notificationKind });
+  if (notificationStatus) details.push({ label: "Notify", value: notificationStatus });
+  if (targetAgentName) details.push({ label: "Agent", value: targetAgentName });
+  if (boardName) details.push({ label: "Board", value: boardName });
+  if (sourceBoardName) details.push({ label: "Source", value: sourceBoardName });
+  if (groupName) details.push({ label: "Group", value: groupName });
+  if (error) details.push({ label: "Error", value: error });
+
+  const fallbackSummary =
+    eventType.startsWith("board.") && notificationKind && boardName
+      ? `${notificationKind.replace(/_/g, " ")} on ${boardName}.`
+      : null;
+
+  if (details.length === 0 && !fallbackSummary) return null;
+  return { summary: message || fallbackSummary || eventType, details };
+};
+
+const resolveGatewayActivityContent = (
+  eventType: string,
+  message: string,
+  payload: Partial<GatewayActivityPayload> | null,
+  rawPayload: Record<string, unknown> | null = null,
+): { summary: string; details: ActivityDetailRow[] } | null => {
+  if (!payload) return null;
+  const notificationKind = payload.notification_kind?.trim() || null;
+  const notificationStatus =
+    payload.notification_status?.trim() || payload.delivery_status?.trim() || null;
+  const targetAgentName =
+    payload.target_agent_name?.trim() ||
+    readString(rawPayload, ["agent_name"]) ||
+    null;
+  const boardName = payload.board_name?.trim() || null;
+  const gatewayName =
+    payload.gateway_name?.trim() || readString(rawPayload, ["gateway_name"]) || null;
+  const action = payload.action?.trim() || readString(rawPayload, ["action"]) || null;
+  const targetKind =
+    payload.target_kind?.trim() || readString(rawPayload, ["target_kind"]) || null;
+  const workspacePath =
+    payload.workspace_path?.trim() ||
+    readString(rawPayload, ["workspace_path"]) ||
+    null;
+  const sessionKey =
+    payload.session_key?.trim() || readString(rawPayload, ["session_key"]) || null;
+  const error = payload.error?.trim() || readString(rawPayload, ["error"]) || null;
+
+  const details: ActivityDetailRow[] = [];
+  if (eventType.startsWith("agent.")) {
+    if (targetAgentName) details.push({ label: "Agent", value: targetAgentName });
+    if (action) details.push({ label: "Action", value: action });
+    if (notificationStatus) details.push({ label: "Delivery", value: notificationStatus });
+    if (gatewayName) details.push({ label: "Gateway", value: gatewayName });
+  } else {
+    if (notificationKind) details.push({ label: "Kind", value: notificationKind });
+    if (notificationStatus) details.push({ label: "Notify", value: notificationStatus });
+    if (targetAgentName) details.push({ label: "Agent", value: targetAgentName });
+    if (boardName) details.push({ label: "Board", value: boardName });
+    if (gatewayName) details.push({ label: "Gateway", value: gatewayName });
+    if (action) details.push({ label: "Action", value: action });
+  }
+  if (targetKind) details.push({ label: "Target", value: targetKind });
+  if (workspacePath) details.push({ label: "Workspace", value: workspacePath });
+  if (sessionKey) details.push({ label: "Session", value: sessionKey });
+  if (error) details.push({ label: "Error", value: error });
+
+  const fallbackSummary =
+    (eventType.startsWith("gateway.") || eventType.startsWith("agent.")) &&
+    (action || notificationKind)
+      ? `${action ?? notificationKind} ${notificationStatus ?? "event"}.`
+      : null;
+
+  if (details.length === 0 && !fallbackSummary) return null;
+  return { summary: message || fallbackSummary || eventType, details };
+};
+
 const readString = (
   record: Record<string, unknown> | null,
   keys: string[],
@@ -140,44 +229,34 @@ export const resolveActivityFeedContent = (
 
   if (eventType.startsWith("agent.")) {
     const gatewayPayload = parseGatewayActivityPayload(normalizedPayload);
-    const agentName =
-      gatewayPayload?.target_agent_name?.trim() ||
-      readString(normalizedPayload, ["agent_name"]);
-    const action =
-      gatewayPayload?.action?.trim() || readString(normalizedPayload, ["action"]);
-    const deliveryStatus =
-      gatewayPayload?.notification_status?.trim() ||
-      gatewayPayload?.delivery_status?.trim() ||
-      readString(normalizedPayload, ["delivery_status"]);
-    const gatewayName =
-      gatewayPayload?.gateway_name?.trim() ||
-      readString(normalizedPayload, ["gateway_name"]);
-    const targetKind =
-      gatewayPayload?.target_kind?.trim() ||
-      readString(normalizedPayload, ["target_kind"]);
-    const workspacePath =
-      gatewayPayload?.workspace_path?.trim() ||
-      readString(normalizedPayload, ["workspace_path"]);
-    const sessionKey =
-      gatewayPayload?.session_key?.trim() ||
-      readString(normalizedPayload, ["session_key"]);
-    const error =
-      gatewayPayload?.error?.trim() || readString(normalizedPayload, ["error"]);
-
-    const details: ActivityDetailRow[] = [];
-    if (agentName) details.push({ label: "Agent", value: agentName });
-    if (action) details.push({ label: "Action", value: action });
-    if (deliveryStatus) details.push({ label: "Delivery", value: deliveryStatus });
-    if (gatewayName) details.push({ label: "Gateway", value: gatewayName });
-    if (targetKind) details.push({ label: "Target", value: targetKind });
-    if (workspacePath) details.push({ label: "Workspace", value: workspacePath });
-    if (sessionKey) details.push({ label: "Session", value: sessionKey });
-    if (error) details.push({ label: "Error", value: error });
-    return {
-      summary: normalizedMessage || eventType,
-      details,
-      runtimeStatus: null,
-    };
+    const resolved =
+      resolveGatewayActivityContent(
+        eventType,
+        normalizedMessage,
+        gatewayPayload,
+        normalizedPayload,
+      ) ??
+      (() => {
+        const agentName = readString(normalizedPayload, ["agent_name"]);
+        const action = readString(normalizedPayload, ["action"]);
+        const deliveryStatus = readString(normalizedPayload, ["delivery_status"]);
+        const gatewayName = readString(normalizedPayload, ["gateway_name"]);
+        const targetKind = readString(normalizedPayload, ["target_kind"]);
+        const workspacePath = readString(normalizedPayload, ["workspace_path"]);
+        const sessionKey = readString(normalizedPayload, ["session_key"]);
+        const error = readString(normalizedPayload, ["error"]);
+        const details: ActivityDetailRow[] = [];
+        if (agentName) details.push({ label: "Agent", value: agentName });
+        if (action) details.push({ label: "Action", value: action });
+        if (deliveryStatus) details.push({ label: "Delivery", value: deliveryStatus });
+        if (gatewayName) details.push({ label: "Gateway", value: gatewayName });
+        if (targetKind) details.push({ label: "Target", value: targetKind });
+        if (workspacePath) details.push({ label: "Workspace", value: workspacePath });
+        if (sessionKey) details.push({ label: "Session", value: sessionKey });
+        if (error) details.push({ label: "Error", value: error });
+        return { summary: normalizedMessage || eventType, details };
+      })();
+    return { ...resolved, runtimeStatus: null };
   }
 
   if (eventType.startsWith("task.") && normalizedPayload) {
@@ -231,6 +310,25 @@ export const resolveActivityFeedContent = (
   if (normalizedPayload) {
     const boardPayload = parseBoardActivityPayload(normalizedPayload);
     const gatewayPayload = parseGatewayActivityPayload(normalizedPayload);
+    if (eventType.startsWith("board.")) {
+      const resolvedBoard = resolveBoardActivityContent(
+        eventType,
+        normalizedMessage,
+        boardPayload,
+      );
+      if (resolvedBoard) {
+        return { ...resolvedBoard, runtimeStatus: null };
+      }
+    }
+    const resolvedGateway = resolveGatewayActivityContent(
+      eventType,
+      normalizedMessage,
+      gatewayPayload,
+      normalizedPayload,
+    );
+    if (resolvedGateway) {
+      return { ...resolvedGateway, runtimeStatus: null };
+    }
     const notificationKind =
       boardPayload?.notification_kind?.trim() ||
       gatewayPayload?.notification_kind?.trim() ||
