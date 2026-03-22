@@ -550,9 +550,32 @@ async def _runtime_execution_metrics(
         )
     ).all()
 
+    task_ids = list({task.id for _, task, _board in recent_rows})
+    approval_rows = (
+        await session.exec(
+            select(Approval)
+            .where(col(Approval.board_id).in_(board_ids))
+            .where(col(Approval.task_id).in_(task_ids))
+            .order_by(col(Approval.created_at).desc())
+        )
+    ).all() if task_ids else []
+
+    pending_approval_count_by_task: dict[UUID, int] = {}
+    latest_resolved_approval_by_task: dict[UUID, Approval] = {}
+    for approval in approval_rows:
+        if approval.task_id is None:
+            continue
+        if approval.status == "pending":
+            pending_approval_count_by_task[approval.task_id] = (
+                pending_approval_count_by_task.get(approval.task_id, 0) + 1
+            )
+            continue
+        latest_resolved_approval_by_task.setdefault(approval.task_id, approval)
+
     recent_runs: list[DashboardRuntimeRunRead] = []
     for run, task, board in recent_rows:
         input_tokens, output_tokens, total_tokens = _usage_triplet(run.result_payload)
+        latest_resolved_approval = latest_resolved_approval_by_task.get(task.id)
         recent_runs.append(
             DashboardRuntimeRunRead(
                 run_id=run.id,
@@ -575,6 +598,13 @@ async def _runtime_execution_metrics(
                 block_reason=_result_text(run.result_payload, "block_reason"),
                 cancel_reason=_result_text(run.result_payload, "cancel_reason"),
                 stall_reason=_result_text(run.result_payload, "stall_reason"),
+                latest_approval_status=latest_resolved_approval.status
+                if latest_resolved_approval is not None
+                else None,
+                latest_approval_resolved_at=latest_resolved_approval.resolved_at
+                if latest_resolved_approval is not None
+                else None,
+                pending_approval_count=pending_approval_count_by_task.get(task.id, 0),
                 last_event=_result_text(run.result_payload, "last_event"),
                 last_message=_result_text(run.result_payload, "last_message"),
                 session_id=_result_text(run.result_payload, "session_id"),

@@ -121,6 +121,9 @@ type DashboardRuntimeRunSnapshot = RuntimeRunSnapshot & {
   issue_identifier?: string | null;
   runner_kind?: string | null;
   completion_kind?: string | null;
+  latest_approval_status?: string | null;
+  latest_approval_resolved_at?: string | null;
+  pending_approval_count?: number;
   last_event?: string | null;
   last_message?: string | null;
   session_id?: string | null;
@@ -2118,6 +2121,23 @@ export default function DashboardPage() {
                                   <p className="mt-1 line-clamp-2 text-[11px] text-slate-600">
                                     {guidance.detail}
                                   </p>
+                                  {runtimeRunNeedsApprovalAttention(run) &&
+                                  (run.latest_approval_status === "approved" ||
+                                    run.latest_approval_status === "rejected") ? (
+                                    <div className="mt-2 rounded-md border border-slate-200 bg-white/70 px-2 py-2 text-[11px] text-slate-700">
+                                      Latest approval was{" "}
+                                      <span className="font-semibold">
+                                        {run.latest_approval_status}
+                                      </span>
+                                      {run.latest_approval_resolved_at ? (
+                                        <> {formatTimestamp(run.latest_approval_resolved_at)}</>
+                                      ) : null}
+                                      .{" "}
+                                      {run.latest_approval_status === "approved"
+                                        ? "Retry or continue the run now that the gate is clear."
+                                        : "Review the rejection before retrying or escalating again."}
+                                    </div>
+                                  ) : null}
                                 </div>
                                 <RuntimeRunMetaGrid details={detailRows} itemKey={run.run_id} />
                               </div>
@@ -2206,7 +2226,9 @@ export default function DashboardPage() {
                                     onClick={(event) => event.stopPropagation()}
                                     className="mt-1 inline-flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-800"
                                   >
-                                    Open approvals
+                                    {run.pending_approval_count && run.pending_approval_count > 0
+                                      ? `Open approvals (${run.pending_approval_count})`
+                                      : "Open approvals"}
                                     <ArrowUpRight className="h-3 w-3" />
                                   </a>
                                 ) : null}

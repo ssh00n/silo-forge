@@ -115,6 +115,9 @@ class DashboardRuntimeRunRead(SQLModel):
     block_reason: str | None = None
     cancel_reason: str | None = None
     stall_reason: str | None = None
+    latest_approval_status: str | None = None
+    latest_approval_resolved_at: datetime | None = None
+    pending_approval_count: int = 0
     last_event: str | None = None
     last_message: str | None = None
     session_id: str | None = None
