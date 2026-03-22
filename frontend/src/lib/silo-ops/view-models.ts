@@ -12,6 +12,7 @@ import {
   type TaskDemandProfile,
 } from "@/lib/silo-ops/demand";
 import {
+  buildSiloHealthModel,
   summarizeSiloHealth,
   type SiloHealthSummary,
 } from "@/lib/silo-ops/health";
