@@ -27,6 +27,7 @@ from app.schemas.silos import (
     SiloCreate,
     SiloDetailRead,
     SiloGatewayAssignment,
+    SiloOperationalSummaryRead,
     SiloPreviewRead,
     SiloRead,
     SiloRoleDesiredState,
@@ -426,6 +427,14 @@ class SiloService:
         )
         latest_runtime_operation = await self._latest_runtime_operation(silo_id=silo.id)
         workload_summary = await self._workload_summary(silo_id=silo.id)
+        operational_summary = self._operational_summary(
+            summary=summary,
+            desired_state=desired_state,
+            role_count=len(roles),
+            latest_runtime_operation=latest_runtime_operation,
+            workload_summary=workload_summary,
+            provision_plan=provision_plan,
+        )
         source_request = await crud.get_one_by(
             self._session,
             SiloSpawnRequest,
@@ -443,6 +452,7 @@ class SiloService:
             provision_plan=provision_plan,
             latest_runtime_operation=latest_runtime_operation,
             workload_summary=workload_summary,
+            operational_summary=operational_summary,
         )
 
     def _assignment_map(
@@ -554,6 +564,146 @@ class SiloService:
             updated_at=run.updated_at.isoformat(),
             started_at=run.started_at.isoformat() if run.started_at else None,
             completed_at=run.completed_at.isoformat() if run.completed_at else None,
+        )
+
+    @staticmethod
+    def _operational_summary(
+        *,
+        summary: SiloRead,
+        desired_state: SiloPreviewRead,
+        role_count: int,
+        latest_runtime_operation: SiloRuntimeHistoryEntryRead | None,
+        workload_summary: SiloWorkloadSummaryRead,
+        provision_plan: SiloProvisionPlanRead | None,
+    ) -> SiloOperationalSummaryRead:
+        warning_count = len(desired_state.warnings)
+        warning_count += len(provision_plan.warnings) if provision_plan else 0
+        if provision_plan:
+            warning_count += sum(len(target.warnings) for target in provision_plan.targets)
+        if latest_runtime_operation:
+            warning_count += len(latest_runtime_operation.warnings)
+            warning_count += sum(len(result.warnings) for result in latest_runtime_operation.results)
+
+        blocked_targets = (
+            sum(1 for target in provision_plan.targets if not target.supports_picoclaw_bundle_apply)
+            if provision_plan
+            else 0
+        )
+        ready_targets = (
+            sum(1 for target in provision_plan.targets if target.supports_picoclaw_bundle_apply)
+            if provision_plan
+            else 0
+        )
+        gateway_role_count = sum(1 for role in desired_state.roles if role.runtime_kind == "gateway")
+        assigned_gateway_role_count = sum(
+            1
+            for role in desired_state.roles
+            if role.runtime_kind == "gateway" and role.gateway_id
+        )
+
+        if workload_summary.blocked_run_count > 0:
+            health_label = "Blocked"
+            health_tone = "danger"
+            health_guidance = (
+                "Blocked runtime work is present. Clear the blockage before dispatching more load here."
+            )
+        elif workload_summary.failed_run_count > 0:
+            health_label = "Degraded"
+            health_tone = "warning"
+            health_guidance = (
+                "Recent runtime failures suggest this silo needs investigation before taking sensitive work."
+            )
+        elif blocked_targets > 0 or warning_count > 0:
+            health_label = "Blocked" if blocked_targets > 0 else "Degraded"
+            health_tone: Literal["success", "warning", "danger", "neutral"] = (
+                "danger" if blocked_targets > 0 else "warning"
+            )
+            health_guidance = (
+                "Resolve blocked runtime targets before trusting this silo with more work."
+                if blocked_targets > 0
+                else "Resolve runtime warnings before trusting this silo with more work."
+            )
+        elif gateway_role_count > 0 and assigned_gateway_role_count < gateway_role_count:
+            health_label = "Needs setup"
+            health_tone = "warning"
+            health_guidance = "Assign gateway-backed roles before expecting healthy execution."
+        elif ready_targets > 0:
+            if summary.status != "active":
+                health_label = "Needs setup"
+                health_tone = "warning"
+                health_guidance = (
+                    "The silo is configured enough to validate or apply runtime."
+                )
+            elif workload_summary.active_run_count > 0:
+                health_label = "Busy"
+                health_tone = "neutral"
+                health_guidance = (
+                    "This silo is healthy, but it is already carrying active runtime work."
+                )
+            else:
+                health_label = "Healthy"
+                health_tone = "success"
+                health_guidance = (
+                    "Healthy, idle, and ready to accept more runtime work."
+                )
+
+            if (
+                latest_runtime_operation
+                and latest_runtime_operation.mode == "apply"
+                and all(result.supports_picoclaw_bundle_apply for result in latest_runtime_operation.results)
+            ):
+                health_guidance = "The latest runtime apply completed without blocked targets."
+        else:
+            health_label = "Needs setup"
+            health_tone = "neutral"
+            health_guidance = (
+                "This silo exists, but it has not been driven into an operational state yet."
+            )
+
+        if not latest_runtime_operation:
+            runtime_posture = "No runtime operation yet"
+        elif latest_runtime_operation.mode == "apply":
+            runtime_posture = (
+                "Latest apply needs follow-up"
+                if any(
+                    not result.supports_picoclaw_bundle_apply
+                    for result in latest_runtime_operation.results
+                )
+                else "Latest apply completed"
+            )
+        else:
+            runtime_posture = (
+                "Latest validate found blockers"
+                if any(
+                    not result.supports_picoclaw_bundle_apply
+                    for result in latest_runtime_operation.results
+                )
+                else "Latest validate completed"
+            )
+
+        if not workload_summary.recent_runs:
+            workload_guidance = "No runtime work has been dispatched to this silo yet."
+        elif workload_summary.blocked_run_count > 0:
+            workload_guidance = (
+                "Blocked runs need operator attention before this silo can be trusted with more work."
+            )
+        elif workload_summary.failed_run_count > 0:
+            workload_guidance = (
+                "Recent runtime failures should be investigated before scaling this silo further."
+            )
+        elif workload_summary.active_run_count > 0:
+            workload_guidance = "This silo is actively carrying runtime work right now."
+        else:
+            workload_guidance = (
+                "Recent runs completed; review the latest work before assigning more load."
+            )
+
+        return SiloOperationalSummaryRead(
+            health_label=health_label,
+            health_tone=health_tone,
+            health_guidance=health_guidance,
+            runtime_posture=runtime_posture,
+            workload_guidance=workload_guidance,
         )
 
 
