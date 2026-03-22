@@ -66,6 +66,7 @@ import {
 import {
   canAcknowledgeRuntimeRun,
   canCancelRuntimeRun,
+  canEscalateRuntimeRun,
   canRetryRuntimeRun,
   formatRuntimeDurationMs,
   runtimeRunOperatorState,
@@ -962,6 +963,7 @@ export default function DashboardPage() {
   const [retryingRunId, setRetryingRunId] = useState<string | null>(null);
   const [cancellingRunId, setCancellingRunId] = useState<string | null>(null);
   const [acknowledgingRunId, setAcknowledgingRunId] = useState<string | null>(null);
+  const [escalatingRunId, setEscalatingRunId] = useState<string | null>(null);
   const streamedActivityEventsRef = useRef<StreamedActivityEvent[]>([]);
   const activityCategory = useMemo<ActivityCategory | "runtime">(() => {
     const value = searchParams.get("activity");
@@ -1085,6 +1087,19 @@ export default function DashboardPage() {
       await invalidateRuntimeViews();
     } finally {
       setAcknowledgingRunId(null);
+    }
+  };
+
+  const escalateRuntimeRun = async (run: DashboardRuntimeRunSnapshot): Promise<void> => {
+    setEscalatingRunId(run.run_id);
+    try {
+      await customFetch<{ data: unknown; status: number; headers: Headers }>(
+        `/api/v1/boards/${encodeURIComponent(run.board_id)}/tasks/${encodeURIComponent(run.task_id)}/execution-runs/${encodeURIComponent(run.run_id)}/escalate`,
+        { method: "POST" },
+      );
+      await invalidateRuntimeViews();
+    } finally {
+      setEscalatingRunId(null);
     }
   };
 
@@ -2167,6 +2182,21 @@ export default function DashboardPage() {
                                     {acknowledgingRunId === run.run_id
                                       ? "Acknowledging…"
                                       : "Acknowledge"}
+                                  </button>
+                                ) : null}
+                                {canEscalateRuntimeRun(run.status) ? (
+                                  <button
+                                    type="button"
+                                    onClick={async (event) => {
+                                      event.stopPropagation();
+                                      await escalateRuntimeRun(run);
+                                    }}
+                                    disabled={escalatingRunId === run.run_id}
+                                    className="mt-1 inline-flex items-center gap-1 text-[11px] text-violet-700 hover:text-violet-800"
+                                  >
+                                    {escalatingRunId === run.run_id
+                                      ? "Escalating…"
+                                      : "Escalate"}
                                   </button>
                                 ) : null}
                               </div>

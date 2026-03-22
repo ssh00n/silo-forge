@@ -83,6 +83,7 @@ type TaskEventType =
   | "task.execution_run.updated"
   | "task.execution_run.report"
   | "task.execution_run.acknowledged"
+  | "task.execution_run.escalated"
   | "task.created"
   | "task.updated"
   | "task.status_changed";
@@ -133,6 +134,7 @@ const TASK_EVENT_TYPES = new Set<TaskEventType>([
   "task.execution_run.updated",
   "task.execution_run.report",
   "task.execution_run.acknowledged",
+  "task.execution_run.escalated",
   "task.created",
   "task.updated",
   "task.status_changed",
@@ -265,6 +267,7 @@ const eventLabel = (eventType: FeedEventType): string => {
   if (eventType === "task.execution_run.updated") return "Run update";
   if (eventType === "task.execution_run.report") return "Run report";
   if (eventType === "task.execution_run.acknowledged") return "Run acknowledged";
+  if (eventType === "task.execution_run.escalated") return "Run escalated";
   if (eventType === "task.created") return "Created";
   if (eventType === "task.status_changed") return "Status";
   if (eventType === "board.chat") return "Chat";
@@ -356,6 +359,9 @@ const eventPillClass = (eventType: FeedEventType): string => {
   }
   if (eventType === "task.execution_run.acknowledged") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "task.execution_run.escalated") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
   }
   if (eventType === "task.created") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -481,6 +487,7 @@ const EXECUTION_RUN_EVENTS = new Set<FeedEventType>([
   "task.execution_run.updated",
   "task.execution_run.report",
   "task.execution_run.acknowledged",
+  "task.execution_run.escalated",
 ]);
 
 const isExecutionRunEvent = (eventType: FeedEventType): boolean =>

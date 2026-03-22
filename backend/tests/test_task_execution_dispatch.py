@@ -20,6 +20,7 @@ from app.core.config import settings
 from app.db.session import get_session
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
+from app.models.approvals import Approval
 from app.models.boards import Board
 from app.models.organization_members import OrganizationMember
 from app.models.organizations import Organization
@@ -646,6 +647,82 @@ async def test_acknowledge_execution_run_records_activity_event() -> None:
             assert acknowledged_event.payload is not None
             assert acknowledged_event.payload["status"] == "blocked"
             assert acknowledged_event.payload["summary"] == "Operator has seen the approval block."
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_escalate_execution_run_creates_pending_approval_and_moves_task_to_review() -> None:
+    engine, session_maker = await _make_engine()
+    async with session_maker() as session:
+        ctx, board, task, silo, lead = await _seed_context(session)
+        service = TaskExecutionRunService(session)
+        created = await service.create_run(
+            board=board,
+            task=task,
+            payload=TaskExecutionRunCreate(silo_slug=silo.slug),
+        )
+        await service.update_run(
+            organization_id=board.organization_id,
+            board=board,
+            task=task,
+            run_id=created.id,
+            payload=TaskExecutionRunUpdate(
+                status="blocked",
+                summary="Waiting for operator review.",
+                result_payload={
+                    "completion_kind": "approval_blocked",
+                    "block_reason": "Waiting for lead approval before continuing.",
+                },
+            ),
+        )
+    app = _build_test_app(session_maker, ctx)
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            response = await client.post(
+                f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs/{created.id}/escalate",
+                json={"note": "Escalate this blocked runtime to the lead."},
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "blocked"
+        async with session_maker() as session:
+            approval = (
+                await session.exec(
+                    select(Approval)
+                    .where(col(Approval.board_id) == board.id)
+                    .where(col(Approval.task_id) == task.id)
+                    .order_by(col(Approval.created_at).desc())
+                )
+            ).first()
+            assert approval is not None
+            assert approval.status == "pending"
+            assert approval.action_type == "runtime.escalation"
+            assert approval.agent_id == lead.id
+            assert approval.payload is not None
+            assert approval.payload["reason"] == "Escalate this blocked runtime to the lead."
+
+            refreshed_task = await session.get(Task, task.id)
+            assert refreshed_task is not None
+            assert refreshed_task.status == "review"
+            assert refreshed_task.assigned_agent_id == lead.id
+
+            escalated_event = (
+                await session.exec(
+                    select(ActivityEvent)
+                    .where(col(ActivityEvent.task_id) == task.id)
+                    .where(col(ActivityEvent.event_type) == "task.execution_run.escalated")
+                    .order_by(col(ActivityEvent.created_at).desc())
+                )
+            ).first()
+            assert escalated_event is not None
+            assert escalated_event.payload is not None
+            assert escalated_event.payload["status"] == "blocked"
+            assert escalated_event.payload["summary"] == "Escalate this blocked runtime to the lead."
     finally:
         await engine.dispose()
 

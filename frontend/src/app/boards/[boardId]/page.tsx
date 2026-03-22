@@ -133,6 +133,7 @@ import { fetchSilos } from "@/lib/silos";
 import {
   canAcknowledgeRuntimeRun,
   canCancelRuntimeRun,
+  canEscalateRuntimeRun,
   canRetryRuntimeRun,
   formatRuntimeDurationMs,
   type TaskExecutionRunResponse,
@@ -219,6 +220,7 @@ const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "task.execution_run.updated",
   "task.execution_run.report",
   "task.execution_run.acknowledged",
+  "task.execution_run.escalated",
   "task.created",
   "task.updated",
   "task.status_changed",
@@ -553,6 +555,7 @@ const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "task.execution_run.updated") return "Run update";
   if (eventType === "task.execution_run.report") return "Run report";
   if (eventType === "task.execution_run.acknowledged") return "Run acknowledged";
+  if (eventType === "task.execution_run.escalated") return "Run escalated";
   if (eventType === "task.created") return "Created";
   if (eventType === "task.status_changed") return "Status";
   if (eventType === "board.chat") return "Chat";
@@ -640,6 +643,9 @@ const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   }
   if (eventType === "task.execution_run.acknowledged") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "task.execution_run.escalated") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
   }
   if (eventType === "task.created") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -762,6 +768,7 @@ const EXECUTION_RUN_LIVE_FEED_EVENTS = new Set<LiveFeedEventType>([
   "task.execution_run.updated",
   "task.execution_run.report",
   "task.execution_run.acknowledged",
+  "task.execution_run.escalated",
 ]);
 
 const isExecutionRunLiveFeedEvent = (eventType: LiveFeedEventType): boolean =>
@@ -951,17 +958,21 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   isRetrying,
   isCancelling,
   isAcknowledging,
+  isEscalating,
   onRetry,
   onCancel,
   onAcknowledge,
+  onEscalate,
 }: {
   run: TaskExecutionRunSnapshot;
   isRetrying: boolean;
   isCancelling: boolean;
   isAcknowledging: boolean;
+  isEscalating: boolean;
   onRetry?: () => void;
   onCancel?: () => void;
   onAcknowledge?: () => void;
+  onEscalate?: () => void;
 }) {
   const totalTokens = executionRunTotalTokens(run);
   const pullRequestNumber = executionRunPullRequestNumber(run);
@@ -971,6 +982,7 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   const canCancel = canCancelRuntimeRun(run.status) && Boolean(onCancel);
   const canAcknowledge =
     canAcknowledgeRuntimeRun(run.status) && Boolean(onAcknowledge);
+  const canEscalate = canEscalateRuntimeRun(run.status) && Boolean(onEscalate);
   const operatorState = runtimeRunOperatorState(run);
   const guidance = runtimeRunOperatorGuidance(run);
   const detailRows = [
@@ -1075,6 +1087,18 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
               className="h-8 px-2 text-xs"
             >
               {isAcknowledging ? "Acknowledging…" : "Acknowledge"}
+            </Button>
+          ) : null}
+          {canEscalate ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onEscalate}
+              disabled={isEscalating}
+              className="h-8 px-2 text-xs"
+            >
+              {isEscalating ? "Escalating…" : "Escalate"}
             </Button>
           ) : null}
         </div>
@@ -1429,6 +1453,9 @@ export default function BoardDetailPage() {
     string | null
   >(null);
   const [acknowledgingExecutionRunId, setAcknowledgingExecutionRunId] = useState<
+    string | null
+  >(null);
+  const [escalatingExecutionRunId, setEscalatingExecutionRunId] = useState<
     string | null
   >(null);
   const [newExecutionRunSiloSlug, setNewExecutionRunSiloSlug] = useState("");
@@ -3577,6 +3604,26 @@ export default function BoardDetailPage() {
     [boardId, invalidateExecutionRunViews, pushToast, selectedTask],
   );
 
+  const handleEscalateExecutionRun = useCallback(
+    async (run: TaskExecutionRunSnapshot) => {
+      if (!selectedTask || !boardId) return;
+      setEscalatingExecutionRunId(run.id);
+      try {
+        await customFetch<TaskExecutionRunResponse>(
+          `/api/v1/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(selectedTask.id)}/execution-runs/${encodeURIComponent(run.id)}/escalate`,
+          { method: "POST" },
+        );
+        await invalidateExecutionRunViews();
+        pushToast("Run escalated for approval.", "success");
+      } catch (err) {
+        pushToast(formatActionError(err, "Unable to escalate execution run."));
+      } finally {
+        setEscalatingExecutionRunId(null);
+      }
+    },
+    [boardId, invalidateExecutionRunViews, pushToast, selectedTask],
+  );
+
   const handleCreateExecutionRun = useCallback(async () => {
     if (!selectedTask || !boardId) return;
     const siloSlug = newExecutionRunSiloSlug.trim();
@@ -5114,6 +5161,7 @@ export default function BoardDetailPage() {
                       isRetrying={retryingExecutionRunId === run.id}
                       isCancelling={cancellingExecutionRunId === run.id}
                       isAcknowledging={acknowledgingExecutionRunId === run.id}
+                      isEscalating={escalatingExecutionRunId === run.id}
                       onRetry={
                         canWrite && canRetryRuntimeRun(run.status)
                           ? () => handleRetryExecutionRun(run)
@@ -5127,6 +5175,11 @@ export default function BoardDetailPage() {
                       onAcknowledge={
                         canWrite && canAcknowledgeRuntimeRun(run.status)
                           ? () => handleAcknowledgeExecutionRun(run)
+                          : undefined
+                      }
+                      onEscalate={
+                        canWrite && canEscalateRuntimeRun(run.status)
+                          ? () => handleEscalateExecutionRun(run)
                           : undefined
                       }
                     />

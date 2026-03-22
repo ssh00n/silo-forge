@@ -155,6 +155,9 @@ export const canCancelRuntimeRun = (status: RuntimeRunStatus | string): boolean 
 export const canAcknowledgeRuntimeRun = (status: RuntimeRunStatus | string): boolean =>
   status === "failed" || status === "cancelled" || status === "blocked";
 
+export const canEscalateRuntimeRun = (status: RuntimeRunStatus | string): boolean =>
+  status === "failed" || status === "cancelled" || status === "blocked";
+
 const normalizeRuntimeHint = (value?: string | null): string | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
