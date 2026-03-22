@@ -11,12 +11,14 @@ import { DashboardPageLayout } from "@/components/templates/DashboardPageLayout"
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
-  buildSiloOverviewPosture,
-  dispatchReasonClass,
-  summarizeSiloHealth,
+  buildSiloOverviewCards,
+  buildSiloOverviewSummaryViewModel,
+  siloReasonChipClass,
+  siloToneBadgeVariant,
 } from "@/lib/silo-dispatch";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
 import { fetchSilos } from "@/lib/silos";
+import { Badge } from "@/components/ui/badge";
 
 export default function SilosPage() {
   const { isSignedIn } = useAuth();
@@ -30,18 +32,8 @@ export default function SilosPage() {
   });
 
   const silos = useMemo(() => silosQuery.data ?? [], [silosQuery.data]);
-  const siloHealthSummary = useMemo(() => summarizeSiloHealth(silos), [silos]);
-  const siloSummary = useMemo(
-    () => ({
-      total: siloHealthSummary.totalCount,
-      healthy: siloHealthSummary.healthyCount,
-      busy: siloHealthSummary.busyCount,
-      blocked: siloHealthSummary.blockedCount,
-      degraded: siloHealthSummary.degradedCount,
-      needsSetup: siloHealthSummary.needsSetupCount,
-    }),
-    [siloHealthSummary],
-  );
+  const siloSummary = useMemo(() => buildSiloOverviewSummaryViewModel(silos), [silos]);
+  const siloCards = useMemo(() => buildSiloOverviewCards(silos), [silos]);
 
   return (
     <DashboardPageLayout
@@ -145,8 +137,8 @@ export default function SilosPage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {silos.map((silo) => {
-              const posture = buildSiloOverviewPosture(silo);
+            {siloCards.map((posture) => {
+              const silo = posture.silo;
               return (
               <Link key={silo.slug} href={`/silos/${silo.slug}`}>
                 <Card className="h-full border border-slate-200 transition hover:-translate-y-0.5 hover:border-blue-300">
@@ -158,19 +150,12 @@ export default function SilosPage() {
                           {silo.blueprint_slug}@{silo.blueprint_version}
                         </p>
                       </div>
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                          posture.tone === "success"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : posture.tone === "warning"
-                              ? "bg-amber-100 text-amber-700"
-                              : posture.tone === "danger"
-                                ? "bg-rose-100 text-rose-700"
-                                : "bg-slate-100 text-slate-700"
-                        }`}
+                      <Badge
+                        variant={siloToneBadgeVariant(posture.tone)}
+                        className="px-2.5 py-1 text-xs font-medium normal-case tracking-normal"
                       >
                         {posture.readinessLabel}
-                      </span>
+                      </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -179,7 +164,7 @@ export default function SilosPage() {
                       {posture.reasons.slice(0, 3).map((reason) => (
                         <span
                           key={`${silo.slug}-${reason.label}`}
-                          className={`rounded-full px-2.5 py-1 ${dispatchReasonClass(reason.tone)}`}
+                          className={`rounded-full px-2.5 py-1 ${siloReasonChipClass(reason.tone)}`}
                         >
                           {reason.label}
                         </span>

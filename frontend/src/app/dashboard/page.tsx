@@ -76,8 +76,7 @@ import {
   runtimeRunTimingLabel,
 } from "@/lib/runtime-runs";
 import {
-  buildSiloOverviewPosture,
-  summarizeSiloHealth,
+  buildDashboardSiloHealthViewModel,
 } from "@/lib/silo-dispatch";
 import {
   describeSiloRequestPressure,
@@ -1222,39 +1221,15 @@ export default function DashboardPage() {
       },
     );
   }, [siloRequestsQuery.data]);
-  const siloHealthSummary = useMemo(
-    () => summarizeSiloHealth(silosQuery.data ?? []),
+  const siloHealthViewModel = useMemo(
+    () => buildDashboardSiloHealthViewModel(silosQuery.data ?? []),
     [silosQuery.data],
   );
-  const siloHealthBadge = useMemo(() => {
-    if (siloHealthSummary.totalCount === 0) {
-      return { text: "No silos", tone: "neutral" as const };
-    }
-    if (siloHealthSummary.blockedCount > 0) {
-      return { text: "Blocked", tone: "offline" as const };
-    }
-    if (siloHealthSummary.degradedCount > 0) {
-      return { text: "Degraded", tone: "neutral" as const };
-    }
-    if (siloHealthSummary.needsSetupCount > 0) {
-      return { text: "Needs setup", tone: "neutral" as const };
-    }
-    if (siloHealthSummary.busyCount > 0) {
-      return { text: "Operational", tone: "neutral" as const };
-    }
-    return { text: "Healthy", tone: "online" as const };
-  }, [siloHealthSummary]);
   const siloHealthContextHref = useMemo(() => {
-    const silos = silosQuery.data ?? [];
-    if (silos.length === 0) return null;
-    const ranked = [...silos].sort((left, right) => {
-      const leftPosture = buildSiloOverviewPosture(left);
-      const rightPosture = buildSiloOverviewPosture(right);
-      return rightPosture.score - leftPosture.score;
-    });
-    const primary = ranked[0];
-    return primary ? `/silos/${primary.slug}` : null;
-  }, [silosQuery.data]);
+    return siloHealthViewModel.primarySiloSlug
+      ? `/silos/${siloHealthViewModel.primarySiloSlug}`
+      : null;
+  }, [siloHealthViewModel.primarySiloSlug]);
 
   const onlineAgents = useMemo(
     () => agents.filter((agent) => (agent.status ?? "").toLowerCase() === "online").length,
@@ -1826,16 +1801,16 @@ export default function DashboardPage() {
               <InfoBlock
                 title="Silo Health"
                 infoText="Core operating posture for the silos that can take work now."
-                badge={siloHealthBadge}
+                badge={siloHealthViewModel.badge}
                 rows={[
-                  { label: "Healthy", value: formatCount(siloHealthSummary.healthyCount) },
-                  { label: "Busy", value: formatCount(siloHealthSummary.busyCount) },
-                  { label: "Blocked", value: formatCount(siloHealthSummary.blockedCount) },
+                  { label: "Healthy", value: formatCount(siloHealthViewModel.summary.healthyCount) },
+                  { label: "Busy", value: formatCount(siloHealthViewModel.summary.busyCount) },
+                  { label: "Blocked", value: formatCount(siloHealthViewModel.summary.blockedCount) },
                   {
                     label: "Degraded",
-                    value: formatCount(siloHealthSummary.degradedCount),
+                    value: formatCount(siloHealthViewModel.summary.degradedCount),
                   },
-                  { label: "Needs setup", value: formatCount(siloHealthSummary.needsSetupCount) },
+                  { label: "Needs setup", value: formatCount(siloHealthViewModel.summary.needsSetupCount) },
                 ]}
                 actionHref="/silos"
                 actionLabel="Open silos"
