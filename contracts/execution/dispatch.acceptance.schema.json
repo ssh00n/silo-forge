@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/execution/dispatch.acceptance.schema.json",
+  "title": "SiloForgeExecutionDispatchAcceptance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "accepted",
+    "adapter_mode",
+    "external_run_id",
+    "workspace_path",
+    "branch_name",
+    "summary"
+  ],
+  "properties": {
+    "accepted": {
+      "type": "boolean"
+    },
+    "adapter_mode": {
+      "type": "string",
+      "enum": [
+        "http",
+        "stub"
+      ]
+    },
+    "external_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspace_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "branch_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

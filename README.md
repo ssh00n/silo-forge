@@ -1,6 +1,6 @@
 # Silo Forge
 
-[![CI](https://github.com/abhi1693/openclaw-mission-control/actions/workflows/ci.yml/badge.svg)](https://github.com/abhi1693/openclaw-mission-control/actions/workflows/ci.yml) ![Static Badge](https://img.shields.io/badge/Join-Slack-active?style=flat&color=blue&link=https%3A%2F%2Fjoin.slack.com%2Ft%2Foc-mission-control%2Fshared_invite%2Fzt-3qpcm57xh-AI9C~smc3MDBVzEhvwf7gg)
+[![CI](https://github.com/ssh00n/silo-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/ssh00n/silo-forge/actions/workflows/ci.yml) ![Static Badge](https://img.shields.io/badge/Join-Slack-active?style=flat&color=blue&link=https%3A%2F%2Fjoin.slack.com%2Ft%2Foc-mission-control%2Fshared_invite%2Fzt-3qpcm57xh-AI9C~smc3MDBVzEhvwf7gg)
 
 Forked from `abhi1693/openclaw-mission-control`. This working tree keeps the upstream MIT license and attribution. See [`NOTICE`](./NOTICE) and [`docs/architecture/product-transition-pre-e2e.md`](./docs/architecture/product-transition-pre-e2e.md).
 
@@ -56,10 +56,10 @@ Core operational areas:
 If you haven't cloned the repo yet, you can run the installer in one line:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/abhi1693/openclaw-mission-control/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ssh00n/silo-forge/master/install.sh | bash
 ```
 
-This clones the repository into `./openclaw-mission-control` if no local checkout is found in your current directory.
+This clones the repository into `./silo-forge` if no local checkout is found in your current directory.
 
 If you already cloned the repo:
 
@@ -173,7 +173,7 @@ Silo Forge is under active development.
 Issues and pull requests are welcome.
 
 - [Contributing guide](./CONTRIBUTING.md)
-- [Open issues](https://github.com/abhi1693/openclaw-mission-control/issues)
+- [Open issues](https://github.com/ssh00n/silo-forge/issues)
 
 ## License
 
@@ -181,4 +181,4 @@ This project is licensed under the MIT License. See [`LICENSE`](./LICENSE).
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=abhi1693/openclaw-mission-control&type=date&legend=top-left)](https://www.star-history.com/#abhi1693/openclaw-mission-control&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=ssh00n/silo-forge&type=date&legend=top-left)](https://www.star-history.com/#ssh00n/silo-forge&type=date&legend=top-left)

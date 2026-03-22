@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/execution/callback.payload.schema.json",
+  "title": "SiloForgeExecutionCallbackPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "dispatching",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "blocked"
+      ]
+    },
+    "external_run_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "branch_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pr_url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri"
+    },
+    "summary": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error_message": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "issue_identifier": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "completion_kind": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "duration_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "result_payload": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "issue_identifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "completion_kind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_event": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "turn_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "usage": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "input_tokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "output_tokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "total_tokens": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

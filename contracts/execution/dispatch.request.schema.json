@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/execution/dispatch.request.schema.json",
+  "title": "SiloForgeExecutionDispatchRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "execution_run_id",
+    "silo_slug",
+    "role_slug",
+    "workspace_root",
+    "callback_url",
+    "issue",
+    "adapter_mode"
+  ],
+  "properties": {
+    "execution_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "silo_slug": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role_slug": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspace_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "callback_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "prompt_override": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "adapter_mode": {
+      "type": "string",
+      "enum": [
+        "http",
+        "stub"
+      ]
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "identifier",
+        "title",
+        "description",
+        "priority",
+        "state",
+        "branch_name",
+        "url",
+        "labels",
+        "blocked_by",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blocked_by": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "identifier",
+              "state"
+            ],
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "identifier": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "state": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "created_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

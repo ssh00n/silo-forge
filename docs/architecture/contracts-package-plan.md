@@ -117,6 +117,12 @@ Adopt these rules from the beginning:
 - codify current execution-run activity payload
 - add generation scripts for TypeScript and Python artifacts
 
+Current status:
+
+- initial `contracts/` directory exists in the main repo
+- first draft schemas exist for dispatch, acceptance, callback, and execution-run activity payloads
+- next step is generation and service adoption
+
 ### Phase 2: backend and frontend adoption
 
 - switch `backend` callback validation to generated types
