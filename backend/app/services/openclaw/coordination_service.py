@@ -26,6 +26,7 @@ from app.schemas.gateway_coordination import (
     GatewayMainAskUserRequest,
     GatewayMainAskUserResponse,
 )
+from app.contracts.activity import finalize_gateway_activity_payload
 from app.services.activity_log import record_activity
 from app.services.openclaw.db_service import OpenClawDBService
 from app.services.openclaw.exceptions import (
@@ -106,7 +107,7 @@ class GatewayCoordinationService(AbstractGatewayMessagingService):
             payload["error"] = error
         if extra:
             payload.update(extra)
-        return payload
+        return finalize_gateway_activity_payload(payload)
 
     @staticmethod
     def _build_gateway_lead_message(

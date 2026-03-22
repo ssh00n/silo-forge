@@ -52,6 +52,7 @@ def test_webhook_queue_roundtrip(monkeypatch: pytest.MonkeyPatch, attempts: int)
 
     monkeypatch.setattr("app.services.queue._redis_client", _fake_redis)
     assert enqueue_webhook_delivery(payload)
+    assert len(fake.values) == 1
 
     dequeued = dequeue_webhook_delivery()
     assert dequeued is not None

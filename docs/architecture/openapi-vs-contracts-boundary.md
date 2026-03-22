@@ -50,6 +50,7 @@ Primary role:
 - execution dispatch acceptance payloads
 - execution callback payloads
 - activity payloads shared across frontend/backend/runtime boundaries
+- queue/job payloads shared across backend worker boundaries
 
 Examples:
 
@@ -126,7 +127,8 @@ Only consume:
 - execution dispatch/callback payloads
 - runtime activity payloads
 - task/approval activity payloads
-- future queue/job payloads
+- board/gateway activity payloads
+- queue/job payloads
 
 ## Expansion policy
 

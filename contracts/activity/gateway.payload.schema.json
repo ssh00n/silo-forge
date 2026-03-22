@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/activity/gateway.payload.schema.json",
+  "title": "SiloForgeGatewayActivityPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "notification_kind",
+    "notification_status"
+  ],
+  "properties": {
+    "notification_kind": { "type": "string", "minLength": 1 },
+    "notification_status": { "type": "string", "minLength": 1 },
+    "board_id": { "type": ["string", "null"] },
+    "board_name": { "type": ["string", "null"] },
+    "actor_agent_id": { "type": ["string", "null"] },
+    "target_agent_id": { "type": ["string", "null"] },
+    "target_agent_name": { "type": ["string", "null"] },
+    "gateway_id": { "type": ["string", "null"] },
+    "gateway_name": { "type": ["string", "null"] },
+    "action": { "type": ["string", "null"] },
+    "delivery_status": { "type": ["string", "null"] },
+    "target_kind": { "type": ["string", "null"] },
+    "workspace_path": { "type": ["string", "null"] },
+    "session_key": { "type": ["string", "null"] },
+    "error": { "type": ["string", "null"] }
+  }
+}

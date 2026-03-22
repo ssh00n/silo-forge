@@ -33,6 +33,14 @@ def _py_name(key: str) -> str:
     return key.upper()
 
 
+def _exported_type_name(key: str, schema: dict[str, Any]) -> str:
+    title = schema.get("title")
+    if isinstance(title, str) and title.strip():
+        normalized = title.strip()
+        return normalized.removeprefix("SiloForge")
+    return "".join(part[:1].upper() + part[1:] for part in key.split("_") if part)
+
+
 def _required_fields(schema: dict[str, object]) -> set[str]:
     required = schema.get("required")
     if not isinstance(required, list):
@@ -154,6 +162,14 @@ def render_frontend(schemas: list[tuple[str, dict[str, object]]]) -> str:
         )
         lines.append(
             f"export type {type_name} = {_ts_type_expr(schema_map[matching_key], inline=True)};"
+        )
+    lines.append("")
+    for key, schema in schemas:
+        type_name = _exported_type_name(key, schema)
+        if type_name in {item[0] for item in type_specs}:
+            continue
+        lines.append(
+            f"export type {type_name} = {_ts_type_expr(schema, inline=True)};"
         )
     lines.append("")
     lines.append("export const contractSchemaIds = {")

@@ -9,6 +9,10 @@ from uuid import UUID
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.contracts.queue import (
+    finalize_webhook_delivery_queue_payload,
+    parse_webhook_delivery_queue_payload,
+)
 from app.services.queue import QueuedTask, dequeue_task, enqueue_task
 from app.services.queue import requeue_if_failed as generic_requeue_if_failed
 
@@ -28,14 +32,17 @@ class QueuedInboundDelivery:
 
 
 def _task_from_payload(payload: QueuedInboundDelivery) -> QueuedTask:
-    return QueuedTask(
-        task_type=TASK_TYPE,
-        payload={
+    normalized_payload = finalize_webhook_delivery_queue_payload(
+        {
             "board_id": str(payload.board_id),
             "webhook_id": str(payload.webhook_id),
             "payload_id": str(payload.payload_id),
             "received_at": payload.received_at.isoformat(),
-        },
+        }
+    )
+    return QueuedTask(
+        task_type=TASK_TYPE,
+        payload=normalized_payload,
         created_at=payload.received_at,
         attempts=payload.attempts,
     )
@@ -48,23 +55,34 @@ def decode_webhook_task(task: QueuedTask) -> QueuedInboundDelivery:
     payload: dict[str, Any] = task.payload
     if task.task_type == "legacy":
         received_at = payload.get("received_at") or payload.get("created_at")
+        parsed = parse_webhook_delivery_queue_payload(
+            {
+                "board_id": str(payload["board_id"]),
+                "webhook_id": str(payload["webhook_id"]),
+                "payload_id": str(payload["payload_id"]),
+                "received_at": (
+                    received_at.isoformat()
+                    if isinstance(received_at, datetime)
+                    else received_at
+                    if isinstance(received_at, str)
+                    else datetime.now(UTC).isoformat()
+                ),
+            }
+        )
         return QueuedInboundDelivery(
-            board_id=UUID(payload["board_id"]),
-            webhook_id=UUID(payload["webhook_id"]),
-            payload_id=UUID(payload["payload_id"]),
-            received_at=(
-                datetime.fromisoformat(received_at)
-                if isinstance(received_at, str)
-                else datetime.now(UTC)
-            ),
+            board_id=UUID(parsed.board_id),
+            webhook_id=UUID(parsed.webhook_id),
+            payload_id=UUID(parsed.payload_id),
+            received_at=parsed.received_at,
             attempts=int(payload.get("attempts", task.attempts)),
         )
 
+    parsed = parse_webhook_delivery_queue_payload(payload)
     return QueuedInboundDelivery(
-        board_id=UUID(payload["board_id"]),
-        webhook_id=UUID(payload["webhook_id"]),
-        payload_id=UUID(payload["payload_id"]),
-        received_at=datetime.fromisoformat(payload["received_at"]),
+        board_id=UUID(parsed.board_id),
+        webhook_id=UUID(parsed.webhook_id),
+        payload_id=UUID(parsed.payload_id),
+        received_at=parsed.received_at,
         attempts=int(payload.get("attempts", task.attempts)),
     )
 

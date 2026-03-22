@@ -24,6 +24,30 @@ SCHEMAS = {
                     'notification_status': {'type': 'string', 'minLength': 1},
                     'lead_agent_id': {'type': ['string', 'null']},
                     'error': {'type': ['string', 'null']}}},
+    "activity__board_payload_schema_json":
+    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
+     '$id': 'https://schemas.silo-forge.dev/activity/board.payload.schema.json',
+     'title': 'SiloForgeBoardActivityPayload',
+     'type': 'object',
+     'additionalProperties': False,
+     'required': ['notification_kind',
+                  'notification_status',
+                  'board_id',
+                  'board_name',
+                  'target_agent_id',
+                  'target_agent_name'],
+     'properties': {'notification_kind': {'type': 'string', 'minLength': 1},
+                    'notification_status': {'type': 'string', 'minLength': 1},
+                    'board_id': {'type': 'string', 'minLength': 1},
+                    'board_name': {'type': 'string', 'minLength': 1},
+                    'target_agent_id': {'type': 'string', 'minLength': 1},
+                    'target_agent_name': {'type': 'string', 'minLength': 1},
+                    'source_board_id': {'type': ['string', 'null']},
+                    'source_board_name': {'type': ['string', 'null']},
+                    'board_group_id': {'type': ['string', 'null']},
+                    'board_group_name': {'type': ['string', 'null']},
+                    'changed_fields': {'type': ['array', 'null'], 'items': {'type': 'string'}},
+                    'error': {'type': ['string', 'null']}}},
     "activity__execution_run_payload_schema_json":
     {'$schema': 'https://json-schema.org/draft/2020-12/schema',
      '$id': 'https://schemas.silo-forge.dev/activity/execution-run.payload.schema.json',
@@ -68,6 +92,28 @@ SCHEMAS = {
                     'duration_ms': {'type': 'integer', 'minimum': 0},
                     'has_prompt_override': {'type': 'boolean'},
                     'retried_from_run_id': {'type': 'string'}}},
+    "activity__gateway_payload_schema_json":
+    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
+     '$id': 'https://schemas.silo-forge.dev/activity/gateway.payload.schema.json',
+     'title': 'SiloForgeGatewayActivityPayload',
+     'type': 'object',
+     'additionalProperties': False,
+     'required': ['notification_kind', 'notification_status'],
+     'properties': {'notification_kind': {'type': 'string', 'minLength': 1},
+                    'notification_status': {'type': 'string', 'minLength': 1},
+                    'board_id': {'type': ['string', 'null']},
+                    'board_name': {'type': ['string', 'null']},
+                    'actor_agent_id': {'type': ['string', 'null']},
+                    'target_agent_id': {'type': ['string', 'null']},
+                    'target_agent_name': {'type': ['string', 'null']},
+                    'gateway_id': {'type': ['string', 'null']},
+                    'gateway_name': {'type': ['string', 'null']},
+                    'action': {'type': ['string', 'null']},
+                    'delivery_status': {'type': ['string', 'null']},
+                    'target_kind': {'type': ['string', 'null']},
+                    'workspace_path': {'type': ['string', 'null']},
+                    'session_key': {'type': ['string', 'null']},
+                    'error': {'type': ['string', 'null']}}},
     "activity__task_payload_schema_json":
     {'$schema': 'https://json-schema.org/draft/2020-12/schema',
      '$id': 'https://schemas.silo-forge.dev/activity/task.payload.schema.json',
@@ -214,14 +260,53 @@ SCHEMAS = {
                                                             'format': 'date-time'},
                                              'updated_at': {'type': ['string', 'null'],
                                                             'format': 'date-time'}}}}},
+    "queue__agent_lifecycle_reconcile_payload_schema_json":
+    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
+     '$id': 'https://schemas.silo-forge.dev/queue/agent-lifecycle-reconcile.payload.schema.json',
+     'title': 'SiloForgeAgentLifecycleReconcileQueuePayload',
+     'type': 'object',
+     'additionalProperties': False,
+     'required': ['agent_id', 'gateway_id', 'generation', 'checkin_deadline_at'],
+     'properties': {'agent_id': {'type': 'string', 'minLength': 1},
+                    'gateway_id': {'type': 'string', 'minLength': 1},
+                    'board_id': {'type': ['string', 'null']},
+                    'generation': {'type': 'integer', 'minimum': 0},
+                    'checkin_deadline_at': {'type': 'string', 'format': 'date-time'}}},
+    "queue__task_execution_dispatch_payload_schema_json":
+    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
+     '$id': 'https://schemas.silo-forge.dev/queue/task-execution-dispatch.payload.schema.json',
+     'title': 'SiloForgeTaskExecutionDispatchQueuePayload',
+     'type': 'object',
+     'additionalProperties': False,
+     'required': ['organization_id', 'board_id', 'task_id', 'run_id'],
+     'properties': {'organization_id': {'type': 'string', 'minLength': 1},
+                    'board_id': {'type': 'string', 'minLength': 1},
+                    'task_id': {'type': 'string', 'minLength': 1},
+                    'run_id': {'type': 'string', 'minLength': 1}}},
+    "queue__webhook_delivery_payload_schema_json":
+    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
+     '$id': 'https://schemas.silo-forge.dev/queue/webhook-delivery.payload.schema.json',
+     'title': 'SiloForgeWebhookDeliveryQueuePayload',
+     'type': 'object',
+     'additionalProperties': False,
+     'required': ['board_id', 'webhook_id', 'payload_id', 'received_at'],
+     'properties': {'board_id': {'type': 'string', 'minLength': 1},
+                    'webhook_id': {'type': 'string', 'minLength': 1},
+                    'payload_id': {'type': 'string', 'minLength': 1},
+                    'received_at': {'type': 'string', 'format': 'date-time'}}},
 }
 
 ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__approval_payload_schema_json"]
+ACTIVITY__BOARD_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__board_payload_schema_json"]
 ACTIVITY__EXECUTION_RUN_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__execution_run_payload_schema_json"]
+ACTIVITY__GATEWAY_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__gateway_payload_schema_json"]
 ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__task_payload_schema_json"]
 EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON = SCHEMAS["execution__callback_payload_schema_json"]
 EXECUTION__DISPATCH_ACCEPTANCE_SCHEMA_JSON = SCHEMAS["execution__dispatch_acceptance_schema_json"]
 EXECUTION__DISPATCH_REQUEST_SCHEMA_JSON = SCHEMAS["execution__dispatch_request_schema_json"]
+QUEUE__AGENT_LIFECYCLE_RECONCILE_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__agent_lifecycle_reconcile_payload_schema_json"]
+QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__task_execution_dispatch_payload_schema_json"]
+QUEUE__WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__webhook_delivery_payload_schema_json"]
 
 ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS_VALUES = ('queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked')
 ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS: TypeAlias = Literal['queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked']

@@ -54,6 +54,13 @@ def test_enqueue_lifecycle_reconcile_uses_delayed_enqueue(
     task = captured["task"]
     assert isinstance(task, QueuedTask)
     assert task.task_type == "agent_lifecycle_reconcile"
+    assert task.payload == {
+        "agent_id": str(payload.agent_id),
+        "gateway_id": str(payload.gateway_id),
+        "board_id": str(payload.board_id),
+        "generation": 7,
+        "checkin_deadline_at": payload.checkin_deadline_at.isoformat(),
+    }
     assert float(captured["delay_seconds"]) > 0
 
 
@@ -96,6 +103,7 @@ def test_defer_lifecycle_reconcile_keeps_attempt_count(
     deferred_task = captured["task"]
     assert isinstance(deferred_task, QueuedTask)
     assert deferred_task.attempts == 2
+    assert deferred_task.payload["generation"] == 3
     assert float(captured["delay_seconds"]) == 12
 
 

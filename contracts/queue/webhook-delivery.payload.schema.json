@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/queue/webhook-delivery.payload.schema.json",
+  "title": "SiloForgeWebhookDeliveryQueuePayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "board_id",
+    "webhook_id",
+    "payload_id",
+    "received_at"
+  ],
+  "properties": {
+    "board_id": { "type": "string", "minLength": 1 },
+    "webhook_id": { "type": "string", "minLength": 1 },
+    "payload_id": { "type": "string", "minLength": 1 },
+    "received_at": { "type": "string", "format": "date-time" }
+  }
+}

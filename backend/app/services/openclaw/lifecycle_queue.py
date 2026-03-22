@@ -10,6 +10,10 @@ from uuid import UUID
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.time import utcnow
+from app.contracts.queue import (
+    finalize_agent_lifecycle_reconcile_queue_payload,
+    parse_agent_lifecycle_reconcile_queue_payload,
+)
 from app.services.queue import QueuedTask, enqueue_task_with_delay
 from app.services.queue import requeue_if_failed as generic_requeue_if_failed
 
@@ -30,15 +34,18 @@ class QueuedAgentLifecycleReconcile:
 
 
 def _task_from_payload(payload: QueuedAgentLifecycleReconcile) -> QueuedTask:
-    return QueuedTask(
-        task_type=TASK_TYPE,
-        payload={
+    normalized_payload = finalize_agent_lifecycle_reconcile_queue_payload(
+        {
             "agent_id": str(payload.agent_id),
             "gateway_id": str(payload.gateway_id),
             "board_id": str(payload.board_id) if payload.board_id is not None else None,
             "generation": payload.generation,
             "checkin_deadline_at": payload.checkin_deadline_at.isoformat(),
-        },
+        }
+    )
+    return QueuedTask(
+        task_type=TASK_TYPE,
+        payload=normalized_payload,
         created_at=utcnow(),
         attempts=payload.attempts,
     )
@@ -48,17 +55,14 @@ def decode_lifecycle_task(task: QueuedTask) -> QueuedAgentLifecycleReconcile:
     if task.task_type not in {TASK_TYPE, "legacy"}:
         raise ValueError(f"Unexpected task_type={task.task_type!r}; expected {TASK_TYPE!r}")
     payload: dict[str, Any] = task.payload
-    raw_board_id = payload.get("board_id")
-    board_id = UUID(raw_board_id) if isinstance(raw_board_id, str) and raw_board_id else None
-    raw_deadline = payload.get("checkin_deadline_at")
-    if not isinstance(raw_deadline, str):
-        raise ValueError("checkin_deadline_at is required")
+    parsed = parse_agent_lifecycle_reconcile_queue_payload(payload)
+    board_id = UUID(parsed.board_id) if parsed.board_id else None
     return QueuedAgentLifecycleReconcile(
-        agent_id=UUID(str(payload["agent_id"])),
-        gateway_id=UUID(str(payload["gateway_id"])),
+        agent_id=UUID(parsed.agent_id),
+        gateway_id=UUID(parsed.gateway_id),
         board_id=board_id,
-        generation=int(payload["generation"]),
-        checkin_deadline_at=datetime.fromisoformat(raw_deadline),
+        generation=parsed.generation,
+        checkin_deadline_at=parsed.checkin_deadline_at,
         attempts=int(payload.get("attempts", task.attempts)),
     )
 

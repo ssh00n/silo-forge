@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/queue/task-execution-dispatch.payload.schema.json",
+  "title": "SiloForgeTaskExecutionDispatchQueuePayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "organization_id",
+    "board_id",
+    "task_id",
+    "run_id"
+  ],
+  "properties": {
+    "organization_id": { "type": "string", "minLength": 1 },
+    "board_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/activity/board.payload.schema.json",
+  "title": "SiloForgeBoardActivityPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "notification_kind",
+    "notification_status",
+    "board_id",
+    "board_name",
+    "target_agent_id",
+    "target_agent_name"
+  ],
+  "properties": {
+    "notification_kind": { "type": "string", "minLength": 1 },
+    "notification_status": { "type": "string", "minLength": 1 },
+    "board_id": { "type": "string", "minLength": 1 },
+    "board_name": { "type": "string", "minLength": 1 },
+    "target_agent_id": { "type": "string", "minLength": 1 },
+    "target_agent_name": { "type": "string", "minLength": 1 },
+    "source_board_id": { "type": ["string", "null"] },
+    "source_board_name": { "type": ["string", "null"] },
+    "board_group_id": { "type": ["string", "null"] },
+    "board_group_name": { "type": ["string", "null"] },
+    "changed_fields": {
+      "type": ["array", "null"],
+      "items": { "type": "string" }
+    },
+    "error": { "type": ["string", "null"] }
+  }
+}

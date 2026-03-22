@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/queue/agent-lifecycle-reconcile.payload.schema.json",
+  "title": "SiloForgeAgentLifecycleReconcileQueuePayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agent_id",
+    "gateway_id",
+    "generation",
+    "checkin_deadline_at"
+  ],
+  "properties": {
+    "agent_id": { "type": "string", "minLength": 1 },
+    "gateway_id": { "type": "string", "minLength": 1 },
+    "board_id": { "type": ["string", "null"] },
+    "generation": { "type": "integer", "minimum": 0 },
+    "checkin_deadline_at": { "type": "string", "format": "date-time" }
+  }
+}

@@ -2,6 +2,8 @@
 
 import type {
   ApprovalActivityPayload,
+  BoardActivityPayload,
+  GatewayActivityPayload,
   TaskActivityPayload,
 } from "@/contracts/generated/schemas";
 import {
@@ -42,6 +44,18 @@ const parseApprovalActivityPayload = (
 ): Partial<ApprovalActivityPayload> | null => {
   const record = toRecord(payload);
   return record as Partial<ApprovalActivityPayload> | null;
+};
+
+const parseBoardActivityPayload = (payload: unknown): Partial<BoardActivityPayload> | null => {
+  const record = toRecord(payload);
+  return record as Partial<BoardActivityPayload> | null;
+};
+
+const parseGatewayActivityPayload = (
+  payload: unknown,
+): Partial<GatewayActivityPayload> | null => {
+  const record = toRecord(payload);
+  return record as Partial<GatewayActivityPayload> | null;
 };
 
 const readString = (
@@ -125,14 +139,30 @@ export const resolveActivityFeedContent = (
   }
 
   if (eventType.startsWith("agent.")) {
-    const agentName = readString(normalizedPayload, ["agent_name"]);
-    const action = readString(normalizedPayload, ["action"]);
-    const deliveryStatus = readString(normalizedPayload, ["delivery_status"]);
-    const gatewayName = readString(normalizedPayload, ["gateway_name"]);
-    const targetKind = readString(normalizedPayload, ["target_kind"]);
-    const workspacePath = readString(normalizedPayload, ["workspace_path"]);
-    const sessionKey = readString(normalizedPayload, ["session_key"]);
-    const error = readString(normalizedPayload, ["error"]);
+    const gatewayPayload = parseGatewayActivityPayload(normalizedPayload);
+    const agentName =
+      gatewayPayload?.target_agent_name?.trim() ||
+      readString(normalizedPayload, ["agent_name"]);
+    const action =
+      gatewayPayload?.action?.trim() || readString(normalizedPayload, ["action"]);
+    const deliveryStatus =
+      gatewayPayload?.notification_status?.trim() ||
+      gatewayPayload?.delivery_status?.trim() ||
+      readString(normalizedPayload, ["delivery_status"]);
+    const gatewayName =
+      gatewayPayload?.gateway_name?.trim() ||
+      readString(normalizedPayload, ["gateway_name"]);
+    const targetKind =
+      gatewayPayload?.target_kind?.trim() ||
+      readString(normalizedPayload, ["target_kind"]);
+    const workspacePath =
+      gatewayPayload?.workspace_path?.trim() ||
+      readString(normalizedPayload, ["workspace_path"]);
+    const sessionKey =
+      gatewayPayload?.session_key?.trim() ||
+      readString(normalizedPayload, ["session_key"]);
+    const error =
+      gatewayPayload?.error?.trim() || readString(normalizedPayload, ["error"]);
 
     const details: ActivityDetailRow[] = [];
     if (agentName) details.push({ label: "Agent", value: agentName });
@@ -199,13 +229,34 @@ export const resolveActivityFeedContent = (
   }
 
   if (normalizedPayload) {
-    const notificationKind = readString(normalizedPayload, ["notification_kind"]);
-    const notificationStatus = readString(normalizedPayload, ["notification_status"]);
-    const targetAgentName = readString(normalizedPayload, ["target_agent_name"]);
-    const boardName = readString(normalizedPayload, ["board_name"]);
-    const sourceBoardName = readString(normalizedPayload, ["source_board_name"]);
-    const groupName = readString(normalizedPayload, ["board_group_name"]);
-    const error = readString(normalizedPayload, ["error"]);
+    const boardPayload = parseBoardActivityPayload(normalizedPayload);
+    const gatewayPayload = parseGatewayActivityPayload(normalizedPayload);
+    const notificationKind =
+      boardPayload?.notification_kind?.trim() ||
+      gatewayPayload?.notification_kind?.trim() ||
+      readString(normalizedPayload, ["notification_kind"]);
+    const notificationStatus =
+      boardPayload?.notification_status?.trim() ||
+      gatewayPayload?.notification_status?.trim() ||
+      readString(normalizedPayload, ["notification_status"]);
+    const targetAgentName =
+      boardPayload?.target_agent_name?.trim() ||
+      gatewayPayload?.target_agent_name?.trim() ||
+      readString(normalizedPayload, ["target_agent_name"]);
+    const boardName =
+      boardPayload?.board_name?.trim() ||
+      gatewayPayload?.board_name?.trim() ||
+      readString(normalizedPayload, ["board_name"]);
+    const sourceBoardName =
+      boardPayload?.source_board_name?.trim() ||
+      readString(normalizedPayload, ["source_board_name"]);
+    const groupName =
+      boardPayload?.board_group_name?.trim() ||
+      readString(normalizedPayload, ["board_group_name"]);
+    const error =
+      boardPayload?.error?.trim() ||
+      gatewayPayload?.error?.trim() ||
+      readString(normalizedPayload, ["error"]);
 
     const details: ActivityDetailRow[] = [];
     if (notificationKind) details.push({ label: "Kind", value: notificationKind });
