@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  AgentActivityPayload,
   ApprovalActivityPayload,
   BoardActivityPayload,
   GatewayActivityPayload,
@@ -61,6 +62,19 @@ const parseApprovalActivityPayload = (
     return null;
   }
   return record as Partial<ApprovalActivityPayload>;
+};
+
+const parseAgentActivityPayload = (payload: unknown): Partial<AgentActivityPayload> | null => {
+  const record = toRecord(payload);
+  if (!record) return null;
+  if (
+    !hasString(record, "agent_name") &&
+    !hasString(record, "action") &&
+    !hasString(record, "delivery_status")
+  ) {
+    return null;
+  }
+  return record as Partial<AgentActivityPayload>;
 };
 
 const parseBoardActivityPayload = (payload: unknown): Partial<BoardActivityPayload> | null => {
@@ -127,6 +141,7 @@ const resolveGatewayActivityContent = (
   eventType: string,
   message: string,
   payload: Partial<GatewayActivityPayload> | null,
+  agentPayload: Partial<AgentActivityPayload> | null = null,
   rawPayload: Record<string, unknown> | null = null,
 ): { summary: string; details: ActivityDetailRow[] } | null => {
   if (!payload) return null;
@@ -134,6 +149,7 @@ const resolveGatewayActivityContent = (
   const notificationStatus =
     payload.notification_status?.trim() || payload.delivery_status?.trim() || null;
   const targetAgentName =
+    agentPayload?.agent_name?.trim() ||
     payload.target_agent_name?.trim() ||
     readString(rawPayload, ["agent_name"]) ||
     null;
@@ -148,8 +164,12 @@ const resolveGatewayActivityContent = (
     readString(rawPayload, ["workspace_path"]) ||
     null;
   const sessionKey =
-    payload.session_key?.trim() || readString(rawPayload, ["session_key"]) || null;
-  const error = payload.error?.trim() || readString(rawPayload, ["error"]) || null;
+    agentPayload?.session_key?.trim() ||
+    payload.session_key?.trim() ||
+    readString(rawPayload, ["session_key"]) ||
+    null;
+  const error =
+    agentPayload?.error?.trim() || payload.error?.trim() || readString(rawPayload, ["error"]) || null;
 
   const details: ActivityDetailRow[] = [];
   if (eventType.startsWith("agent.")) {
@@ -261,23 +281,30 @@ export const resolveActivityFeedContent = (
   }
 
   if (eventType.startsWith("agent.")) {
+    const agentPayload = parseAgentActivityPayload(normalizedPayload);
     const gatewayPayload = parseGatewayActivityPayload(normalizedPayload);
     const resolved =
       resolveGatewayActivityContent(
         eventType,
         normalizedMessage,
         gatewayPayload,
+        agentPayload,
         normalizedPayload,
       ) ??
       (() => {
-        const agentName = readString(normalizedPayload, ["agent_name"]);
-        const action = readString(normalizedPayload, ["action"]);
-        const deliveryStatus = readString(normalizedPayload, ["delivery_status"]);
-        const gatewayName = readString(normalizedPayload, ["gateway_name"]);
-        const targetKind = readString(normalizedPayload, ["target_kind"]);
-        const workspacePath = readString(normalizedPayload, ["workspace_path"]);
-        const sessionKey = readString(normalizedPayload, ["session_key"]);
-        const error = readString(normalizedPayload, ["error"]);
+        const agentName = agentPayload?.agent_name?.trim() || readString(normalizedPayload, ["agent_name"]);
+        const action = agentPayload?.action?.trim() || readString(normalizedPayload, ["action"]);
+        const deliveryStatus =
+          agentPayload?.delivery_status?.trim() || readString(normalizedPayload, ["delivery_status"]);
+        const gatewayName =
+          agentPayload?.gateway_name?.trim() || readString(normalizedPayload, ["gateway_name"]);
+        const targetKind =
+          agentPayload?.target_kind?.trim() || readString(normalizedPayload, ["target_kind"]);
+        const workspacePath =
+          agentPayload?.workspace_path?.trim() || readString(normalizedPayload, ["workspace_path"]);
+        const sessionKey =
+          agentPayload?.session_key?.trim() || readString(normalizedPayload, ["session_key"]);
+        const error = agentPayload?.error?.trim() || readString(normalizedPayload, ["error"]);
         const details: ActivityDetailRow[] = [];
         if (agentName) details.push({ label: "Agent", value: agentName });
         if (action) details.push({ label: "Action", value: action });
@@ -343,6 +370,7 @@ export const resolveActivityFeedContent = (
   if (normalizedPayload) {
     const boardPayload = parseBoardActivityPayload(normalizedPayload);
     const gatewayPayload = parseGatewayActivityPayload(normalizedPayload);
+    const agentPayload = parseAgentActivityPayload(normalizedPayload);
     if (eventType.startsWith("board.")) {
       const resolvedBoard = resolveBoardActivityContent(
         eventType,
@@ -357,6 +385,7 @@ export const resolveActivityFeedContent = (
       eventType,
       normalizedMessage,
       gatewayPayload,
+      agentPayload,
       normalizedPayload,
     );
     if (resolvedGateway) {

@@ -7,6 +7,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel, ConfigDict
 
 from app.contracts.generated_schemas import (
+    ACTIVITY__AGENT_PAYLOAD_SCHEMA_JSON,
     ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON,
     ACTIVITY__BOARD_PAYLOAD_SCHEMA_JSON,
     ACTIVITY__GATEWAY_PAYLOAD_SCHEMA_JSON,
@@ -49,6 +50,22 @@ class ApprovalActivityPayloadContract(BaseModel):
     approval_status: str
     notification_status: str
     lead_agent_id: str | None = None
+    error: str | None = None
+
+
+class AgentActivityPayloadContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str
+    agent_name: str
+    action: str
+    board_id: str | None = None
+    delivery_status: str | None = None
+    gateway_id: str | None = None
+    gateway_name: str | None = None
+    workspace_path: str | None = None
+    session_key: str | None = None
+    target_kind: str | None = None
     error: str | None = None
 
 
@@ -139,6 +156,22 @@ def finalize_approval_activity_payload(payload: dict[str, Any]) -> dict[str, Any
         schema=ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON,
         payload=payload,
         model=ApprovalActivityPayloadContract,
+    )
+
+
+def parse_agent_activity_payload(payload: dict[str, Any]) -> AgentActivityPayloadContract:
+    return _parse_activity_payload(
+        schema=ACTIVITY__AGENT_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=AgentActivityPayloadContract,
+    )
+
+
+def finalize_agent_activity_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return _finalize_activity_payload(
+        schema=ACTIVITY__AGENT_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=AgentActivityPayloadContract,
     )
 
 

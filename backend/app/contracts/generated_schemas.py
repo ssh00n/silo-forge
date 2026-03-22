@@ -11,6 +11,80 @@ from typing import Literal, TypeAlias
 SCHEMAS = json.loads(
     r"""
 {
+  "activity__agent_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/activity/agent.payload.schema.json",
+    "title": "SiloForgeAgentActivityPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "agent_id",
+      "agent_name",
+      "action"
+    ],
+    "properties": {
+      "agent_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "agent_name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "action": {
+        "type": "string",
+        "minLength": 1
+      },
+      "board_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "delivery_status": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "gateway_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "gateway_name": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "workspace_path": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "session_key": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "target_kind": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
   "activity__approval_payload_schema_json": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://schemas.silo-forge.dev/activity/approval.payload.schema.json",
@@ -1139,6 +1213,7 @@ SCHEMAS = json.loads(
 )
 
 
+ACTIVITY__AGENT_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__agent_payload_schema_json"]
 ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__approval_payload_schema_json"]
 ACTIVITY__BOARD_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__board_payload_schema_json"]
 ACTIVITY__EXECUTION_RUN_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__execution_run_payload_schema_json"]
