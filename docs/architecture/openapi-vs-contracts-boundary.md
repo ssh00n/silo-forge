@@ -128,7 +128,7 @@ Only consume:
 - execution dispatch/callback payloads
 - runtime activity payloads
 - task/approval activity payloads
-- board/gateway activity payloads
+- board/gateway/agent activity payloads
 - queue/job payloads
 - telemetry payloads for worker/runtime events
 

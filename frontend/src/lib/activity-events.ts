@@ -1,10 +1,14 @@
 "use client";
 
 import type {
+  AgentActivityPayload,
   ApprovalActivityPayload,
   BoardActivityPayload,
   GatewayActivityPayload,
+  QueueWorkerEventTelemetryPayload,
+  SiloRuntimeActivityPayload,
   TaskActivityPayload,
+  WebhookDeliveryResultTelemetryPayload,
 } from "@/contracts/generated/schemas";
 import {
   type RuntimeRunActivityPayload,
@@ -63,6 +67,19 @@ const parseApprovalActivityPayload = (
   return record as Partial<ApprovalActivityPayload>;
 };
 
+const parseAgentActivityPayload = (payload: unknown): Partial<AgentActivityPayload> | null => {
+  const record = toRecord(payload);
+  if (!record) return null;
+  if (
+    !hasString(record, "agent_name") &&
+    !hasString(record, "action") &&
+    !hasString(record, "delivery_status")
+  ) {
+    return null;
+  }
+  return record as Partial<AgentActivityPayload>;
+};
+
 const parseBoardActivityPayload = (payload: unknown): Partial<BoardActivityPayload> | null => {
   const record = toRecord(payload);
   if (!record) return null;
@@ -89,6 +106,43 @@ const parseGatewayActivityPayload = (
     return null;
   }
   return record as Partial<GatewayActivityPayload>;
+};
+
+const parseSiloRuntimeActivityPayload = (
+  payload: unknown,
+): Partial<SiloRuntimeActivityPayload> | null => {
+  const record = toRecord(payload);
+  if (!record) return null;
+  if (
+    !hasString(record, "silo_name") &&
+    !hasString(record, "mode") &&
+    !hasString(record, "operation_id")
+  ) {
+    return null;
+  }
+  return record as Partial<SiloRuntimeActivityPayload>;
+};
+
+const parseQueueWorkerTelemetryPayload = (
+  payload: unknown,
+): Partial<QueueWorkerEventTelemetryPayload> | null => {
+  const record = toRecord(payload);
+  if (!record) return null;
+  if (!hasString(record, "queue_name") && !hasString(record, "status")) {
+    return null;
+  }
+  return record as Partial<QueueWorkerEventTelemetryPayload>;
+};
+
+const parseWebhookTelemetryPayload = (
+  payload: unknown,
+): Partial<WebhookDeliveryResultTelemetryPayload> | null => {
+  const record = toRecord(payload);
+  if (!record) return null;
+  if (!hasString(record, "status") && !hasString(record, "payload_id")) {
+    return null;
+  }
+  return record as Partial<WebhookDeliveryResultTelemetryPayload>;
 };
 
 const resolveBoardActivityContent = (
@@ -127,6 +181,7 @@ const resolveGatewayActivityContent = (
   eventType: string,
   message: string,
   payload: Partial<GatewayActivityPayload> | null,
+  agentPayload: Partial<AgentActivityPayload> | null = null,
   rawPayload: Record<string, unknown> | null = null,
 ): { summary: string; details: ActivityDetailRow[] } | null => {
   if (!payload) return null;
@@ -134,6 +189,7 @@ const resolveGatewayActivityContent = (
   const notificationStatus =
     payload.notification_status?.trim() || payload.delivery_status?.trim() || null;
   const targetAgentName =
+    agentPayload?.agent_name?.trim() ||
     payload.target_agent_name?.trim() ||
     readString(rawPayload, ["agent_name"]) ||
     null;
@@ -148,8 +204,12 @@ const resolveGatewayActivityContent = (
     readString(rawPayload, ["workspace_path"]) ||
     null;
   const sessionKey =
-    payload.session_key?.trim() || readString(rawPayload, ["session_key"]) || null;
-  const error = payload.error?.trim() || readString(rawPayload, ["error"]) || null;
+    agentPayload?.session_key?.trim() ||
+    payload.session_key?.trim() ||
+    readString(rawPayload, ["session_key"]) ||
+    null;
+  const error =
+    agentPayload?.error?.trim() || payload.error?.trim() || readString(rawPayload, ["error"]) || null;
 
   const details: ActivityDetailRow[] = [];
   if (eventType.startsWith("agent.")) {
@@ -188,6 +248,22 @@ const readString = (
   for (const key of keys) {
     const value = record[key];
     if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+};
+
+const readNumber = (
+  record: Record<string, unknown> | null,
+  keys: string[],
+): number | null => {
+  if (!record) return null;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number.parseFloat(value.trim());
+      if (Number.isFinite(parsed)) return parsed;
+    }
   }
   return null;
 };
@@ -261,23 +337,30 @@ export const resolveActivityFeedContent = (
   }
 
   if (eventType.startsWith("agent.")) {
+    const agentPayload = parseAgentActivityPayload(normalizedPayload);
     const gatewayPayload = parseGatewayActivityPayload(normalizedPayload);
     const resolved =
       resolveGatewayActivityContent(
         eventType,
         normalizedMessage,
         gatewayPayload,
+        agentPayload,
         normalizedPayload,
       ) ??
       (() => {
-        const agentName = readString(normalizedPayload, ["agent_name"]);
-        const action = readString(normalizedPayload, ["action"]);
-        const deliveryStatus = readString(normalizedPayload, ["delivery_status"]);
-        const gatewayName = readString(normalizedPayload, ["gateway_name"]);
-        const targetKind = readString(normalizedPayload, ["target_kind"]);
-        const workspacePath = readString(normalizedPayload, ["workspace_path"]);
-        const sessionKey = readString(normalizedPayload, ["session_key"]);
-        const error = readString(normalizedPayload, ["error"]);
+        const agentName = agentPayload?.agent_name?.trim() || readString(normalizedPayload, ["agent_name"]);
+        const action = agentPayload?.action?.trim() || readString(normalizedPayload, ["action"]);
+        const deliveryStatus =
+          agentPayload?.delivery_status?.trim() || readString(normalizedPayload, ["delivery_status"]);
+        const gatewayName =
+          agentPayload?.gateway_name?.trim() || readString(normalizedPayload, ["gateway_name"]);
+        const targetKind =
+          agentPayload?.target_kind?.trim() || readString(normalizedPayload, ["target_kind"]);
+        const workspacePath =
+          agentPayload?.workspace_path?.trim() || readString(normalizedPayload, ["workspace_path"]);
+        const sessionKey =
+          agentPayload?.session_key?.trim() || readString(normalizedPayload, ["session_key"]);
+        const error = agentPayload?.error?.trim() || readString(normalizedPayload, ["error"]);
         const details: ActivityDetailRow[] = [];
         if (agentName) details.push({ label: "Agent", value: agentName });
         if (action) details.push({ label: "Action", value: action });
@@ -315,14 +398,21 @@ export const resolveActivityFeedContent = (
   }
 
   if (eventType.startsWith("silo.runtime.")) {
-    const siloName = readString(normalizedPayload, ["silo_name"]);
-    const mode = readString(normalizedPayload, ["mode"]);
-    const operationId = readString(normalizedPayload, ["operation_id"]);
-    const resultCount = readString(normalizedPayload, ["result_count"]);
-    const warningCount = readString(normalizedPayload, ["warning_count"]);
-    const restartRequired = readString(normalizedPayload, ["restart_required"]);
-    const gatewayNames = readString(normalizedPayload, ["gateway_names"]);
-    const roles = readString(normalizedPayload, ["roles"]);
+    const runtimePayload = parseSiloRuntimeActivityPayload(normalizedPayload);
+    const siloName = runtimePayload?.silo_name?.trim() || readString(normalizedPayload, ["silo_name"]);
+    const mode = runtimePayload?.mode?.trim() || readString(normalizedPayload, ["mode"]);
+    const operationId =
+      runtimePayload?.operation_id?.trim() || readString(normalizedPayload, ["operation_id"]);
+    const resultCount =
+      runtimePayload?.result_count?.trim() || readString(normalizedPayload, ["result_count"]);
+    const warningCount =
+      runtimePayload?.warning_count?.trim() || readString(normalizedPayload, ["warning_count"]);
+    const restartRequired =
+      runtimePayload?.restart_required?.trim() ||
+      readString(normalizedPayload, ["restart_required"]);
+    const gatewayNames =
+      runtimePayload?.gateway_names?.trim() || readString(normalizedPayload, ["gateway_names"]);
+    const roles = runtimePayload?.roles?.trim() || readString(normalizedPayload, ["roles"]);
 
     const details: ActivityDetailRow[] = [];
     if (siloName) details.push({ label: "Silo", value: siloName });
@@ -340,9 +430,76 @@ export const resolveActivityFeedContent = (
     };
   }
 
+  if (eventType.startsWith("queue.worker.")) {
+    const telemetry = parseQueueWorkerTelemetryPayload(normalizedPayload);
+    const queueName = telemetry?.queue_name?.trim() || readString(normalizedPayload, ["queue_name"]);
+    const status = telemetry?.status?.trim() || readString(normalizedPayload, ["status"]);
+    const taskType = telemetry?.task_type?.trim() || readString(normalizedPayload, ["task_type"]);
+    const attempt = telemetry?.attempt ?? readNumber(normalizedPayload, ["attempt"]);
+    const count = telemetry?.count ?? readNumber(normalizedPayload, ["count"]);
+    const throttleSeconds =
+      telemetry?.throttle_seconds ?? readNumber(normalizedPayload, ["throttle_seconds"]);
+    const retryDelaySeconds =
+      telemetry?.retry_delay_seconds ?? readNumber(normalizedPayload, ["retry_delay_seconds"]);
+    const error = telemetry?.error?.trim() || readString(normalizedPayload, ["error"]);
+    const details: ActivityDetailRow[] = [];
+    if (queueName) details.push({ label: "Queue", value: queueName });
+    if (status) details.push({ label: "Status", value: status });
+    if (taskType) details.push({ label: "Task type", value: taskType });
+    if (attempt !== null && attempt !== undefined) details.push({ label: "Attempt", value: String(attempt) });
+    if (count !== null && count !== undefined) details.push({ label: "Count", value: String(count) });
+    if (throttleSeconds !== null && throttleSeconds !== undefined) {
+      details.push({ label: "Throttle", value: `${throttleSeconds}s` });
+    }
+    if (retryDelaySeconds !== null && retryDelaySeconds !== undefined) {
+      details.push({ label: "Retry", value: `${retryDelaySeconds}s` });
+    }
+    if (error) details.push({ label: "Error", value: error });
+    return {
+      summary: normalizedMessage || (status ? `Queue worker ${status}.` : eventType),
+      details,
+      runtimeStatus: null,
+    };
+  }
+
+  if (eventType.startsWith("webhook.dispatch.")) {
+    const telemetry = parseWebhookTelemetryPayload(normalizedPayload);
+    const status = telemetry?.status?.trim() || readString(normalizedPayload, ["status"]);
+    const payloadId = telemetry?.payload_id?.trim() || readString(normalizedPayload, ["payload_id"]);
+    const webhookId = telemetry?.webhook_id?.trim() || readString(normalizedPayload, ["webhook_id"]);
+    const attempt = telemetry?.attempt ?? readNumber(normalizedPayload, ["attempt"]);
+    const count = telemetry?.count ?? readNumber(normalizedPayload, ["count"]);
+    const durationMs = telemetry?.duration_ms ?? readNumber(normalizedPayload, ["duration_ms"]);
+    const throttleSeconds =
+      telemetry?.throttle_seconds ?? readNumber(normalizedPayload, ["throttle_seconds"]);
+    const retryDelaySeconds =
+      telemetry?.retry_delay_seconds ?? readNumber(normalizedPayload, ["retry_delay_seconds"]);
+    const error = telemetry?.error?.trim() || readString(normalizedPayload, ["error"]);
+    const details: ActivityDetailRow[] = [];
+    if (status) details.push({ label: "Status", value: status });
+    if (payloadId) details.push({ label: "Payload", value: payloadId });
+    if (webhookId) details.push({ label: "Webhook", value: webhookId });
+    if (attempt !== null && attempt !== undefined) details.push({ label: "Attempt", value: String(attempt) });
+    if (count !== null && count !== undefined) details.push({ label: "Count", value: String(count) });
+    if (durationMs !== null && durationMs !== undefined) details.push({ label: "Duration", value: `${durationMs}ms` });
+    if (throttleSeconds !== null && throttleSeconds !== undefined) {
+      details.push({ label: "Throttle", value: `${throttleSeconds}s` });
+    }
+    if (retryDelaySeconds !== null && retryDelaySeconds !== undefined) {
+      details.push({ label: "Retry", value: `${retryDelaySeconds}s` });
+    }
+    if (error) details.push({ label: "Error", value: error });
+    return {
+      summary: normalizedMessage || (status ? `Webhook dispatch ${status}.` : eventType),
+      details,
+      runtimeStatus: null,
+    };
+  }
+
   if (normalizedPayload) {
     const boardPayload = parseBoardActivityPayload(normalizedPayload);
     const gatewayPayload = parseGatewayActivityPayload(normalizedPayload);
+    const agentPayload = parseAgentActivityPayload(normalizedPayload);
     if (eventType.startsWith("board.")) {
       const resolvedBoard = resolveBoardActivityContent(
         eventType,
@@ -357,6 +514,7 @@ export const resolveActivityFeedContent = (
       eventType,
       normalizedMessage,
       gatewayPayload,
+      agentPayload,
       normalizedPayload,
     );
     if (resolvedGateway) {
@@ -424,6 +582,8 @@ export const activityCategoryForEvent = (eventType: string): ActivityCategory =>
   if (eventType.startsWith("task.")) return "tasks";
   if (eventType.startsWith("approval.")) return "approvals";
   if (eventType.startsWith("silo.runtime.")) return "runtime";
+  if (eventType.startsWith("queue.worker.")) return "runtime";
+  if (eventType.startsWith("webhook.dispatch.")) return "gateway";
   if (eventType.startsWith("gateway.")) return "gateway";
   if (eventType.startsWith("board.")) return "boards";
   if (eventType.startsWith("agent.")) return "agents";

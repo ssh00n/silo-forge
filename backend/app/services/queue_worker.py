@@ -19,6 +19,7 @@ from app.services.queue import QueuedTask, dequeue_task
 from app.services.task_execution_queue import TASK_TYPE as TASK_EXECUTION_DISPATCH_TASK_TYPE
 from app.services.task_execution_queue import requeue_task_execution_dispatch
 from app.services.task_execution_worker import process_task_execution_dispatch_task
+from app.services.telemetry_activity import record_telemetry_activity
 from app.services.webhooks.dispatch import (
     process_webhook_queue_task,
     requeue_webhook_queue_task,
@@ -113,6 +114,10 @@ async def flush_queue(*, block: bool = False, block_timeout: float = 0) -> int:
                 "queue.worker.dequeue_failed",
                 extra=_worker_telemetry(status="dequeue_failed"),
             )
+            await record_telemetry_activity(
+                event_type="queue.worker.dequeue_failed",
+                payload=_worker_telemetry(status="dequeue_failed"),
+            )
             continue
 
         if task is None:
@@ -123,6 +128,10 @@ async def flush_queue(*, block: bool = False, block_timeout: float = 0) -> int:
             logger.warning(
                 "queue.worker.task_unhandled",
                 extra=_worker_telemetry(status="task_unhandled", task_type=task.task_type),
+            )
+            await record_telemetry_activity(
+                event_type="queue.worker.task_unhandled",
+                payload=_worker_telemetry(status="task_unhandled", task_type=task.task_type),
             )
             continue
 
@@ -137,10 +146,27 @@ async def flush_queue(*, block: bool = False, block_timeout: float = 0) -> int:
                     attempt=task.attempts,
                 ),
             )
+            await record_telemetry_activity(
+                event_type="queue.worker.success",
+                payload=_worker_telemetry(
+                    status="succeeded",
+                    task_type=task.task_type,
+                    attempt=task.attempts,
+                ),
+            )
         except Exception as exc:
             logger.exception(
                 "queue.worker.failed",
                 extra=_worker_telemetry(
+                    status="failed",
+                    task_type=task.task_type,
+                    attempt=task.attempts,
+                    error=exc,
+                ),
+            )
+            await record_telemetry_activity(
+                event_type="queue.worker.failed",
+                payload=_worker_telemetry(
                     status="failed",
                     task_type=task.task_type,
                     attempt=task.attempts,
@@ -159,12 +185,25 @@ async def flush_queue(*, block: bool = False, block_timeout: float = 0) -> int:
                         retry_delay_seconds=delay,
                     ),
                 )
+                await record_telemetry_activity(
+                    event_type="queue.worker.drop_task",
+                    payload=_worker_telemetry(
+                        status="dropped",
+                        task_type=task.task_type,
+                        attempt=task.attempts,
+                        retry_delay_seconds=delay,
+                    ),
+                )
         await asyncio.sleep(settings.rq_dispatch_throttle_seconds)
 
     if processed > 0:
         logger.info(
             "queue.worker.batch_complete",
             extra=_worker_telemetry(status="batch_complete", count=processed),
+        )
+        await record_telemetry_activity(
+            event_type="queue.worker.batch_complete",
+            payload=_worker_telemetry(status="batch_complete", count=processed),
         )
     return processed
 
@@ -182,19 +221,37 @@ async def _run_worker_loop() -> None:
                 "queue.worker.loop_failed",
                 extra=_worker_telemetry(status="loop_failed"),
             )
+            await record_telemetry_activity(
+                event_type="queue.worker.loop_failed",
+                payload=_worker_telemetry(status="loop_failed"),
+            )
             await asyncio.sleep(1)
 
 
 def run_worker() -> None:
     """RQ entrypoint for running continuous queue processing."""
+    started_payload = _worker_telemetry(
+        status="batch_started",
+        throttle_seconds=settings.rq_dispatch_throttle_seconds,
+    )
     logger.info(
         "queue.worker.batch_started",
-        extra=_worker_telemetry(
-            status="batch_started",
-            throttle_seconds=settings.rq_dispatch_throttle_seconds,
-        ),
+        extra=started_payload,
+    )
+    asyncio.run(
+        record_telemetry_activity(
+            event_type="queue.worker.batch_started",
+            payload=started_payload,
+        )
     )
     try:
         asyncio.run(_run_worker_loop())
     finally:
-        logger.info("queue.worker.stopped", extra=_worker_telemetry(status="stopped"))
+        stopped_payload = _worker_telemetry(status="stopped")
+        logger.info("queue.worker.stopped", extra=stopped_payload)
+        asyncio.run(
+            record_telemetry_activity(
+                event_type="queue.worker.stopped",
+                payload=stopped_payload,
+            )
+        )

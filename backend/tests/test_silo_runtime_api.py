@@ -152,6 +152,7 @@ async def test_validate_silo_runtime_calls_picoclaw_validate_for_assigned_target
         assert activity.payload["silo_slug"] == "demo-silo"
         assert activity.payload["mode"] == "validate"
         assert activity.payload["result_count"] == "4"
+        assert activity.payload["restart_required"] == "yes"
         assert activity.payload["gateway_ids"] == str(gateway.id)
         assert activity.board_id is None
     finally:
@@ -214,6 +215,7 @@ async def test_apply_silo_runtime_calls_picoclaw_apply(monkeypatch: pytest.Monke
         assert activity.payload is not None
         assert activity.payload["silo_name"] == "Demo Silo"
         assert activity.payload["mode"] == "apply"
+        assert activity.payload["roles"] == "fox, bunny, owl, otter"
         assert activity.payload["gateway_ids"] == str(gateway.id)
     finally:
         await engine.dispose()

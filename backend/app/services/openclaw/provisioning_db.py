@@ -45,6 +45,7 @@ from app.schemas.agents import (
 )
 from app.schemas.common import OkResponse
 from app.schemas.gateways import GatewayTemplatesSyncError, GatewayTemplatesSyncResult
+from app.contracts.activity import finalize_agent_activity_payload
 from app.services.activity_log import record_activity
 from app.services.openclaw.constants import (
     _TOOLS_KV_RE,
@@ -982,7 +983,7 @@ class AgentLifecycleService(OpenClawDBService):
             payload["workspace_path"] = workspace_path
         if target_kind:
             payload["target_kind"] = target_kind
-        return payload
+        return finalize_agent_activity_payload(payload)
 
     @staticmethod
     def record_instruction_failure(

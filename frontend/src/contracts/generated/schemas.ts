@@ -4,6 +4,81 @@
 export type SchemaEnum<T> = T extends { enum: readonly (infer U)[] } ? U : never;
 export type SchemaProperties<T> = T extends { properties: infer P } ? P : never;
 
+export const activityAgentPayloadSchemaJson = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/activity/agent.payload.schema.json",
+  "title": "SiloForgeAgentActivityPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agent_id",
+    "agent_name",
+    "action"
+  ],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "board_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "delivery_status": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "gateway_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "gateway_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspace_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "session_key": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "target_kind": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+} as const;
+
 export const activityApprovalPayloadSchemaJson = {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.silo-forge.dev/activity/approval.payload.schema.json",
@@ -371,6 +446,82 @@ export const activityGatewayPayloadSchemaJson = {
         "string",
         "null"
       ]
+    }
+  }
+} as const;
+
+export const activitySiloRuntimePayloadSchemaJson = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/activity/silo-runtime.payload.schema.json",
+  "title": "SiloForgeSiloRuntimeActivityPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "silo_id",
+    "silo_slug",
+    "silo_name",
+    "mode",
+    "operation_id",
+    "result_count",
+    "warning_count",
+    "restart_required",
+    "gateway_ids",
+    "gateway_names",
+    "roles"
+  ],
+  "properties": {
+    "silo_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "silo_slug": {
+      "type": "string",
+      "minLength": 1
+    },
+    "silo_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "board_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "validate",
+        "apply"
+      ]
+    },
+    "operation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "result_count": {
+      "type": "string",
+      "minLength": 1
+    },
+    "warning_count": {
+      "type": "string",
+      "minLength": 1
+    },
+    "restart_required": {
+      "type": "string",
+      "enum": [
+        "yes",
+        "no"
+      ]
+    },
+    "gateway_names": {
+      "type": "string"
+    },
+    "gateway_ids": {
+      "type": "string"
+    },
+    "roles": {
+      "type": "string"
     }
   }
 } as const;
@@ -1151,10 +1302,12 @@ export type ExecutionCallbackPayload = { status: "queued" | "dispatching" | "run
 export type ExecutionDispatchAcceptance = { accepted: boolean; adapter_mode: "http" | "stub"; external_run_id: string; workspace_path: string; branch_name: string; summary: string; };
 export type ExecutionDispatchRequest = { execution_run_id: string; silo_slug: string; role_slug: string; workspace_root: string; callback_url: string; prompt_override?: string | null; adapter_mode: "http" | "stub"; issue: { id: string; identifier: string; title: string; description: string | null; priority: number | null; state: string; branch_name: string | null; url: string | null; labels: Array<string>; blocked_by: Array<{ id: string | null; identifier: string | null; state: string | null; }>; created_at: string | null; updated_at: string | null; }; };
 
+export type AgentActivityPayload = { agent_id: string; agent_name: string; action: string; board_id?: string | null; delivery_status?: string | null; gateway_id?: string | null; gateway_name?: string | null; workspace_path?: string | null; session_key?: string | null; target_kind?: string | null; error?: string | null; };
 export type ApprovalActivityPayload = { approval_id: string; board_id: string; task_id?: string | null; agent_id?: string | null; action_type: string; approval_status: string; notification_status: string; lead_agent_id?: string | null; error?: string | null; };
 export type BoardActivityPayload = { notification_kind: string; notification_status: string; board_id: string; board_name: string; target_agent_id: string; target_agent_name: string; source_board_id?: string | null; source_board_name?: string | null; board_group_id?: string | null; board_group_name?: string | null; changed_fields?: Array<string> | null; error?: string | null; };
 export type ExecutionRunActivityPayload = { executor_kind: "symphony"; run_id: string; run_short_id: string; organization_id?: string; board_id?: string; task_id?: string; silo_id: string; silo_slug?: string; role_slug: string; status: "queued" | "dispatching" | "running" | "succeeded" | "failed" | "cancelled" | "blocked"; adapter_mode?: string; branch_hint?: string; branch_name?: string; workspace_path?: string; external_run_id?: string; summary?: string; pr_url?: string; pull_request?: number; total_tokens?: number; error_message?: string; issue_identifier?: string; runner_kind?: string; completion_kind?: string; last_event?: string; last_message?: string; session_id?: string; turn_count?: number; duration_ms?: number; has_prompt_override?: boolean; retried_from_run_id?: string; };
 export type GatewayActivityPayload = { notification_kind: string; notification_status: string; board_id?: string | null; board_name?: string | null; actor_agent_id?: string | null; target_agent_id?: string | null; target_agent_name?: string | null; gateway_id?: string | null; gateway_name?: string | null; action?: string | null; delivery_status?: string | null; target_kind?: string | null; workspace_path?: string | null; session_key?: string | null; error?: string | null; };
+export type SiloRuntimeActivityPayload = { silo_id: string; silo_slug: string; silo_name: string; board_id?: string | null; mode: "validate" | "apply"; operation_id: string; result_count: string; warning_count: string; restart_required: "yes" | "no"; gateway_names: string; gateway_ids: string; roles: string; };
 export type TaskActivityPayload = { task_id: string; board_id: string; task_title: string; status: string; assigned_agent_id?: string | null; priority?: string | number | null; previous_status?: string | null; reason?: string | null; dependency_task_id?: string | null; dependency_task_title?: string | null; dependency_task_status?: string | null; target_agent_id?: string | null; target_agent_name?: string | null; notification_kind?: string | null; notification_status?: string | null; error?: string | null; };
 export type AgentLifecycleReconcileQueuePayload = { agent_id: string; gateway_id: string; board_id?: string | null; generation: number; checkin_deadline_at: string; };
 export type QueuedTaskEnvelope = { task_type: string; payload: Record<string, unknown>; created_at: string; attempts?: number; };
@@ -1164,10 +1317,12 @@ export type QueueWorkerEventTelemetryPayload = { queue_name: string; status: "ba
 export type WebhookDeliveryResultTelemetryPayload = { board_id?: string | null; webhook_id?: string | null; payload_id?: string | null; attempt: number; status: "succeeded" | "failed" | "requeued" | "batch_complete" | "batch_started" | "batch_finished"; error?: string | null; retry_delay_seconds?: number | null; count?: number | null; duration_ms?: number | null; throttle_seconds?: number | null; };
 
 export const contractSchemaIds = {
+  "activity__agent_payload_schema_json": "activityAgentPayloadSchemaJson",
   "activity__approval_payload_schema_json": "activityApprovalPayloadSchemaJson",
   "activity__board_payload_schema_json": "activityBoardPayloadSchemaJson",
   "activity__execution_run_payload_schema_json": "activityExecutionRunPayloadSchemaJson",
   "activity__gateway_payload_schema_json": "activityGatewayPayloadSchemaJson",
+  "activity__silo_runtime_payload_schema_json": "activitySiloRuntimePayloadSchemaJson",
   "activity__task_payload_schema_json": "activityTaskPayloadSchemaJson",
   "execution__callback_payload_schema_json": "executionCallbackPayloadSchemaJson",
   "execution__dispatch_acceptance_schema_json": "executionDispatchAcceptanceSchemaJson",

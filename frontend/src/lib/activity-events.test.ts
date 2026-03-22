@@ -187,13 +187,61 @@ describe("activity-events helpers", () => {
     });
   });
 
+  it("builds queue worker telemetry details from payload", () => {
+    expect(
+      resolveActivityFeedContent("queue.worker.failed", "Queue worker failed task_execution_dispatch", {
+        queue_name: "default",
+        status: "failed",
+        task_type: "task_execution_dispatch",
+        attempt: 2,
+        retry_delay_seconds: 5.5,
+        error: "boom",
+      }),
+    ).toEqual({
+      summary: "Queue worker failed task_execution_dispatch",
+      details: [
+        { label: "Queue", value: "default" },
+        { label: "Status", value: "failed" },
+        { label: "Task type", value: "task_execution_dispatch" },
+        { label: "Attempt", value: "2" },
+        { label: "Retry", value: "5.5s" },
+        { label: "Error", value: "boom" },
+      ],
+      runtimeStatus: null,
+    });
+  });
+
+  it("builds webhook dispatch telemetry details from payload", () => {
+    expect(
+      resolveActivityFeedContent("webhook.dispatch.requeued", "", {
+        status: "requeued",
+        payload_id: "payload-123",
+        webhook_id: "webhook-456",
+        attempt: 1,
+        retry_delay_seconds: 3,
+      }),
+    ).toEqual({
+      summary: "Webhook dispatch requeued.",
+      details: [
+        { label: "Status", value: "requeued" },
+        { label: "Payload", value: "payload-123" },
+        { label: "Webhook", value: "webhook-456" },
+        { label: "Attempt", value: "1" },
+        { label: "Retry", value: "3s" },
+      ],
+      runtimeStatus: null,
+    });
+  });
+
   it("classifies activity categories for filters", () => {
     expect(activityCategoryForEvent("task.execution_run.report")).toBe("runs");
     expect(activityCategoryForEvent("silo.runtime.validate")).toBe("runtime");
+    expect(activityCategoryForEvent("queue.worker.failed")).toBe("runtime");
     expect(activityCategoryForEvent("task.status_changed")).toBe("tasks");
     expect(activityCategoryForEvent("approval.created")).toBe("approvals");
     expect(activityCategoryForEvent("board.lead_notified")).toBe("boards");
     expect(activityCategoryForEvent("agent.provision.failed")).toBe("agents");
+    expect(activityCategoryForEvent("webhook.dispatch.success")).toBe("gateway");
     expect(activityCategoryForEvent("gateway.main.lead_message.sent")).toBe("gateway");
     expect(activityCategoryForEvent("board.chat")).toBe("chat");
   });

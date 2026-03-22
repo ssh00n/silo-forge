@@ -189,6 +189,13 @@ type LiveFeedItem = {
   event_type: LiveFeedEventType;
 };
 
+type LiveFeedOpsSummary = {
+  latestLabel: string;
+  latestAt: string | null;
+  successCount: number;
+  failureCount: number;
+};
+
 const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "task.comment",
   "task.assignee_notified",
@@ -229,6 +236,15 @@ const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "gateway.main.lead_message.sent",
   "gateway.main.lead_message.failed",
   "gateway.main.lead_broadcast.sent",
+  "queue.worker.success",
+  "queue.worker.failed",
+  "queue.worker.dequeue_failed",
+  "queue.worker.batch_complete",
+  "webhook.dispatch.success",
+  "webhook.dispatch.failed",
+  "webhook.dispatch.requeued",
+  "webhook.dispatch.batch_complete",
+  "webhook.dispatch.batch_finished",
   "silo.runtime.validate",
   "silo.runtime.apply",
 ]);
@@ -556,6 +572,15 @@ const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "gateway.main.lead_message.sent") return "Lead message";
   if (eventType === "gateway.main.lead_message.failed") return "Lead message failed";
   if (eventType === "gateway.main.lead_broadcast.sent") return "Lead broadcast";
+  if (eventType === "queue.worker.success") return "Worker success";
+  if (eventType === "queue.worker.failed") return "Worker failed";
+  if (eventType === "queue.worker.dequeue_failed") return "Worker dequeue failed";
+  if (eventType === "queue.worker.batch_complete") return "Worker batch";
+  if (eventType === "webhook.dispatch.success") return "Webhook sent";
+  if (eventType === "webhook.dispatch.failed") return "Webhook failed";
+  if (eventType === "webhook.dispatch.requeued") return "Webhook retried";
+  if (eventType === "webhook.dispatch.batch_complete") return "Webhook batch";
+  if (eventType === "webhook.dispatch.batch_finished") return "Webhook finished";
   if (eventType === "silo.runtime.validate") return "Runtime validate";
   if (eventType === "silo.runtime.apply") return "Runtime apply";
   return "Updated";
@@ -687,6 +712,27 @@ const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   }
   if (eventType === "gateway.main.lead_broadcast.sent") {
     return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType === "queue.worker.success" || eventType === "queue.worker.batch_complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "queue.worker.failed" || eventType === "queue.worker.dequeue_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType.startsWith("queue.worker.")) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
+  }
+  if (eventType === "webhook.dispatch.success" || eventType === "webhook.dispatch.batch_complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "webhook.dispatch.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "webhook.dispatch.requeued") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType.startsWith("webhook.dispatch.")) {
+    return "border-sky-200 bg-sky-50 text-sky-700";
   }
   if (eventType === "silo.runtime.validate") {
     return "border-sky-200 bg-sky-50 text-sky-700";
@@ -2775,6 +2821,92 @@ export default function BoardDetailPage() {
     [liveFeedMode, orderedLiveFeed],
   );
 
+  const workerOpsSummary = useMemo<LiveFeedOpsSummary>(() => {
+    const workerEvents = orderedLiveFeed.filter((item) =>
+      item.event_type.startsWith("queue.worker."),
+    );
+    const latest = workerEvents[0] ?? null;
+    return {
+      latestLabel: latest ? liveFeedEventLabel(latest.event_type) : "No signal",
+      latestAt: latest?.created_at ?? null,
+      successCount: workerEvents.filter(
+        (item) =>
+          item.event_type === "queue.worker.success" ||
+          item.event_type === "queue.worker.batch_complete",
+      ).length,
+      failureCount: workerEvents.filter(
+        (item) =>
+          item.event_type === "queue.worker.failed" ||
+          item.event_type === "queue.worker.dequeue_failed",
+      ).length,
+    };
+  }, [orderedLiveFeed]);
+
+  const webhookOpsSummary = useMemo<LiveFeedOpsSummary>(() => {
+    const webhookEvents = orderedLiveFeed.filter((item) =>
+      item.event_type.startsWith("webhook.dispatch."),
+    );
+    const latest = webhookEvents[0] ?? null;
+    return {
+      latestLabel: latest ? liveFeedEventLabel(latest.event_type) : "No signal",
+      latestAt: latest?.created_at ?? null,
+      successCount: webhookEvents.filter(
+        (item) =>
+          item.event_type === "webhook.dispatch.success" ||
+          item.event_type === "webhook.dispatch.batch_complete",
+      ).length,
+      failureCount: webhookEvents.filter(
+        (item) => item.event_type === "webhook.dispatch.failed",
+      ).length,
+    };
+  }, [orderedLiveFeed]);
+
+  const taskWorkerOpsSummary = useMemo<LiveFeedOpsSummary>(() => {
+    const taskId = selectedTask?.id ?? null;
+    const relevant = orderedLiveFeed.filter((item) => {
+      if (!item.event_type.startsWith("queue.worker.")) return false;
+      if (!taskId) return true;
+      return item.task_id === taskId || item.task_id === null;
+    });
+    const latest = relevant[0] ?? null;
+    return {
+      latestLabel: latest ? liveFeedEventLabel(latest.event_type) : "No signal",
+      latestAt: latest?.created_at ?? null,
+      successCount: relevant.filter(
+        (item) =>
+          item.event_type === "queue.worker.success" ||
+          item.event_type === "queue.worker.batch_complete",
+      ).length,
+      failureCount: relevant.filter(
+        (item) =>
+          item.event_type === "queue.worker.failed" ||
+          item.event_type === "queue.worker.dequeue_failed",
+      ).length,
+    };
+  }, [orderedLiveFeed, selectedTask]);
+
+  const taskWebhookOpsSummary = useMemo<LiveFeedOpsSummary>(() => {
+    const taskId = selectedTask?.id ?? null;
+    const relevant = orderedLiveFeed.filter((item) => {
+      if (!item.event_type.startsWith("webhook.dispatch.")) return false;
+      if (!taskId) return true;
+      return item.task_id === taskId || item.task_id === null;
+    });
+    const latest = relevant[0] ?? null;
+    return {
+      latestLabel: latest ? liveFeedEventLabel(latest.event_type) : "No signal",
+      latestAt: latest?.created_at ?? null,
+      successCount: relevant.filter(
+        (item) =>
+          item.event_type === "webhook.dispatch.success" ||
+          item.event_type === "webhook.dispatch.batch_complete",
+      ).length,
+      failureCount: relevant.filter(
+        (item) => item.event_type === "webhook.dispatch.failed",
+      ).length,
+    };
+  }, [orderedLiveFeed, selectedTask]);
+
   const assignableAgents = useMemo(
     () => agents.filter((agent) => !agent.is_board_lead),
     [agents],
@@ -4770,6 +4902,50 @@ export default function BoardDetailPage() {
                   <span className="text-xs text-slate-400">Refreshing…</span>
                 ) : null}
               </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        Worker Ops
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {taskWorkerOpsSummary.latestLabel}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {taskWorkerOpsSummary.latestAt
+                        ? formatRelativeTimestamp(taskWorkerOpsSummary.latestAt)
+                        : "No signal"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-4 text-xs text-slate-600">
+                    <span>Success {taskWorkerOpsSummary.successCount}</span>
+                    <span>Failures {taskWorkerOpsSummary.failureCount}</span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        Webhook Ops
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {taskWebhookOpsSummary.latestLabel}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {taskWebhookOpsSummary.latestAt
+                        ? formatRelativeTimestamp(taskWebhookOpsSummary.latestAt)
+                        : "No signal"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-4 text-xs text-slate-600">
+                    <span>Success {taskWebhookOpsSummary.successCount}</span>
+                    <span>Failures {taskWebhookOpsSummary.failureCount}</span>
+                  </div>
+                </div>
+              </div>
               {selectedTaskExecutionRunsQuery.isLoading ? (
                 <p className="text-sm text-slate-500">Loading runtime runs…</p>
               ) : selectedTaskExecutionRunsQuery.error ? (
@@ -4953,6 +5129,50 @@ export default function BoardDetailPage() {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Worker Ops
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">
+                      {workerOpsSummary.latestLabel}
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    {workerOpsSummary.latestAt
+                      ? formatRelativeTimestamp(workerOpsSummary.latestAt)
+                      : DASH}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center gap-4 text-xs text-slate-600">
+                  <span>Success {workerOpsSummary.successCount}</span>
+                  <span>Failures {workerOpsSummary.failureCount}</span>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Webhook Ops
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">
+                      {webhookOpsSummary.latestLabel}
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    {webhookOpsSummary.latestAt
+                      ? formatRelativeTimestamp(webhookOpsSummary.latestAt)
+                      : DASH}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center gap-4 text-xs text-slate-600">
+                  <span>Success {webhookOpsSummary.successCount}</span>
+                  <span>Failures {webhookOpsSummary.failureCount}</span>
+                </div>
+              </div>
+            </div>
             {isLiveFeedHistoryLoading && visibleLiveFeed.length === 0 ? (
               <p className="text-sm text-slate-500">Loading feed…</p>
             ) : liveFeedHistoryError ? (

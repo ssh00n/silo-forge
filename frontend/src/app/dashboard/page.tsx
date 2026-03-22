@@ -80,6 +80,11 @@ type SummaryRow = {
   tone?: "default" | "success" | "warning" | "danger";
 };
 
+type TelemetrySummary = {
+  badge?: { text: string; tone: "online" | "offline" | "neutral" };
+  rows: SummaryRow[];
+};
+
 type GatewayTarget = {
   gatewayId: string;
   boardId: string;
@@ -124,6 +129,38 @@ type RuntimeMetricsResponse = {
   headers: Headers;
 };
 
+type TelemetryOpsSnapshot = {
+  generated_at: string;
+  worker: {
+    latest_event_type: string | null;
+    latest_at: string | null;
+    latest_queue_name: string | null;
+    latest_task_type: string | null;
+    latest_attempt: number | null;
+    latest_board_id: string | null;
+    latest_task_id: string | null;
+    success_count_7d: number;
+    failure_count_7d: number;
+    dequeue_failure_count_7d: number;
+  };
+  webhook: {
+    latest_event_type: string | null;
+    latest_at: string | null;
+    latest_payload_id: string | null;
+    latest_attempt: number | null;
+    latest_board_id: string | null;
+    success_count_7d: number;
+    failure_count_7d: number;
+    retried_count_7d: number;
+  };
+};
+
+type TelemetryOpsResponse = {
+  data: TelemetryOpsSnapshot;
+  status: number;
+  headers: Headers;
+};
+
 type StreamedActivityEvent = ActivityEventRead;
 
 const DASH = "—";
@@ -142,6 +179,310 @@ const DASHBOARD_ACTIVITY_FILTERS: Array<{
   { value: "boards", label: "Boards" },
   { value: "gateway", label: "Gateway" },
 ];
+
+const dashboardActivityLabel = (eventType: string): string => {
+  if (eventType === "task.execution_run.created") return "Run queued";
+  if (eventType === "task.execution_run.dispatched") return "Run sent";
+  if (eventType === "task.execution_run.retried") return "Run retried";
+  if (eventType === "task.execution_run.updated") return "Run update";
+  if (eventType === "task.execution_run.report") return "Run report";
+  if (eventType === "silo.runtime.validate") return "Runtime validate";
+  if (eventType === "silo.runtime.apply") return "Runtime apply";
+  if (eventType === "queue.worker.batch_started") return "Worker start";
+  if (eventType === "queue.worker.batch_complete") return "Worker batch";
+  if (eventType === "queue.worker.stopped") return "Worker stopped";
+  if (eventType === "queue.worker.success") return "Worker success";
+  if (eventType === "queue.worker.failed") return "Worker failed";
+  if (eventType.startsWith("queue.worker.")) return "Worker";
+  if (eventType === "webhook.dispatch.batch_started") return "Webhook batch";
+  if (eventType === "webhook.dispatch.batch_complete") return "Webhook batch";
+  if (eventType === "webhook.dispatch.batch_finished") return "Webhook finished";
+  if (eventType === "webhook.dispatch.success") return "Webhook sent";
+  if (eventType === "webhook.dispatch.failed") return "Webhook failed";
+  if (eventType === "webhook.dispatch.requeued") return "Webhook retried";
+  if (eventType.startsWith("webhook.dispatch.")) return "Webhook";
+  if (eventType === "task.status_changed") return "Status";
+  if (eventType === "task.created") return "Created";
+  if (eventType === "approval.created") return "Approval";
+  if (eventType === "approval.updated") return "Approval update";
+  if (eventType === "approval.approved") return "Approved";
+  if (eventType === "approval.rejected") return "Rejected";
+  if (eventType.startsWith("agent.") && eventType.endsWith(".failed")) return "Lifecycle failed";
+  if (eventType.startsWith("agent.") && eventType.endsWith(".direct")) return "Lifecycle";
+  if (eventType === "agent.heartbeat") return "Heartbeat";
+  if (eventType === "agent.wakeup.sent") return "Wakeup";
+  if (eventType === "agent.nudge.sent") return "Nudge";
+  if (eventType === "agent.nudge.failed") return "Nudge failed";
+  if (eventType === "agent.soul.updated") return "SOUL updated";
+  if (eventType.startsWith("gateway.")) return "Gateway";
+  if (eventType.startsWith("board.")) return "Board";
+  if (eventType.startsWith("task.")) return "Task";
+  return eventType;
+};
+
+const dashboardActivityPillClass = (eventType: string): string => {
+  if (eventType === "task.execution_run.created") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType === "task.execution_run.dispatched") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType === "task.execution_run.retried") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+  if (eventType === "task.execution_run.updated") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "task.execution_run.report") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "silo.runtime.validate") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.runtime.apply") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType === "queue.worker.success" || eventType === "queue.worker.batch_complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "queue.worker.failed" || eventType === "queue.worker.dequeue_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType.startsWith("queue.worker.")) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
+  }
+  if (eventType === "webhook.dispatch.success" || eventType === "webhook.dispatch.batch_complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "webhook.dispatch.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "webhook.dispatch.requeued") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType.startsWith("webhook.dispatch.")) {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  const category = activityCategoryForEvent(eventType);
+  if (category === "runtime" || category === "runs") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (category === "gateway") {
+    return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
+  }
+  if (category === "agents") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+  if (category === "approvals") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (category === "tasks") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  return "border-slate-200 bg-slate-100 text-slate-700";
+};
+
+const toRelativeOrDash = (value: string | null | undefined): string => {
+  if (!value) return DASH;
+  return formatRelativeTimestamp(value);
+};
+
+const toCountString = (value: unknown): string => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return formatCount(value);
+  }
+  return DASH;
+};
+
+const toTextOrDash = (value: unknown): string => {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return DASH;
+};
+
+const buildWorkerTelemetrySummary = (
+  events: ActivityEventRead[],
+  snapshot: TelemetryOpsSnapshot | null,
+): TelemetrySummary => {
+  if (snapshot) {
+    const latest = snapshot.worker.latest_event_type;
+    const failureTotal =
+      snapshot.worker.failure_count_7d + snapshot.worker.dequeue_failure_count_7d;
+    return {
+      badge: {
+        text: latest ? dashboardActivityLabel(latest) : "No signal",
+        tone:
+          latest === "queue.worker.failed" || latest === "queue.worker.dequeue_failed"
+            ? "offline"
+            : latest
+              ? "online"
+              : "neutral",
+      },
+      rows: [
+        {
+          label: "Latest event",
+          value: snapshot.worker.latest_at
+            ? toRelativeOrDash(snapshot.worker.latest_at)
+            : "No worker activity",
+          tone: snapshot.worker.latest_at ? "default" : "warning",
+        },
+        {
+          label: "Successful jobs",
+          value: toCountString(snapshot.worker.success_count_7d),
+          tone: snapshot.worker.success_count_7d > 0 ? "success" : "default",
+        },
+        {
+          label: "Worker failures",
+          value: toCountString(failureTotal),
+          tone: failureTotal > 0 ? "danger" : "default",
+        },
+        {
+          label: "Queue",
+          value: toTextOrDash(snapshot.worker.latest_queue_name),
+        },
+        {
+          label: "Task type",
+          value: toTextOrDash(snapshot.worker.latest_task_type),
+        },
+      ],
+    };
+  }
+  const workerEvents = events.filter((event) => event.event_type.startsWith("queue.worker."));
+  const latest = workerEvents[0];
+  const payload = (latest?.payload ?? {}) as Record<string, unknown>;
+  const failures = workerEvents.filter((event) =>
+    event.event_type === "queue.worker.failed" || event.event_type === "queue.worker.dequeue_failed"
+  ).length;
+  const successes = workerEvents.filter((event) => event.event_type === "queue.worker.success").length;
+
+  const badgeTone =
+    latest?.event_type === "queue.worker.failed" || latest?.event_type === "queue.worker.dequeue_failed"
+      ? "offline"
+      : latest
+        ? "online"
+        : "neutral";
+  const badgeText = latest ? dashboardActivityLabel(latest.event_type) : "No signal";
+
+  return {
+    badge: { text: badgeText, tone: badgeTone },
+    rows: [
+      {
+        label: "Latest event",
+        value: latest ? toRelativeOrDash(latest.created_at) : "No worker activity",
+        tone: latest ? "default" : "warning",
+      },
+      {
+        label: "Successful jobs",
+        value: toCountString(successes),
+        tone: successes > 0 ? "success" : "default",
+      },
+      {
+        label: "Worker failures",
+        value: toCountString(failures),
+        tone: failures > 0 ? "danger" : "default",
+      },
+      {
+        label: "Queue",
+        value: toTextOrDash(payload.queue_name),
+      },
+      {
+        label: "Task type",
+        value: toTextOrDash(payload.task_type),
+      },
+    ],
+  };
+};
+
+const buildWebhookTelemetrySummary = (
+  events: ActivityEventRead[],
+  snapshot: TelemetryOpsSnapshot | null,
+): TelemetrySummary => {
+  if (snapshot) {
+    const latest = snapshot.webhook.latest_event_type;
+    return {
+      badge: {
+        text: latest ? dashboardActivityLabel(latest) : "No signal",
+        tone: latest === "webhook.dispatch.failed" ? "offline" : latest ? "online" : "neutral",
+      },
+      rows: [
+        {
+          label: "Latest event",
+          value: snapshot.webhook.latest_at
+            ? toRelativeOrDash(snapshot.webhook.latest_at)
+            : "No webhook activity",
+          tone: snapshot.webhook.latest_at ? "default" : "warning",
+        },
+        {
+          label: "Delivered",
+          value: toCountString(snapshot.webhook.success_count_7d),
+          tone: snapshot.webhook.success_count_7d > 0 ? "success" : "default",
+        },
+        {
+          label: "Failed",
+          value: toCountString(snapshot.webhook.failure_count_7d),
+          tone: snapshot.webhook.failure_count_7d > 0 ? "danger" : "default",
+        },
+        {
+          label: "Retried",
+          value: toCountString(snapshot.webhook.retried_count_7d),
+          tone: snapshot.webhook.retried_count_7d > 0 ? "warning" : "default",
+        },
+        {
+          label: "Attempts",
+          value: toTextOrDash(snapshot.webhook.latest_attempt),
+        },
+      ],
+    };
+  }
+  const webhookEvents = events.filter((event) => event.event_type.startsWith("webhook.dispatch."));
+  const latest = webhookEvents[0];
+  const payload = (latest?.payload ?? {}) as Record<string, unknown>;
+  const sent = webhookEvents.filter((event) => event.event_type === "webhook.dispatch.success").length;
+  const failed = webhookEvents.filter((event) => event.event_type === "webhook.dispatch.failed").length;
+  const retried = webhookEvents.filter((event) => event.event_type === "webhook.dispatch.requeued").length;
+
+  const badgeTone =
+    latest?.event_type === "webhook.dispatch.failed"
+      ? "offline"
+      : latest
+        ? "online"
+        : "neutral";
+  const badgeText = latest ? dashboardActivityLabel(latest.event_type) : "No signal";
+
+  return {
+    badge: { text: badgeText, tone: badgeTone },
+    rows: [
+      {
+        label: "Latest event",
+        value: latest ? toRelativeOrDash(latest.created_at) : "No webhook activity",
+        tone: latest ? "default" : "warning",
+      },
+      {
+        label: "Delivered",
+        value: toCountString(sent),
+        tone: sent > 0 ? "success" : "default",
+      },
+      {
+        label: "Failed",
+        value: toCountString(failed),
+        tone: failed > 0 ? "danger" : "default",
+      },
+      {
+        label: "Retried",
+        value: toCountString(retried),
+        tone: retried > 0 ? "warning" : "default",
+      },
+      {
+        label: "Attempts",
+        value: toTextOrDash(payload.attempt ?? payload.delivery_attempt ?? payload.attempts),
+      },
+    ],
+  };
+};
 
 const latestActivityTimestamp = (items: ActivityEventRead[]): string | null => {
   let latestTime = 0;
@@ -426,6 +767,8 @@ function TopMetricCard({
   infoText,
   icon,
   accent,
+  onClick,
+  ariaLabel,
 }: {
   title: string;
   value: string;
@@ -433,6 +776,8 @@ function TopMetricCard({
   infoText?: string;
   icon: React.ReactNode;
   accent: "blue" | "green" | "violet" | "emerald";
+  onClick?: () => void;
+  ariaLabel?: string;
 }) {
   const iconTone =
     accent === "blue"
@@ -443,8 +788,29 @@ function TopMetricCard({
           ? "bg-violet-50 text-violet-600"
           : "bg-green-50 text-green-600";
 
+  const interactiveProps = onClick
+    ? {
+        role: "link" as const,
+        tabIndex: 0,
+        "aria-label": ariaLabel ?? title,
+        onClick,
+        onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          onClick();
+        },
+      }
+    : {};
+
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <section
+      {...interactiveProps}
+      className={`rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+        onClick
+          ? "cursor-pointer focus-visible:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+          : ""
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-1.5">
@@ -481,11 +847,19 @@ function InfoBlock({
   badge,
   infoText,
   rows,
+  actionHref,
+  actionLabel,
+  secondaryActionHref,
+  secondaryActionLabel,
 }: {
   title: string;
   badge?: { text: string; tone: "online" | "offline" | "neutral" };
   infoText?: string;
   rows: SummaryRow[];
+  actionHref?: string;
+  actionLabel?: string;
+  secondaryActionHref?: string;
+  secondaryActionLabel?: string;
 }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
@@ -502,19 +876,39 @@ function InfoBlock({
             </span>
           ) : null}
         </div>
-        {badge ? (
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-              badge.tone === "online"
-                ? "bg-emerald-100 text-emerald-700"
-                : badge.tone === "offline"
-                  ? "bg-rose-100 text-rose-700"
-                  : "bg-slate-200 text-slate-700"
-            }`}
-          >
-            {badge.text}
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {actionHref && actionLabel ? (
+            <Link
+              href={actionHref}
+              className="inline-flex items-center gap-1 text-xs text-slate-500 transition hover:text-slate-700"
+            >
+              {actionLabel}
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : null}
+          {secondaryActionHref && secondaryActionLabel ? (
+            <Link
+              href={secondaryActionHref}
+              className="inline-flex items-center gap-1 text-xs text-slate-500 transition hover:text-slate-700"
+            >
+              {secondaryActionLabel}
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          ) : null}
+          {badge ? (
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                badge.tone === "online"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : badge.tone === "offline"
+                    ? "bg-rose-100 text-rose-700"
+                    : "bg-slate-200 text-slate-700"
+              }`}
+            >
+              {badge.text}
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
         {rows.map((row) => (
@@ -611,6 +1005,19 @@ export default function DashboardPage() {
       return response.data;
     },
   });
+  const telemetryOpsQuery = useQuery<TelemetryOpsSnapshot, ApiError>({
+    queryKey: ["dashboard", "telemetry-ops", DASHBOARD_RANGE],
+    enabled: Boolean(isSignedIn),
+    refetchInterval: 15_000,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const response = await customFetch<TelemetryOpsResponse>(
+        `/api/v1/metrics/telemetry-ops?range_key=${encodeURIComponent(DASHBOARD_RANGE)}`,
+        { method: "GET" },
+      );
+      return response.data;
+    },
+  });
 
   const retryRuntimeRun = async (run: DashboardRuntimeRunSnapshot): Promise<void> => {
     await customFetch<{ data: unknown; status: number; headers: Headers }>(
@@ -619,6 +1026,7 @@ export default function DashboardPage() {
     );
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["dashboard", "execution-runtime", DASHBOARD_RANGE] }),
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "telemetry-ops", DASHBOARD_RANGE] }),
       queryClient.invalidateQueries({ queryKey: ["/api/v1/metrics/dashboard", { range_key: DASHBOARD_RANGE }] }),
       queryClient.invalidateQueries({ queryKey: ["/api/v1/activity", { limit: 200 }] }),
     ]);
@@ -653,6 +1061,7 @@ export default function DashboardPage() {
 
   const metrics = metricsQuery.data?.status === 200 ? metricsQuery.data.data : null;
   const runtimeMetrics = runtimeMetricsQuery.data ?? null;
+  const telemetryOpsMetrics = telemetryOpsQuery.data ?? null;
 
   const onlineAgents = useMemo(
     () => agents.filter((agent) => (agent.status ?? "").toLowerCase() === "online").length,
@@ -796,6 +1205,16 @@ export default function DashboardPage() {
           });
     return filtered.slice(0, 8);
   }, [activityCategory, orderedActivityEvents]);
+
+  const workerTelemetrySummary = useMemo(
+    () => buildWorkerTelemetrySummary(orderedActivityEvents, telemetryOpsMetrics),
+    [orderedActivityEvents, telemetryOpsMetrics],
+  );
+
+  const webhookTelemetrySummary = useMemo(
+    () => buildWebhookTelemetrySummary(orderedActivityEvents, telemetryOpsMetrics),
+    [orderedActivityEvents, telemetryOpsMetrics],
+  );
 
   const updateActivityCategory = (next: ActivityCategory | "runtime") => {
     const params = new URLSearchParams(searchParams.toString());
@@ -1050,6 +1469,22 @@ export default function DashboardPage() {
     }
     return `/activity?${params.toString()}`;
   }, [activityCategory]);
+  const workerFeedHref = useMemo(() => "/activity?category=runtime", []);
+  const webhookFeedHref = useMemo(() => "/activity?category=gateway", []);
+  const workerContextHref = useMemo(() => {
+    const boardId = telemetryOpsMetrics?.worker.latest_board_id;
+    const taskId = telemetryOpsMetrics?.worker.latest_task_id;
+    if (!boardId) return null;
+    if (taskId) {
+      return `/boards/${encodeURIComponent(boardId)}?taskId=${encodeURIComponent(taskId)}`;
+    }
+    return `/boards/${encodeURIComponent(boardId)}`;
+  }, [telemetryOpsMetrics]);
+  const webhookContextHref = useMemo(() => {
+    const boardId = telemetryOpsMetrics?.webhook.latest_board_id;
+    if (!boardId) return null;
+    return `/boards/${encodeURIComponent(boardId)}`;
+  }, [telemetryOpsMetrics]);
 
   const shouldIgnoreRowNavigation = (target: EventTarget | null): boolean => {
     if (!(target instanceof HTMLElement)) return false;
@@ -1191,6 +1626,65 @@ export default function DashboardPage() {
                   tone: gatewayBadgeTone,
                 }}
                 rows={gatewayRows}
+              />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <InfoBlock
+                title="Worker Telemetry"
+                infoText="Summarized from recent queue worker activity events."
+                badge={workerTelemetrySummary.badge}
+                rows={workerTelemetrySummary.rows}
+                actionHref={workerFeedHref}
+                actionLabel="Open feed"
+                secondaryActionHref={workerContextHref ?? undefined}
+                secondaryActionLabel={workerContextHref ? "Open task" : undefined}
+              />
+              <InfoBlock
+                title="Webhook Telemetry"
+                infoText="Summarized from recent webhook delivery activity events."
+                badge={webhookTelemetrySummary.badge}
+                rows={webhookTelemetrySummary.rows}
+                actionHref={webhookFeedHref}
+                actionLabel="Open feed"
+                secondaryActionHref={webhookContextHref ?? undefined}
+                secondaryActionLabel={webhookContextHref ? "Open board" : undefined}
+              />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <TopMetricCard
+                title="Worker Failures"
+                value={formatCount(
+                  telemetryOpsMetrics
+                    ? telemetryOpsMetrics.worker.failure_count_7d +
+                        telemetryOpsMetrics.worker.dequeue_failure_count_7d
+                    : 0,
+                )}
+                secondary={
+                  telemetryOpsMetrics?.worker.latest_at
+                    ? `Latest ${formatRelativeTimestamp(telemetryOpsMetrics.worker.latest_at)}`
+                    : "No recent worker signal"
+                }
+                infoText={`Queue worker failures and dequeue failures over ${DASHBOARD_RANGE_LABEL}`}
+                icon={<Timer className="h-4 w-4" />}
+                accent="violet"
+                onClick={() => router.push(workerFeedHref)}
+                ariaLabel="Open runtime activity feed for worker telemetry"
+              />
+              <TopMetricCard
+                title="Webhook Failures"
+                value={formatCount(telemetryOpsMetrics?.webhook.failure_count_7d ?? 0)}
+                secondary={
+                  telemetryOpsMetrics?.webhook.retried_count_7d
+                    ? `${formatCount(telemetryOpsMetrics.webhook.retried_count_7d)} retried`
+                    : "No retries"
+                }
+                infoText={`Webhook dispatch failures over ${DASHBOARD_RANGE_LABEL}`}
+                icon={<Shield className="h-4 w-4" />}
+                accent="green"
+                onClick={() => router.push(webhookFeedHref)}
+                ariaLabel="Open gateway activity feed for webhook telemetry"
               />
             </div>
 
@@ -1373,7 +1867,14 @@ export default function DashboardPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1 overflow-hidden">
                               <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                                <p className="uppercase tracking-wider text-slate-500">
+                                <span
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium ${dashboardActivityPillClass(
+                                    event.event_type,
+                                  )}`}
+                                >
+                                  {dashboardActivityLabel(event.event_type)}
+                                </span>
+                                <p className="uppercase tracking-wider text-slate-400">
                                   {event.event_type}
                                 </p>
                                 {content.runtimeStatus ? (

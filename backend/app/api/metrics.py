@@ -33,6 +33,9 @@ from app.schemas.metrics import (
     DashboardRuntimeRunRead,
     DashboardSeriesPoint,
     DashboardSeriesSet,
+    DashboardTelemetryOpsMetrics,
+    DashboardTelemetryWebhookMetrics,
+    DashboardTelemetryWorkerMetrics,
     DashboardWipPoint,
     DashboardWipRangeSeries,
     DashboardWipSeriesSet,
@@ -586,6 +589,113 @@ async def _runtime_execution_metrics(
     )
 
 
+def _payload_text(payload: dict[str, object] | None, key: str) -> str | None:
+    if not payload:
+        return None
+    value = payload.get(key)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _payload_int(payload: dict[str, object] | None, *keys: str) -> int | None:
+    if not payload:
+        return None
+    for key in keys:
+        value = payload.get(key)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+    return None
+
+
+async def _telemetry_ops_metrics(
+    session: AsyncSession,
+    range_spec: RangeSpec,
+    board_ids: list[UUID],
+) -> DashboardTelemetryOpsMetrics:
+    generated_at = utcnow()
+    if not board_ids:
+        return DashboardTelemetryOpsMetrics(
+            generated_at=generated_at,
+            worker=DashboardTelemetryWorkerMetrics(),
+            webhook=DashboardTelemetryWebhookMetrics(),
+        )
+
+    worker_recent = (
+        await session.exec(
+            select(ActivityEvent)
+            .where(col(ActivityEvent.event_type).like("queue.worker.%"))
+            .order_by(col(ActivityEvent.created_at).desc())
+            .limit(1)
+        )
+    ).first()
+    webhook_recent = (
+        await session.exec(
+            select(ActivityEvent)
+            .where(col(ActivityEvent.event_type).like("webhook.dispatch.%"))
+            .where(col(ActivityEvent.board_id).in_(board_ids))
+            .order_by(col(ActivityEvent.created_at).desc())
+            .limit(1)
+        )
+    ).first()
+
+    worker_period = (
+        await session.exec(
+            select(ActivityEvent.event_type, func.count())
+            .where(col(ActivityEvent.event_type).like("queue.worker.%"))
+            .where(col(ActivityEvent.created_at) >= range_spec.start)
+            .where(col(ActivityEvent.created_at) <= range_spec.end)
+            .group_by(col(ActivityEvent.event_type))
+        )
+    ).all()
+    webhook_period = (
+        await session.exec(
+            select(ActivityEvent.event_type, func.count())
+            .where(col(ActivityEvent.event_type).like("webhook.dispatch.%"))
+            .where(col(ActivityEvent.board_id).in_(board_ids))
+            .where(col(ActivityEvent.created_at) >= range_spec.start)
+            .where(col(ActivityEvent.created_at) <= range_spec.end)
+            .group_by(col(ActivityEvent.event_type))
+        )
+    ).all()
+
+    worker_counts = {str(event_type): int(total or 0) for event_type, total in worker_period}
+    webhook_counts = {str(event_type): int(total or 0) for event_type, total in webhook_period}
+
+    return DashboardTelemetryOpsMetrics(
+        generated_at=generated_at,
+        worker=DashboardTelemetryWorkerMetrics(
+            latest_event_type=worker_recent.event_type if worker_recent else None,
+            latest_at=worker_recent.created_at if worker_recent else None,
+            latest_queue_name=_payload_text(worker_recent.payload if worker_recent else None, "queue_name"),
+            latest_task_type=_payload_text(worker_recent.payload if worker_recent else None, "task_type"),
+            latest_attempt=_payload_int(worker_recent.payload if worker_recent else None, "attempt"),
+            latest_board_id=worker_recent.board_id if worker_recent else None,
+            latest_task_id=worker_recent.task_id if worker_recent else None,
+            success_count_7d=worker_counts.get("queue.worker.success", 0),
+            failure_count_7d=worker_counts.get("queue.worker.failed", 0),
+            dequeue_failure_count_7d=worker_counts.get("queue.worker.dequeue_failed", 0),
+        ),
+        webhook=DashboardTelemetryWebhookMetrics(
+            latest_event_type=webhook_recent.event_type if webhook_recent else None,
+            latest_at=webhook_recent.created_at if webhook_recent else None,
+            latest_payload_id=_payload_text(webhook_recent.payload if webhook_recent else None, "payload_id"),
+            latest_attempt=_payload_int(
+                webhook_recent.payload if webhook_recent else None,
+                "attempt",
+                "delivery_attempt",
+                "attempts",
+            ),
+            latest_board_id=webhook_recent.board_id if webhook_recent else None,
+            success_count_7d=webhook_counts.get("webhook.dispatch.success", 0),
+            failure_count_7d=webhook_counts.get("webhook.dispatch.failed", 0),
+            retried_count_7d=webhook_counts.get("webhook.dispatch.requeued", 0),
+        ),
+    )
+
+
 async def _resolve_dashboard_board_ids(
     session: AsyncSession,
     *,
@@ -706,3 +816,22 @@ async def dashboard_execution_runtime_metrics(
         group_id=group_id,
     )
     return await _runtime_execution_metrics(session, primary, board_ids)
+
+
+@router.get("/telemetry-ops", response_model=DashboardTelemetryOpsMetrics)
+async def dashboard_telemetry_ops_metrics(
+    range_key: DashboardRangeKey = RANGE_QUERY,
+    board_id: UUID | None = BOARD_ID_QUERY,
+    group_id: UUID | None = GROUP_ID_QUERY,
+    session: AsyncSession = SESSION_DEP,
+    ctx: OrganizationContext = ORG_MEMBER_DEP,
+) -> DashboardTelemetryOpsMetrics:
+    """Return worker and webhook telemetry snapshot for accessible boards."""
+    primary = _resolve_range(range_key)
+    board_ids = await _resolve_dashboard_board_ids(
+        session,
+        ctx=ctx,
+        board_id=board_id,
+        group_id=group_id,
+    )
+    return await _telemetry_ops_metrics(session, primary, board_ids)

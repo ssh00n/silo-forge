@@ -4,13 +4,53 @@ from uuid import uuid4
 
 from app.api.boards import _board_notification_payload
 from app.contracts.activity import (
+    parse_agent_activity_payload,
     parse_board_activity_payload,
     parse_gateway_activity_payload,
 )
 from app.models.agents import Agent
 from app.models.board_groups import BoardGroup
 from app.models.boards import Board
+from app.models.gateways import Gateway
 from app.services.openclaw.coordination_service import GatewayCoordinationService
+from app.services.openclaw.provisioning_db import AgentLifecycleService
+
+
+def test_agent_activity_payload_matches_contract() -> None:
+    gateway = Gateway(id=uuid4(), organization_id=uuid4(), name="Fox Host", slug="fox-host")
+    board = Board(id=uuid4(), organization_id=gateway.organization_id, name="Ops Board", slug="ops-board")
+    agent = Agent(
+        id=uuid4(),
+        board_id=board.id,
+        gateway_id=gateway.id,
+        name="Fox",
+        openclaw_session_id="agent:fox",
+    )
+
+    payload = AgentLifecycleService._agent_activity_payload(
+        agent,
+        action="provision",
+        delivery_status="sent",
+        gateway=gateway,
+        workspace_path="/tmp/fox",
+        target_kind="board_agent",
+    )
+
+    assert payload == {
+        "agent_id": str(agent.id),
+        "agent_name": "Fox",
+        "action": "provision",
+        "session_key": "agent:fox",
+        "board_id": str(board.id),
+        "delivery_status": "sent",
+        "gateway_id": str(gateway.id),
+        "gateway_name": "Fox Host",
+        "workspace_path": "/tmp/fox",
+        "target_kind": "board_agent",
+    }
+    parsed = parse_agent_activity_payload(payload)
+    assert parsed.agent_name == "Fox"
+    assert parsed.action == "provision"
 
 
 def test_board_notification_payload_matches_contract() -> None:

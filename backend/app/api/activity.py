@@ -47,6 +47,10 @@ ORG_MEMBER_DEP = Depends(require_org_member)
 BOARD_ID_QUERY = Query(default=None)
 SINCE_QUERY = Query(default=None)
 _RUNTIME_TYPE_REFERENCES = (UUID,)
+GLOBAL_ACTIVITY_EVENT_PATTERNS = (
+    "queue.worker.%",
+    "webhook.dispatch.batch_%",
+)
 
 
 def _parse_since(value: str | None) -> datetime | None:
@@ -116,6 +120,12 @@ def _build_activity_route(
     if event.task_id is not None:
         fallback_params["taskId"] = str(event.task_id)
     return ("activity", fallback_params)
+
+
+def _global_activity_visibility_clause() -> Any:
+    return or_(
+        *(col(ActivityEvent.event_type).like(pattern) for pattern in GLOBAL_ACTIVITY_EVENT_PATTERNS)
+    )
 
 
 def _feed_item(
@@ -274,6 +284,11 @@ async def _fetch_activity_events(
                     col(ActivityEvent.board_id).is_(None),
                     col(Task.board_id).in_(board_ids),
                 ),
+                and_(
+                    col(ActivityEvent.board_id).is_(None),
+                    col(ActivityEvent.task_id).is_(None),
+                    _global_activity_visibility_clause(),
+                ),
             ),
         )
     else:
@@ -322,6 +337,11 @@ async def list_activity(
                     and_(
                         col(ActivityEvent.board_id).is_(None),
                         col(Task.board_id).in_(board_ids),
+                    ),
+                    and_(
+                        col(ActivityEvent.board_id).is_(None),
+                        col(ActivityEvent.task_id).is_(None),
+                        _global_activity_visibility_clause(),
                     ),
                 ),
             )
