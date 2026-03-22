@@ -27,7 +27,7 @@ from app.models.silo_roles import SiloRole
 from app.models.silos import Silo
 from app.models.tasks import Task
 from app.models.users import User
-from app.schemas.task_execution_runs import TaskExecutionRunCreate
+from app.schemas.task_execution_runs import TaskExecutionRunCreate, TaskExecutionRunUpdate
 from app.services.organizations import OrganizationContext
 from app.services.task_execution_runs import TaskExecutionRunService
 from app.services.task_execution_worker import _maybe_simulate_stub_callback_loop
@@ -536,6 +536,117 @@ async def test_symphony_callback_exposes_explicit_operator_reason_fields() -> No
         assert body["last_message"] == "Lead approval requested."
     finally:
         settings.symphony_callback_token = original_callback_token
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_cancel_execution_run_marks_run_cancelled_with_operator_reason() -> None:
+    engine, session_maker = await _make_engine()
+    async with session_maker() as session:
+        ctx, board, task, silo, _lead = await _seed_context(session)
+        service = TaskExecutionRunService(session)
+        created = await service.create_run(
+            board=board,
+            task=task,
+            payload=TaskExecutionRunCreate(silo_slug=silo.slug),
+        )
+        await service.update_run(
+            organization_id=board.organization_id,
+            board=board,
+            task=task,
+            run_id=created.id,
+            payload=TaskExecutionRunUpdate(status="running", summary="Runtime active."),
+        )
+    app = _build_test_app(session_maker, ctx)
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            response = await client.post(
+                f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs/{created.id}/cancel",
+                json={"note": "Operator cancelled from the board panel."},
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "cancelled"
+        assert body["completion_kind"] == "operator_cancelled"
+        assert body["cancel_reason"] == "Operator cancelled from the board panel."
+        assert body["last_event"] == "operator_cancelled"
+        async with session_maker() as session:
+            updated_event = (
+                await session.exec(
+                    select(ActivityEvent)
+                    .where(col(ActivityEvent.task_id) == task.id)
+                    .where(col(ActivityEvent.event_type) == "task.execution_run.updated")
+                    .order_by(col(ActivityEvent.created_at).desc())
+                )
+            ).first()
+            assert updated_event is not None
+            assert updated_event.payload is not None
+            assert updated_event.payload["status"] == "cancelled"
+            assert updated_event.payload["cancel_reason"] == "Operator cancelled from the board panel."
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_acknowledge_execution_run_records_activity_event() -> None:
+    engine, session_maker = await _make_engine()
+    async with session_maker() as session:
+        ctx, board, task, silo, _lead = await _seed_context(session)
+        service = TaskExecutionRunService(session)
+        created = await service.create_run(
+            board=board,
+            task=task,
+            payload=TaskExecutionRunCreate(silo_slug=silo.slug),
+        )
+        await service.update_run(
+            organization_id=board.organization_id,
+            board=board,
+            task=task,
+            run_id=created.id,
+            payload=TaskExecutionRunUpdate(
+                status="blocked",
+                summary="Waiting for approval.",
+                result_payload={
+                    "completion_kind": "approval_blocked",
+                    "block_reason": "Waiting for lead approval before continuing.",
+                },
+            ),
+        )
+    app = _build_test_app(session_maker, ctx)
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            response = await client.post(
+                f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs/{created.id}/acknowledge",
+                json={"note": "Operator has seen the approval block."},
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "blocked"
+        async with session_maker() as session:
+            acknowledged_event = (
+                await session.exec(
+                    select(ActivityEvent)
+                    .where(col(ActivityEvent.task_id) == task.id)
+                    .where(col(ActivityEvent.event_type) == "task.execution_run.acknowledged")
+                    .order_by(col(ActivityEvent.created_at).desc())
+                )
+            ).first()
+            assert acknowledged_event is not None
+            assert acknowledged_event.message is not None
+            assert "Operator acknowledged Symphony run" in acknowledged_event.message
+            assert "Operator has seen the approval block." in acknowledged_event.message
+            assert acknowledged_event.payload is not None
+            assert acknowledged_event.payload["status"] == "blocked"
+            assert acknowledged_event.payload["summary"] == "Operator has seen the approval block."
+    finally:
         await engine.dispose()
 
 

@@ -39,6 +39,20 @@ class TaskExecutionRunCreate(SQLModel):
         return value
 
 
+class TaskExecutionRunOperatorAction(SQLModel):
+    """Operator action payload for cancel/acknowledge runtime actions."""
+
+    note: str | None = None
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def normalize_note(cls, value: object) -> object:
+        if isinstance(value, str):
+            trimmed = value.strip()
+            return trimmed or None
+        return value
+
+
 class TaskExecutionRunUpdate(SQLModel):
     """Patch payload for updating execution run status and results."""
 

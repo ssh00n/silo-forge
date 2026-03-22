@@ -64,6 +64,9 @@ import {
   parseTimestamp,
 } from "@/lib/formatters";
 import {
+  canAcknowledgeRuntimeRun,
+  canCancelRuntimeRun,
+  canRetryRuntimeRun,
   formatRuntimeDurationMs,
   runtimeRunOperatorState,
   type RuntimeRunSnapshot,
@@ -956,6 +959,9 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { isSignedIn } = useAuth();
   const [streamedActivityEvents, setStreamedActivityEvents] = useState<StreamedActivityEvent[]>([]);
+  const [retryingRunId, setRetryingRunId] = useState<string | null>(null);
+  const [cancellingRunId, setCancellingRunId] = useState<string | null>(null);
+  const [acknowledgingRunId, setAcknowledgingRunId] = useState<string | null>(null);
   const streamedActivityEventsRef = useRef<StreamedActivityEvent[]>([]);
   const activityCategory = useMemo<ActivityCategory | "runtime">(() => {
     const value = searchParams.get("activity");
@@ -1034,17 +1040,52 @@ export default function DashboardPage() {
     },
   });
 
-  const retryRuntimeRun = async (run: DashboardRuntimeRunSnapshot): Promise<void> => {
-    await customFetch<{ data: unknown; status: number; headers: Headers }>(
-      `/api/v1/boards/${encodeURIComponent(run.board_id)}/tasks/${encodeURIComponent(run.task_id)}/execution-runs/${encodeURIComponent(run.run_id)}/retry-dispatch`,
-      { method: "POST" },
-    );
+  const invalidateRuntimeViews = async (): Promise<void> => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["dashboard", "execution-runtime", DASHBOARD_RANGE] }),
       queryClient.invalidateQueries({ queryKey: ["dashboard", "telemetry-ops", DASHBOARD_RANGE] }),
       queryClient.invalidateQueries({ queryKey: ["/api/v1/metrics/dashboard", { range_key: DASHBOARD_RANGE }] }),
       queryClient.invalidateQueries({ queryKey: ["/api/v1/activity", { limit: 200 }] }),
     ]);
+  };
+
+  const retryRuntimeRun = async (run: DashboardRuntimeRunSnapshot): Promise<void> => {
+    setRetryingRunId(run.run_id);
+    try {
+      await customFetch<{ data: unknown; status: number; headers: Headers }>(
+        `/api/v1/boards/${encodeURIComponent(run.board_id)}/tasks/${encodeURIComponent(run.task_id)}/execution-runs/${encodeURIComponent(run.run_id)}/retry-dispatch`,
+        { method: "POST" },
+      );
+      await invalidateRuntimeViews();
+    } finally {
+      setRetryingRunId(null);
+    }
+  };
+
+  const cancelRuntimeRun = async (run: DashboardRuntimeRunSnapshot): Promise<void> => {
+    setCancellingRunId(run.run_id);
+    try {
+      await customFetch<{ data: unknown; status: number; headers: Headers }>(
+        `/api/v1/boards/${encodeURIComponent(run.board_id)}/tasks/${encodeURIComponent(run.task_id)}/execution-runs/${encodeURIComponent(run.run_id)}/cancel`,
+        { method: "POST" },
+      );
+      await invalidateRuntimeViews();
+    } finally {
+      setCancellingRunId(null);
+    }
+  };
+
+  const acknowledgeRuntimeRun = async (run: DashboardRuntimeRunSnapshot): Promise<void> => {
+    setAcknowledgingRunId(run.run_id);
+    try {
+      await customFetch<{ data: unknown; status: number; headers: Headers }>(
+        `/api/v1/boards/${encodeURIComponent(run.board_id)}/tasks/${encodeURIComponent(run.task_id)}/execution-runs/${encodeURIComponent(run.run_id)}/acknowledge`,
+        { method: "POST" },
+      );
+      await invalidateRuntimeViews();
+    } finally {
+      setAcknowledgingRunId(null);
+    }
   };
 
   const activityQuery = useListActivityApiV1ActivityGet<listActivityApiV1ActivityGetResponse, ApiError>(
@@ -2087,16 +2128,45 @@ export default function DashboardPage() {
                                     <ArrowUpRight className="h-3 w-3" />
                                   </a>
                                 ) : null}
-                                {["failed", "cancelled", "blocked"].includes(run.status) ? (
+                                {canRetryRuntimeRun(run.status) ? (
                                   <button
                                     type="button"
                                     onClick={async (event) => {
                                       event.stopPropagation();
                                       await retryRuntimeRun(run);
                                     }}
+                                    disabled={retryingRunId === run.run_id}
                                     className="mt-1 inline-flex items-center gap-1 text-[11px] text-amber-700 hover:text-amber-800"
                                   >
-                                    Retry
+                                    {retryingRunId === run.run_id ? "Retrying…" : "Retry"}
+                                  </button>
+                                ) : null}
+                                {canCancelRuntimeRun(run.status) ? (
+                                  <button
+                                    type="button"
+                                    onClick={async (event) => {
+                                      event.stopPropagation();
+                                      await cancelRuntimeRun(run);
+                                    }}
+                                    disabled={cancellingRunId === run.run_id}
+                                    className="mt-1 inline-flex items-center gap-1 text-[11px] text-rose-700 hover:text-rose-800"
+                                  >
+                                    {cancellingRunId === run.run_id ? "Cancelling…" : "Cancel"}
+                                  </button>
+                                ) : null}
+                                {canAcknowledgeRuntimeRun(run.status) ? (
+                                  <button
+                                    type="button"
+                                    onClick={async (event) => {
+                                      event.stopPropagation();
+                                      await acknowledgeRuntimeRun(run);
+                                    }}
+                                    disabled={acknowledgingRunId === run.run_id}
+                                    className="mt-1 inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-800"
+                                  >
+                                    {acknowledgingRunId === run.run_id
+                                      ? "Acknowledging…"
+                                      : "Acknowledge"}
                                   </button>
                                 ) : null}
                               </div>

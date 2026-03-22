@@ -297,6 +297,97 @@ class TaskExecutionRunService:
         await self._session.commit()
         return retried
 
+    async def cancel_run(
+        self,
+        *,
+        organization_id: UUID,
+        board: Board,
+        task: Task,
+        run_id: UUID,
+        note: str | None = None,
+    ) -> TaskExecutionRunRead:
+        """Cancel an active execution run from the operator surface."""
+        run = await crud.get_one_by(
+            self._session,
+            TaskExecutionRun,
+            organization_id=organization_id,
+            board_id=board.id,
+            task_id=task.id,
+            id=run_id,
+        )
+        if run is None:
+            raise ValueError("Execution run not found")
+        if run.status in {"succeeded", "failed", "cancelled"}:
+            raise ValueError("Only active or blocked runs can be cancelled")
+
+        summary = note or "Operator cancelled the run."
+        cancel_reason = note or "Operator cancelled the run from the control plane."
+        return await self.update_run(
+            organization_id=organization_id,
+            board=board,
+            task=task,
+            run_id=run.id,
+            payload=TaskExecutionRunUpdate(
+                status="cancelled",
+                summary=summary,
+                completion_kind="operator_cancelled",
+                cancel_reason=cancel_reason,
+                last_event="operator_cancelled",
+                last_message=summary,
+                result_payload={
+                    "completion_kind": "operator_cancelled",
+                    "cancel_reason": cancel_reason,
+                    "last_event": "operator_cancelled",
+                    "last_message": summary,
+                },
+            ),
+        )
+
+    async def acknowledge_run(
+        self,
+        *,
+        organization_id: UUID,
+        board: Board,
+        task: Task,
+        run_id: UUID,
+        note: str | None = None,
+    ) -> TaskExecutionRunRead:
+        """Record an operator acknowledgement event for a terminal execution run."""
+        run = await crud.get_one_by(
+            self._session,
+            TaskExecutionRun,
+            organization_id=organization_id,
+            board_id=board.id,
+            task_id=task.id,
+            id=run_id,
+        )
+        if run is None:
+            raise ValueError("Execution run not found")
+        if run.status not in {"failed", "cancelled", "blocked"}:
+            raise ValueError("Only failed, cancelled, or blocked runs can be acknowledged")
+
+        silo = await self._session.get(Silo, run.silo_id)
+        if silo is None:
+            raise ValueError("Silo not found")
+
+        message = f"Operator acknowledged Symphony run {self._short_run_id(run.id)}."
+        if note:
+            message = f"{message} {note}"
+
+        payload = self._build_run_payload(run=run, silo_slug=silo.slug)
+        if note:
+            payload["summary"] = note
+        record_activity(
+            self._session,
+            event_type="task.execution_run.acknowledged",
+            message=message,
+            payload=self._finalize_activity_payload(payload),
+            task_id=task.id,
+            board_id=board.id,
+        )
+        await self._session.commit()
+        return self._to_read(run, silo_slug=silo.slug)
+
     async def dispatch_run(
         self,
         *,

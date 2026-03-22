@@ -131,12 +131,14 @@ import { cn } from "@/lib/utils";
 import { usePageActive } from "@/hooks/usePageActive";
 import { fetchSilos } from "@/lib/silos";
 import {
+  canAcknowledgeRuntimeRun,
+  canCancelRuntimeRun,
+  canRetryRuntimeRun,
   formatRuntimeDurationMs,
   type TaskExecutionRunResponse,
   type TaskExecutionRunSnapshot,
   type TaskExecutionRunsResponse,
   runtimeRunOperatorState,
-  type RuntimeRunStatus,
   runtimeRunOperatorGuidance,
   runtimeRunTimingRows,
 } from "@/lib/runtime-runs";
@@ -216,6 +218,7 @@ const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "task.execution_run.retried",
   "task.execution_run.updated",
   "task.execution_run.report",
+  "task.execution_run.acknowledged",
   "task.created",
   "task.updated",
   "task.status_changed",
@@ -549,6 +552,7 @@ const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "task.execution_run.retried") return "Run retried";
   if (eventType === "task.execution_run.updated") return "Run update";
   if (eventType === "task.execution_run.report") return "Run report";
+  if (eventType === "task.execution_run.acknowledged") return "Run acknowledged";
   if (eventType === "task.created") return "Created";
   if (eventType === "task.status_changed") return "Status";
   if (eventType === "board.chat") return "Chat";
@@ -633,6 +637,9 @@ const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   }
   if (eventType === "task.execution_run.report") {
     return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "task.execution_run.acknowledged") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
   if (eventType === "task.created") {
     return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -754,6 +761,7 @@ const EXECUTION_RUN_LIVE_FEED_EVENTS = new Set<LiveFeedEventType>([
   "task.execution_run.retried",
   "task.execution_run.updated",
   "task.execution_run.report",
+  "task.execution_run.acknowledged",
 ]);
 
 const isExecutionRunLiveFeedEvent = (eventType: LiveFeedEventType): boolean =>
@@ -855,9 +863,6 @@ const executionRunPullRequestNumber = (
   return null;
 };
 
-const canRetryExecutionRun = (status: RuntimeRunStatus): boolean =>
-  status === "failed" || status === "cancelled" || status === "blocked";
-
 const commentElementId = (id: string): string =>
   `task-comment-${id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
@@ -944,17 +949,28 @@ TaskCommentCard.displayName = "TaskCommentCard";
 const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
   run,
   isRetrying,
+  isCancelling,
+  isAcknowledging,
   onRetry,
+  onCancel,
+  onAcknowledge,
 }: {
   run: TaskExecutionRunSnapshot;
   isRetrying: boolean;
+  isCancelling: boolean;
+  isAcknowledging: boolean;
   onRetry?: () => void;
+  onCancel?: () => void;
+  onAcknowledge?: () => void;
 }) {
   const totalTokens = executionRunTotalTokens(run);
   const pullRequestNumber = executionRunPullRequestNumber(run);
   const summary = (run.summary ?? "").trim();
   const errorMessage = (run.error_message ?? "").trim();
-  const canRetry = canRetryExecutionRun(run.status) && Boolean(onRetry);
+  const canRetry = canRetryRuntimeRun(run.status) && Boolean(onRetry);
+  const canCancel = canCancelRuntimeRun(run.status) && Boolean(onCancel);
+  const canAcknowledge =
+    canAcknowledgeRuntimeRun(run.status) && Boolean(onAcknowledge);
   const operatorState = runtimeRunOperatorState(run);
   const guidance = runtimeRunOperatorGuidance(run);
   const detailRows = [
@@ -1035,6 +1051,30 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
               className="h-8 px-2 text-xs"
             >
               {isRetrying ? "Retrying…" : "Retry"}
+            </Button>
+          ) : null}
+          {canCancel ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="h-8 px-2 text-xs"
+            >
+              {isCancelling ? "Cancelling…" : "Cancel"}
+            </Button>
+          ) : null}
+          {canAcknowledge ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onAcknowledge}
+              disabled={isAcknowledging}
+              className="h-8 px-2 text-xs"
+            >
+              {isAcknowledging ? "Acknowledging…" : "Acknowledge"}
             </Button>
           ) : null}
         </div>
@@ -1383,6 +1423,12 @@ export default function BoardDetailPage() {
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [postCommentError, setPostCommentError] = useState<string | null>(null);
   const [retryingExecutionRunId, setRetryingExecutionRunId] = useState<
+    string | null
+  >(null);
+  const [cancellingExecutionRunId, setCancellingExecutionRunId] = useState<
+    string | null
+  >(null);
+  const [acknowledgingExecutionRunId, setAcknowledgingExecutionRunId] = useState<
     string | null
   >(null);
   const [newExecutionRunSiloSlug, setNewExecutionRunSiloSlug] = useState("");
@@ -3476,6 +3522,61 @@ export default function BoardDetailPage() {
     [boardId, pushToast, queryClient, selectedTask],
   );
 
+  const invalidateExecutionRunViews = useCallback(async () => {
+    if (!selectedTask || !boardId) return;
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["board", boardId, "task", selectedTask.id, "execution-runs"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["/api/v1/activity", { limit: 200 }],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", "execution-runtime", "7d"],
+      }),
+    ]);
+  }, [boardId, queryClient, selectedTask]);
+
+  const handleCancelExecutionRun = useCallback(
+    async (run: TaskExecutionRunSnapshot) => {
+      if (!selectedTask || !boardId) return;
+      setCancellingExecutionRunId(run.id);
+      try {
+        await customFetch<TaskExecutionRunResponse>(
+          `/api/v1/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(selectedTask.id)}/execution-runs/${encodeURIComponent(run.id)}/cancel`,
+          { method: "POST" },
+        );
+        await invalidateExecutionRunViews();
+        pushToast("Run cancelled.", "success");
+      } catch (err) {
+        pushToast(formatActionError(err, "Unable to cancel execution run."));
+      } finally {
+        setCancellingExecutionRunId(null);
+      }
+    },
+    [boardId, invalidateExecutionRunViews, pushToast, selectedTask],
+  );
+
+  const handleAcknowledgeExecutionRun = useCallback(
+    async (run: TaskExecutionRunSnapshot) => {
+      if (!selectedTask || !boardId) return;
+      setAcknowledgingExecutionRunId(run.id);
+      try {
+        await customFetch<TaskExecutionRunResponse>(
+          `/api/v1/boards/${encodeURIComponent(boardId)}/tasks/${encodeURIComponent(selectedTask.id)}/execution-runs/${encodeURIComponent(run.id)}/acknowledge`,
+          { method: "POST" },
+        );
+        await invalidateExecutionRunViews();
+        pushToast("Run acknowledged.", "success");
+      } catch (err) {
+        pushToast(formatActionError(err, "Unable to acknowledge execution run."));
+      } finally {
+        setAcknowledgingExecutionRunId(null);
+      }
+    },
+    [boardId, invalidateExecutionRunViews, pushToast, selectedTask],
+  );
+
   const handleCreateExecutionRun = useCallback(async () => {
     if (!selectedTask || !boardId) return;
     const siloSlug = newExecutionRunSiloSlug.trim();
@@ -5011,9 +5112,21 @@ export default function BoardDetailPage() {
                       key={run.id}
                       run={run}
                       isRetrying={retryingExecutionRunId === run.id}
+                      isCancelling={cancellingExecutionRunId === run.id}
+                      isAcknowledging={acknowledgingExecutionRunId === run.id}
                       onRetry={
-                        canWrite && canRetryExecutionRun(run.status)
+                        canWrite && canRetryRuntimeRun(run.status)
                           ? () => handleRetryExecutionRun(run)
+                          : undefined
+                      }
+                      onCancel={
+                        canWrite && canCancelRuntimeRun(run.status)
+                          ? () => handleCancelExecutionRun(run)
+                          : undefined
+                      }
+                      onAcknowledge={
+                        canWrite && canAcknowledgeRuntimeRun(run.status)
+                          ? () => handleAcknowledgeExecutionRun(run)
                           : undefined
                       }
                     />
