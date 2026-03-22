@@ -1891,52 +1891,12 @@ export default function DashboardPage() {
                   { label: "Open", value: formatCount(siloRequestsSummary.openCount) },
                   { label: "Urgent", value: formatCount(siloRequestsSummary.urgentCount) },
                   {
-                    label: "Demand-linked",
-                    value: formatCount(siloRequestsSummary.demandLinkedCount),
-                  },
-                  {
                     label: "Materialized",
                     value: formatCount(siloRequestsSummary.materializedRecentCount),
                   },
                 ]}
                 actionHref="/silos/requests"
                 actionLabel="Open queue"
-              />
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <TopMetricCard
-                title="Worker Failures"
-                value={formatCount(
-                  telemetryOpsMetrics
-                    ? telemetryOpsMetrics.worker.failure_count_7d +
-                        telemetryOpsMetrics.worker.dequeue_failure_count_7d
-                    : 0,
-                )}
-                secondary={
-                  telemetryOpsMetrics?.worker.latest_at
-                    ? `Latest ${formatRelativeTimestamp(telemetryOpsMetrics.worker.latest_at)}`
-                    : "No recent worker signal"
-                }
-                infoText={`Queue worker failures and dequeue failures over ${DASHBOARD_RANGE_LABEL}`}
-                icon={<Timer className="h-4 w-4" />}
-                accent="violet"
-                onClick={() => router.push(workerFeedHref)}
-                ariaLabel="Open runtime activity feed for worker telemetry"
-              />
-              <TopMetricCard
-                title="Webhook Failures"
-                value={formatCount(telemetryOpsMetrics?.webhook.failure_count_7d ?? 0)}
-                secondary={
-                  telemetryOpsMetrics?.webhook.retried_count_7d
-                    ? `${formatCount(telemetryOpsMetrics.webhook.retried_count_7d)} retried`
-                    : "No retries"
-                }
-                infoText={`Webhook dispatch failures over ${DASHBOARD_RANGE_LABEL}`}
-                icon={<Shield className="h-4 w-4" />}
-                accent="green"
-                onClick={() => router.push(webhookFeedHref)}
-                ariaLabel="Open gateway activity feed for webhook telemetry"
               />
             </div>
 

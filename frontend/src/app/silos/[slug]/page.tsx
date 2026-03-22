@@ -139,6 +139,7 @@ export default function SiloDetailPage() {
   const healthSummary = opsViewModel?.healthSummary ?? null;
   const runtimePosture = opsViewModel?.runtimePosture ?? "Loading";
   const workloadGuidance = opsViewModel?.workloadGuidance ?? "Loading";
+  const nextActions = opsViewModel?.nextActions ?? [];
   const configDirty = detail
     ? hasSiloConfigChanges({
         detail,
@@ -395,6 +396,36 @@ export default function SiloDetailPage() {
                 No task-backed runtime runs have been dispatched to this silo yet.
               </p>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {detail ? (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">What next</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Operator follow-up for this silo right now.
+            </p>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            {nextActions.map((action) => (
+              <div
+                key={action.title}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-slate-900">{action.title}</p>
+                  <Badge
+                    variant={siloToneBadgeVariant(action.tone)}
+                    className="px-2.5 py-1 text-xs font-medium normal-case tracking-normal"
+                  >
+                    {action.tone}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-600">{action.detail}</p>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}

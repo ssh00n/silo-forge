@@ -54,6 +54,11 @@ export type SiloDetailOpsViewModel = {
   };
   runtimePosture: string;
   workloadGuidance: string;
+  nextActions: Array<{
+    title: string;
+    detail: string;
+    tone: "success" | "warning" | "danger" | "neutral";
+  }>;
 };
 
 export type TaskDispatchViewModel = {
@@ -217,13 +222,97 @@ const buildSiloWorkloadGuidance = (detail: SiloDetail): string => {
   return "Recent runs completed; review the latest work before assigning more load.";
 };
 
+const buildSiloNextActions = (
+  detail: SiloDetail,
+  healthSummary: SiloDetailOpsViewModel["healthSummary"],
+): SiloDetailOpsViewModel["nextActions"] => {
+  const actions: SiloDetailOpsViewModel["nextActions"] = [];
+  const workload = detail.workload_summary;
+  const gatewayRoleCount = getGatewayRuntimeRoleCount(detail);
+  const assignedGatewayRoles = getAssignedGatewayRoleCount(detail);
+  const latestRuntimeBlockedCount = getLatestRuntimeBlockedCount(detail);
+  const readyTargetCount = getReadyProvisionTargetCount(detail);
+
+  if ((workload?.blocked_run_count ?? 0) > 0) {
+    actions.push({
+      title: "Resolve blocked runs",
+      detail:
+        "Open the blocked runtime work below, clear approvals or dependency gates, then retry on the same silo when continuity still makes sense.",
+      tone: "danger",
+    });
+  } else if ((workload?.failed_run_count ?? 0) > 0) {
+    actions.push({
+      title: "Investigate recent failures",
+      detail:
+        "Review failed runtime work on this silo before routing more sensitive tasks here.",
+      tone: "warning",
+    });
+  }
+
+  if (gatewayRoleCount > 0 && assignedGatewayRoles < gatewayRoleCount) {
+    actions.push({
+      title: "Finish gateway assignment",
+      detail:
+        "Gateway-backed roles are still unassigned. Complete setup before expecting stable execution.",
+      tone: "warning",
+    });
+  } else if (!detail.latest_runtime_operation) {
+    actions.push({
+      title: "Validate runtime",
+      detail:
+        "Run validation once to confirm this silo is ready before dispatching live work.",
+      tone: "neutral",
+    });
+  } else if (latestRuntimeBlockedCount > 0) {
+    actions.push({
+      title: "Clear runtime blockers",
+      detail:
+        "The latest runtime operation still has blocked targets. Resolve them before trusting this silo with more work.",
+      tone: "warning",
+    });
+  } else if (
+    detail.latest_runtime_operation.mode === "validate" &&
+    readyTargetCount > 0 &&
+    detail.silo.status !== "active"
+  ) {
+    actions.push({
+      title: "Apply validated runtime",
+      detail:
+        "Validation is clean enough. Apply runtime to move this silo into an operational state.",
+      tone: "success",
+    });
+  }
+
+  if ((workload?.active_run_count ?? 0) > 0) {
+    actions.push({
+      title: "Monitor current work",
+      detail:
+        "This silo is already carrying active runtime work. Keep continuity in mind before moving tasks elsewhere.",
+      tone: "neutral",
+    });
+  } else if (healthSummary.label === "Healthy") {
+    actions.push({
+      title: "Use this silo for the next task",
+      detail:
+        "This silo is healthy and idle. It is a strong candidate for the next runtime dispatch.",
+      tone: "success",
+    });
+  }
+
+  return actions.slice(0, 3);
+};
+
 export const buildSiloDetailOpsViewModel = (
   detail: SiloDetail,
-): SiloDetailOpsViewModel => ({
-  healthSummary: buildSiloDetailHealthSummary(detail),
-  runtimePosture: buildSiloRuntimePosture(detail),
-  workloadGuidance: buildSiloWorkloadGuidance(detail),
-});
+): SiloDetailOpsViewModel => {
+  const healthSummary = buildSiloDetailHealthSummary(detail);
+  return {
+    healthSummary,
+    runtimePosture: buildSiloRuntimePosture(detail),
+    workloadGuidance: buildSiloWorkloadGuidance(detail),
+    nextActions: buildSiloNextActions(detail, healthSummary),
+  };
+};
 
 const ACTIVE_ASSIGNMENT_STATUSES = new Set(["queued", "dispatching", "running", "blocked"]);
 
