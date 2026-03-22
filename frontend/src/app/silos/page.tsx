@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   buildSiloOverviewPosture,
   dispatchReasonClass,
+  summarizeSiloHealth,
 } from "@/lib/silo-dispatch";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
 import { fetchSilos } from "@/lib/silos";
@@ -29,17 +30,16 @@ export default function SilosPage() {
   });
 
   const silos = useMemo(() => silosQuery.data ?? [], [silosQuery.data]);
+  const siloHealthSummary = useMemo(() => summarizeSiloHealth(silos), [silos]);
   const siloSummary = useMemo(
     () => ({
-      total: silos.length,
-      ready: silos.filter((silo) => silo.status === "active").length,
-      needsSetup: silos.filter((silo) => silo.status === "draft").length,
+      total: siloHealthSummary.totalCount,
+      ready: siloHealthSummary.readyCount,
+      needsSetup: siloHealthSummary.needsSetupCount,
       activeWork: silos.filter((silo) => silo.active_run_count > 0).length,
-      needsAttention: silos.filter(
-        (silo) => silo.blocked_run_count > 0 || silo.failed_run_count > 0,
-      ).length,
+      needsAttention: siloHealthSummary.needsAttentionCount,
     }),
-    [silos],
+    [siloHealthSummary, silos],
   );
 
   return (

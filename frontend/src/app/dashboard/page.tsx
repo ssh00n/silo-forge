@@ -76,10 +76,15 @@ import {
   runtimeRunTimingLabel,
 } from "@/lib/runtime-runs";
 import {
+  buildSiloOverviewPosture,
+  summarizeSiloHealth,
+} from "@/lib/silo-dispatch";
+import {
   describeSiloRequestPressure,
   fetchSiloSpawnRequests,
   isOpenSiloRequestStatus,
 } from "@/lib/silo-spawn-requests";
+import { fetchSilos } from "@/lib/silos";
 import { cn } from "@/lib/utils";
 
 type SessionSummary = {
@@ -1083,6 +1088,13 @@ export default function DashboardPage() {
     refetchInterval: 30_000,
     refetchOnMount: "always",
   });
+  const silosQuery = useQuery({
+    queryKey: ["silos", "dashboard"],
+    queryFn: fetchSilos,
+    enabled: Boolean(isSignedIn),
+    refetchInterval: 30_000,
+    refetchOnMount: "always",
+  });
 
   const invalidateRuntimeViews = async (): Promise<void> => {
     await Promise.all([
@@ -1210,6 +1222,36 @@ export default function DashboardPage() {
       },
     );
   }, [siloRequestsQuery.data]);
+  const siloHealthSummary = useMemo(
+    () => summarizeSiloHealth(silosQuery.data ?? []),
+    [silosQuery.data],
+  );
+  const siloHealthBadge = useMemo(() => {
+    if (siloHealthSummary.totalCount === 0) {
+      return { text: "No silos", tone: "neutral" as const };
+    }
+    if (siloHealthSummary.needsAttentionCount > 0) {
+      return { text: "Needs attention", tone: "offline" as const };
+    }
+    if (siloHealthSummary.needsSetupCount > 0) {
+      return { text: "Needs setup", tone: "neutral" as const };
+    }
+    if (siloHealthSummary.busyCount > 0) {
+      return { text: "Operational", tone: "neutral" as const };
+    }
+    return { text: "Ready", tone: "online" as const };
+  }, [siloHealthSummary]);
+  const siloHealthContextHref = useMemo(() => {
+    const silos = silosQuery.data ?? [];
+    if (silos.length === 0) return null;
+    const ranked = [...silos].sort((left, right) => {
+      const leftPosture = buildSiloOverviewPosture(left);
+      const rightPosture = buildSiloOverviewPosture(right);
+      return rightPosture.score - leftPosture.score;
+    });
+    const primary = ranked[0];
+    return primary ? `/silos/${primary.slug}` : null;
+  }, [silosQuery.data]);
 
   const onlineAgents = useMemo(
     () => agents.filter((agent) => (agent.status ?? "").toLowerCase() === "online").length,
@@ -1777,7 +1819,25 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-4">
+              <InfoBlock
+                title="Silo Health"
+                infoText="Core operating posture for the silos that can take work now."
+                badge={siloHealthBadge}
+                rows={[
+                  { label: "Ready now", value: formatCount(siloHealthSummary.readyCount) },
+                  { label: "Busy", value: formatCount(siloHealthSummary.busyCount) },
+                  {
+                    label: "Needs attention",
+                    value: formatCount(siloHealthSummary.needsAttentionCount),
+                  },
+                  { label: "Needs setup", value: formatCount(siloHealthSummary.needsSetupCount) },
+                ]}
+                actionHref="/silos"
+                actionLabel="Open silos"
+                secondaryActionHref={siloHealthContextHref ?? undefined}
+                secondaryActionLabel={siloHealthContextHref ? "Open next silo" : undefined}
+              />
               <InfoBlock
                 title="Worker Telemetry"
                 infoText="Summarized from recent queue worker activity events."
@@ -1800,18 +1860,13 @@ export default function DashboardPage() {
               />
               <InfoBlock
                 title="Silo Requests"
-                infoText="Requested silo demand waiting to be planned or materialized."
+                infoText="Secondary planning queue for future silo demand."
                 rows={[
                   { label: "Open", value: formatCount(siloRequestsSummary.openCount) },
                   { label: "Urgent", value: formatCount(siloRequestsSummary.urgentCount) },
-                  { label: "High", value: formatCount(siloRequestsSummary.highCount) },
                   {
                     label: "Demand-linked",
                     value: formatCount(siloRequestsSummary.demandLinkedCount),
-                  },
-                  {
-                    label: "Active workload",
-                    value: formatCount(siloRequestsSummary.activeWorkloadCount),
                   },
                   {
                     label: "Materialized",

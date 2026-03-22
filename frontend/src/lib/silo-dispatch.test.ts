@@ -6,6 +6,7 @@ import {
   buildSiloOverviewPosture,
   buildTaskDemandProfile,
   dispatchReasonClass,
+  summarizeSiloHealth,
 } from "./silo-dispatch";
 
 const buildSilo = (overrides: Partial<SiloSummary> = {}): SiloSummary => ({
@@ -59,6 +60,21 @@ describe("silo-dispatch helpers", () => {
 
     expect(posture.readinessLabel).toBe("Available but busy");
     expect(posture.reasons.some((reason) => reason.label === "Active load 2")).toBe(true);
+  });
+
+  it("summarizes silo health using shared posture vocabulary", () => {
+    const summary = summarizeSiloHealth([
+      buildSilo(),
+      buildSilo({ active_run_count: 1 }),
+      buildSilo({ blocked_run_count: 1 }),
+      buildSilo({ status: "draft" }),
+    ]);
+
+    expect(summary.totalCount).toBe(4);
+    expect(summary.readyCount).toBe(1);
+    expect(summary.busyCount).toBe(1);
+    expect(summary.needsAttentionCount).toBe(1);
+    expect(summary.needsSetupCount).toBe(1);
   });
 
   it("builds approval pressure demand profile", () => {

@@ -30,6 +30,14 @@ export type TaskDemandProfile = {
   reasons: DispatchReason[];
 };
 
+export type SiloHealthSummary = {
+  totalCount: number;
+  readyCount: number;
+  busyCount: number;
+  needsAttentionCount: number;
+  needsSetupCount: number;
+};
+
 export const dispatchReasonClass = (tone: DispatchReason["tone"]): string => {
   if (tone === "success") return "bg-emerald-50 text-emerald-700";
   if (tone === "warning") return "bg-amber-50 text-amber-700";
@@ -138,6 +146,26 @@ export const buildSiloDispatchCandidate = (
 
 export const buildSiloOverviewPosture = (silo: SiloSummary): SiloDispatchCandidate =>
   buildSiloDispatchCandidate(silo, null);
+
+export const summarizeSiloHealth = (silos: SiloSummary[]): SiloHealthSummary =>
+  silos.reduce<SiloHealthSummary>(
+    (acc, silo) => {
+      acc.totalCount += 1;
+      const posture = buildSiloOverviewPosture(silo);
+      if (posture.readinessLabel === "Ready now") acc.readyCount += 1;
+      else if (posture.readinessLabel === "Available but busy") acc.busyCount += 1;
+      else if (posture.readinessLabel === "Needs attention") acc.needsAttentionCount += 1;
+      else acc.needsSetupCount += 1;
+      return acc;
+    },
+    {
+      totalCount: 0,
+      readyCount: 0,
+      busyCount: 0,
+      needsAttentionCount: 0,
+      needsSetupCount: 0,
+    },
+  );
 
 export const buildTaskDemandProfile = (
   task: TaskDemandInput,
