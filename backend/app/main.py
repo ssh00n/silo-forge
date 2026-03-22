@@ -26,6 +26,7 @@ from app.api.gateways import router as gateways_router
 from app.api.metrics import router as metrics_router
 from app.api.organizations import router as organizations_router
 from app.api.silo_blueprints import router as silo_blueprints_router
+from app.api.silo_spawn_requests import router as silo_spawn_requests_router
 from app.api.silo_provision_plans import router as silo_provision_plans_router
 from app.api.silo_runtime import router as silo_runtime_router
 from app.api.silos import router as silos_router
@@ -571,6 +572,7 @@ api_v1.include_router(organizations_router)
 api_v1.include_router(souls_directory_router)
 api_v1.include_router(skills_marketplace_router)
 api_v1.include_router(silo_blueprints_router)
+api_v1.include_router(silo_spawn_requests_router)
 api_v1.include_router(silos_router)
 api_v1.include_router(silo_provision_plans_router)
 api_v1.include_router(silo_runtime_router)

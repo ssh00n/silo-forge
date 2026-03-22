@@ -29,9 +29,13 @@ import {
   collectSiloWarnings,
   getAssignedGatewayRoleCount,
   getBlockedProvisionTargetCount,
+  getGatewayRuntimeRoleCount,
   getLatestRuntimeAttemptedCount,
   getLatestRuntimeBlockedCount,
   getReadyProvisionTargetCount,
+  getSiloHealthSummary,
+  getSiloRuntimePosture,
+  getSiloWorkloadGuidance,
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
 } from "@/lib/silo-detail";
@@ -126,11 +130,15 @@ export default function SiloDetailPage() {
   const assignedGatewayRoleCount = detail ? getAssignedGatewayRoleCount(detail) : 0;
   const readyTargetCount = detail ? getReadyProvisionTargetCount(detail) : 0;
   const blockedTargetCount = detail ? getBlockedProvisionTargetCount(detail) : 0;
+  const gatewayRuntimeRoleCount = detail ? getGatewayRuntimeRoleCount(detail) : 0;
   const latestRuntimeAttemptedCount = detail
     ? getLatestRuntimeAttemptedCount(detail)
     : 0;
   const latestRuntimeBlockedCount = detail ? getLatestRuntimeBlockedCount(detail) : 0;
   const canApplyRuntime = detail ? hasActionableProvisionTargets(detail) : false;
+  const healthSummary = detail ? getSiloHealthSummary(detail) : null;
+  const runtimePosture = detail ? getSiloRuntimePosture(detail) : "Loading";
+  const workloadGuidance = detail ? getSiloWorkloadGuidance(detail) : "Loading";
   const configDirty = detail
     ? hasSiloConfigChanges({
         detail,
@@ -220,6 +228,40 @@ export default function SiloDetailPage() {
         </div>
       ) : null}
 
+      {detail ? (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Silo operations</p>
+              <p className="mt-1 text-sm text-slate-600">
+                {healthSummary?.guidance}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-medium">
+              <span
+                className={`rounded-full px-3 py-1 ${
+                  healthSummary?.tone === "success"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : healthSummary?.tone === "danger"
+                      ? "bg-rose-100 text-rose-800"
+                      : healthSummary?.tone === "warning"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-white text-slate-700"
+                }`}
+              >
+                {healthSummary?.label}
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-slate-700">
+                {assignedGatewayRoleCount}/{gatewayRuntimeRoleCount} assigned
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-slate-700">
+                {runtimePosture}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {detail?.latest_runtime_operation ? (
         <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -241,6 +283,125 @@ export default function SiloDetailPage() {
                 {detail.latest_runtime_operation.results.length} total
               </span>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {detail?.source_request_id ? (
+        <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-blue-900">Created from silo request</p>
+              <p className="mt-1 text-sm text-blue-800">
+                {detail.source_request_display_name ?? "Silo request"} ·{" "}
+                {detail.source_request_status ?? "linked"}
+              </p>
+            </div>
+            <Link
+              href="/silos/requests"
+              className="text-sm font-medium text-blue-700 hover:text-blue-900"
+            >
+              Open requests
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
+      {detail?.workload_summary ? (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Current work</p>
+              <p className="mt-1 text-sm text-slate-600">{workloadGuidance}</p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-medium">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                {detail.workload_summary.active_run_count} active
+              </span>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800">
+                {detail.workload_summary.blocked_run_count} blocked
+              </span>
+              <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-800">
+                {detail.workload_summary.failed_run_count} failed
+              </span>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Queued</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {detail.workload_summary.queued_run_count}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Running</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {detail.workload_summary.running_run_count}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Blocked</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-700">
+                {detail.workload_summary.blocked_run_count}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Failed</p>
+              <p className="mt-1 text-2xl font-semibold text-rose-700">
+                {detail.workload_summary.failed_run_count}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 space-y-3">
+            {detail.workload_summary.recent_runs.length > 0 ? (
+              detail.workload_summary.recent_runs.map((run) => (
+                <div
+                  key={run.id}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900">{run.task_title}</p>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
+                          {run.status}
+                        </span>
+                        {run.task_priority ? (
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
+                            {run.task_priority}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Role {run.role_slug}
+                        {run.task_status ? ` · Task ${run.task_status}` : ""}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/boards/${run.board_id}?taskId=${run.task_id}`}
+                      className="text-sm font-medium text-blue-700 hover:text-blue-900"
+                    >
+                      Open task
+                    </Link>
+                  </div>
+                  {run.summary ? (
+                    <p className="mt-2 text-sm text-slate-700">{run.summary}</p>
+                  ) : null}
+                  {run.failure_reason || run.block_reason || run.cancel_reason || run.stall_reason ? (
+                    <p className="mt-2 text-xs text-slate-500">
+                      {run.failure_reason ??
+                        run.block_reason ??
+                        run.cancel_reason ??
+                        run.stall_reason}
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500">
+                No task-backed runtime runs have been dispatched to this silo yet.
+              </p>
+            )}
           </div>
         </div>
       ) : null}
@@ -268,40 +429,59 @@ export default function SiloDetailPage() {
           <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Roles</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Health</p>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold text-slate-900">{detail.silo.role_count}</p>
+                <p className="text-3xl font-semibold text-slate-900">
+                  {healthSummary?.label ?? "Draft"}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">{detail.silo.status}</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Telemetry</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Assignments</p>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-semibold text-slate-900">
-                  {detail.silo.enable_telemetry ? "On" : "Off"}
+                  {assignedGatewayRoleCount}/{gatewayRuntimeRoleCount}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">gateway-backed roles assigned</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Runtime</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-slate-900">
+                  {runtimePosture}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  {latestRuntimeAttemptedCount} attempted · {latestRuntimeBlockedCount} blocked
                 </p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Symphony</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Capabilities</p>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-semibold text-slate-900">
-                  {detail.silo.enable_symphony ? "On" : "Off"}
+                  {detail.silo.enable_symphony ? "Symphony" : "Gateway"}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Telemetry {detail.silo.enable_telemetry ? "on" : "off"} · {detail.silo.role_count} roles
                 </p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Runtime Ready</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Ready targets</p>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold text-slate-900">
-                  {readyTargetCount}
-                </p>
+                <p className="text-3xl font-semibold text-slate-900">{readyTargetCount}</p>
+                <p className="mt-2 text-sm text-slate-500">targets can accept apply/validate</p>
               </CardContent>
             </Card>
             <Card>
@@ -310,16 +490,7 @@ export default function SiloDetailPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-semibold text-slate-900">{blockedTargetCount}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Assigned</p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold text-slate-900">
-                  {assignedGatewayRoleCount}
-                </p>
+                <p className="mt-2 text-sm text-slate-500">targets still need operator follow-up</p>
               </CardContent>
             </Card>
           </div>

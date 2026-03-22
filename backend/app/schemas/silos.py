@@ -92,6 +92,7 @@ class SiloBlueprintRead(SQLModel):
 class SiloRead(SQLModel):
     """Read model returned for silo overview pages."""
 
+    id: str | None = None
     slug: str
     name: str
     blueprint_slug: str
@@ -100,6 +101,10 @@ class SiloRead(SQLModel):
     enable_symphony: bool = False
     enable_telemetry: bool = False
     role_count: int = 0
+    active_run_count: int = 0
+    blocked_run_count: int = 0
+    failed_run_count: int = 0
+    last_activity_at: str | None = None
 
 
 class SiloRoleDesiredState(SQLModel):
@@ -143,6 +148,7 @@ class SiloCreate(SQLModel):
 
     name: str
     blueprint_slug: str
+    spawn_request_id: str | None = None
     blueprint_version: str | None = None
     owner_display_name: str | None = None
     enable_symphony: bool = False
@@ -298,11 +304,59 @@ class SiloRuntimeHistoryEntryRead(SQLModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class SiloWorkloadRunRead(SQLModel):
+    """Recent execution run summary scoped to one silo."""
+
+    id: str
+    board_id: str
+    task_id: str
+    task_title: str
+    task_status: str | None = None
+    task_priority: str | None = None
+    role_slug: str
+    status: Literal[
+        "queued",
+        "dispatching",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "blocked",
+    ]
+    summary: str | None = None
+    completion_kind: str | None = None
+    failure_reason: str | None = None
+    block_reason: str | None = None
+    cancel_reason: str | None = None
+    stall_reason: str | None = None
+    created_at: str
+    updated_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+
+
+class SiloWorkloadSummaryRead(SQLModel):
+    """Operator-facing workload summary for one silo."""
+
+    active_run_count: int = 0
+    queued_run_count: int = 0
+    running_run_count: int = 0
+    blocked_run_count: int = 0
+    failed_run_count: int = 0
+    recent_runs: list[SiloWorkloadRunRead] = Field(default_factory=list)
+    last_activity_at: str | None = None
+
+
 class SiloDetailRead(SQLModel):
     """Detailed silo view for operator-facing Silo Detail pages."""
 
+    source_request_id: str | None = None
+    source_request_slug: str | None = None
+    source_request_status: str | None = None
+    source_request_display_name: str | None = None
     silo: SiloRead
     desired_state: SiloPreviewRead
     roles: list[SiloRoleDesiredState] = Field(default_factory=list)
     provision_plan: SiloProvisionPlanRead | None = None
     latest_runtime_operation: SiloRuntimeHistoryEntryRead | None = None
+    workload_summary: SiloWorkloadSummaryRead | None = None

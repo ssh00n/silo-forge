@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import APIRouter, FastAPI
@@ -18,6 +18,7 @@ from app.db.session import get_session
 from app.models.gateways import Gateway
 from app.models.organization_members import OrganizationMember
 from app.models.organizations import Organization
+from app.models.task_execution_runs import TaskExecutionRun
 from app.models.users import User
 from app.services.organizations import OrganizationContext
 
@@ -148,6 +149,53 @@ async def test_list_silos_via_api_returns_persisted_items() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_silos_via_api_includes_workload_overview() -> None:
+    engine = await _make_engine()
+    session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_maker() as session:
+        ctx, _ = await _seed_org_context(session)
+    app = _build_test_app(session_maker, ctx)
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            create_response = await client.post(
+                "/api/v1/silos",
+                json={"name": "Demo Silo", "blueprint_slug": "default-four-agent"},
+            )
+
+        silo_id = UUID(create_response.json()["id"])
+        async with session_maker() as session:
+            session.add(
+                TaskExecutionRun(
+                    organization_id=ctx.organization.id,
+                    board_id=uuid4(),
+                    task_id=uuid4(),
+                    silo_id=silo_id,
+                    role_slug="otter",
+                    status="failed",
+                    task_snapshot={"title": "Recover worker", "status": "review", "priority": "high"},
+                ),
+            )
+            await session.commit()
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/api/v1/silos")
+
+        assert response.status_code == 200
+        assert response.json()[0]["failed_run_count"] == 1
+        assert response.json()[0]["active_run_count"] == 0
+        assert response.json()[0]["last_activity_at"] is not None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_create_silo_via_api_returns_404_for_unknown_gateway() -> None:
     engine = await _make_engine()
     session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -176,6 +224,64 @@ async def test_create_silo_via_api_returns_404_for_unknown_gateway() -> None:
 
         assert response.status_code == 404
         assert "Unknown gateway id" in response.json()["detail"]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_get_silo_detail_includes_workload_summary() -> None:
+    engine = await _make_engine()
+    session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with session_maker() as session:
+        ctx, _gateway = await _seed_org_context(session)
+        create_app = _build_test_app(session_maker, ctx)
+        async with AsyncClient(
+            transport=ASGITransport(app=create_app),
+            base_url="http://testserver",
+        ) as client:
+            create_response = await client.post(
+                "/api/v1/silos",
+                json={"name": "Demo Silo", "blueprint_slug": "default-four-agent"},
+            )
+        silo_id = create_response.json()["id"]
+
+    async with session_maker() as session:
+        run = TaskExecutionRun(
+            organization_id=ctx.organization.id,
+            board_id=uuid4(),
+            task_id=uuid4(),
+            silo_id=uuid4() if silo_id is None else silo_id,
+            role_slug="otter",
+            status="blocked",
+            task_snapshot={
+                "title": "Investigate flaky runtime",
+                "status": "in_progress",
+                "priority": "high",
+            },
+            summary="Approval gate is blocking runtime progress.",
+            result_payload={"block_reason": "approval_pending"},
+        )
+        # SQLModel accepts UUID for silo_id; coerce string response back here.
+        run.silo_id = UUID(str(silo_id))
+        session.add(run)
+        await session.commit()
+
+    app = _build_test_app(session_maker, ctx)
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/api/v1/silos/demo-silo/detail")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["silo"]["slug"] == "demo-silo"
+        assert payload["workload_summary"]["active_run_count"] == 0
+        assert payload["workload_summary"]["blocked_run_count"] == 1
+        assert payload["workload_summary"]["recent_runs"][0]["task_title"] == "Investigate flaky runtime"
+        assert payload["workload_summary"]["recent_runs"][0]["block_reason"] == "approval_pending"
     finally:
         await engine.dispose()
 

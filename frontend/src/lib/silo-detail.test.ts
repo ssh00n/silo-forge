@@ -9,6 +9,8 @@ import {
   getLatestRuntimeAttemptedCount,
   getLatestRuntimeBlockedCount,
   getReadyProvisionTargetCount,
+  getSiloHealthSummary,
+  getSiloWorkloadGuidance,
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
 } from "./silo-detail";
@@ -101,6 +103,36 @@ const buildDetail = (overrides: Partial<SiloDetail> = {}): SiloDetail => ({
       },
     ],
   },
+  workload_summary: {
+    active_run_count: 1,
+    queued_run_count: 0,
+    running_run_count: 1,
+    blocked_run_count: 0,
+    failed_run_count: 0,
+    last_activity_at: "2026-03-20T00:05:00Z",
+    recent_runs: [
+      {
+        id: "run-1",
+        board_id: "board-1",
+        task_id: "task-1",
+        task_title: "Validate launch plan",
+        task_status: "in_progress",
+        task_priority: "high",
+        role_slug: "symphony",
+        status: "running",
+        summary: "Symphony worker session started.",
+        completion_kind: null,
+        failure_reason: null,
+        block_reason: null,
+        cancel_reason: null,
+        stall_reason: null,
+        created_at: "2026-03-20T00:00:00Z",
+        updated_at: "2026-03-20T00:05:00Z",
+        started_at: "2026-03-20T00:01:00Z",
+        completed_at: null,
+      },
+    ],
+  },
   ...overrides,
 });
 
@@ -167,5 +199,74 @@ describe("silo-detail helpers", () => {
         enableTelemetryDraft: null,
       }),
     ).toBe(true);
+  });
+
+  it("describes current silo workload in operator terms", () => {
+    expect(getSiloWorkloadGuidance(buildDetail())).toBe(
+      "This silo is actively carrying runtime work right now.",
+    );
+
+    expect(
+      getSiloWorkloadGuidance(
+        buildDetail({
+          workload_summary: {
+            ...buildDetail().workload_summary!,
+            active_run_count: 0,
+            running_run_count: 0,
+            blocked_run_count: 1,
+          },
+        }),
+      ),
+    ).toBe(
+      "Blocked runs need operator attention before this silo can be trusted with more work.",
+    );
+  });
+
+  it("reflects workload pressure in health summary when runtime is otherwise ready", () => {
+    const summary = getSiloHealthSummary(
+      buildDetail({
+        silo: {
+          ...buildDetail().silo,
+          status: "active",
+          active_run_count: 2,
+        },
+        desired_state: { ...buildDetail().desired_state, warnings: [] },
+        provision_plan: {
+          ...buildDetail().provision_plan!,
+          warnings: [],
+          targets: [
+            {
+              role_slug: "fox",
+              runtime_kind: "gateway",
+              gateway_name: "Fox Gateway",
+              workspace_root: "/workspace/fox",
+              supports_picoclaw_bundle_apply: true,
+              warnings: [],
+            },
+          ],
+        },
+        latest_runtime_operation: {
+          mode: "apply",
+          created_at: "2026-03-20T00:00:00Z",
+          warnings: [],
+          results: [
+            {
+              role_slug: "fox",
+              runtime_kind: "gateway",
+              gateway_name: "Fox Gateway",
+              supports_picoclaw_bundle_apply: true,
+              warnings: [],
+            },
+          ],
+        },
+        workload_summary: {
+          ...buildDetail().workload_summary!,
+          active_run_count: 2,
+          running_run_count: 2,
+        },
+      }),
+    );
+
+    expect(summary.label).toBe("Available but busy");
   });
 });

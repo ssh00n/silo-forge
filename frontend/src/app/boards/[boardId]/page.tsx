@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   useParams,
   usePathname,
@@ -129,7 +130,16 @@ import {
 import { AGENT_EMOJI_GLYPHS } from "@/lib/agent-emoji";
 import { cn } from "@/lib/utils";
 import { usePageActive } from "@/hooks/usePageActive";
+import {
+  describeSiloRequestPressure,
+  fetchSiloSpawnRequestsForBoard,
+} from "@/lib/silo-spawn-requests";
 import { fetchSilos } from "@/lib/silos";
+import {
+  buildSiloDispatchCandidate,
+  buildTaskDemandProfile,
+  dispatchReasonClass,
+} from "@/lib/silo-dispatch";
 import {
   canAcknowledgeRuntimeRun,
   canCancelRuntimeRun,
@@ -203,6 +213,53 @@ type LiveFeedOpsSummary = {
   failureCount: number;
 };
 
+const siloRequestPriorityClass = (priority: string): string => {
+  if (priority === "urgent") return "bg-rose-50 text-rose-700 border border-rose-200";
+  if (priority === "high") return "bg-amber-50 text-amber-700 border border-amber-200";
+  if (priority === "low") return "bg-slate-100 text-slate-600 border border-slate-200";
+  return "bg-blue-50 text-blue-700 border border-blue-200";
+};
+
+const describeBoardSiloRequestPressure = (
+  request: {
+    source_task_id?: string | null;
+    source_task_title?: string | null;
+    source_task_status?: string | null;
+    source_task_priority?: string | null;
+    priority: string;
+  },
+  selectedTask: Task | null,
+): string | null => {
+  if (!selectedTask || request.source_task_id !== selectedTask.id) {
+    return describeSiloRequestPressure({
+      source_task_title: request.source_task_title ?? null,
+      source_task_status: request.source_task_status ?? null,
+      source_task_priority: request.source_task_priority ?? null,
+      priority:
+        request.priority === "low" ||
+        request.priority === "normal" ||
+        request.priority === "high" ||
+        request.priority === "urgent"
+          ? request.priority
+          : "normal",
+    });
+  }
+  if (selectedTask.approvals_pending_count > 0) return "Approval pressure";
+  if (selectedTask.is_blocked) return "Blocked dependency pressure";
+  return describeSiloRequestPressure({
+    source_task_title: request.source_task_title ?? selectedTask.title,
+    source_task_status: selectedTask.status,
+    source_task_priority: selectedTask.priority,
+    priority:
+      request.priority === "low" ||
+      request.priority === "normal" ||
+      request.priority === "high" ||
+      request.priority === "urgent"
+        ? request.priority
+        : "normal",
+  });
+};
+
 const DASH = "—";
 
 const LIVE_FEED_EVENT_TYPES = new Set<string>([
@@ -222,6 +279,10 @@ const LIVE_FEED_EVENT_TYPES = new Set<string>([
   "task.execution_run.report",
   "task.execution_run.acknowledged",
   "task.execution_run.escalated",
+  "silo.request.created",
+  "silo.request.planned",
+  "silo.request.cancelled",
+  "silo.request.materialized",
   "task.created",
   "task.updated",
   "task.status_changed",
@@ -594,6 +655,10 @@ const liveFeedEventLabel = (eventType: LiveFeedEventType): string => {
   if (eventType === "webhook.dispatch.requeued") return "Webhook retried";
   if (eventType === "webhook.dispatch.batch_complete") return "Webhook batch";
   if (eventType === "webhook.dispatch.batch_finished") return "Webhook finished";
+  if (eventType === "silo.request.created") return "Request created";
+  if (eventType === "silo.request.planned") return "Request planned";
+  if (eventType === "silo.request.cancelled") return "Request cancelled";
+  if (eventType === "silo.request.materialized") return "Request materialized";
   if (eventType === "silo.runtime.validate") return "Runtime validate";
   if (eventType === "silo.runtime.apply") return "Runtime apply";
   return "Updated";
@@ -752,6 +817,15 @@ const liveFeedEventPillClass = (eventType: LiveFeedEventType): string => {
   }
   if (eventType.startsWith("webhook.dispatch.")) {
     return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.request.created" || eventType === "silo.request.planned") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.request.materialized") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "silo.request.cancelled") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
   }
   if (eventType === "silo.runtime.validate") {
     return "border-sky-200 bg-sky-50 text-sky-700";
@@ -1433,6 +1507,24 @@ export default function BoardDetailPage() {
     () => (silosQuery.data ?? []).filter((silo) => silo.enable_symphony),
     [silosQuery.data],
   );
+  const symphonyDispatchCandidates = useMemo(
+    () =>
+      [...symphonyEnabledSilos]
+        .map((silo) => buildSiloDispatchCandidate(silo, selectedTask))
+        .sort((left, right) => left.score - right.score || left.silo.name.localeCompare(right.silo.name)),
+    [selectedTask, symphonyEnabledSilos],
+  );
+  const selectedDispatchCandidate = useMemo(
+    () =>
+      symphonyDispatchCandidates.find(
+        (candidate) => candidate.silo.slug === newExecutionRunSiloSlug,
+      ) ?? symphonyDispatchCandidates[0] ?? null,
+    [newExecutionRunSiloSlug, symphonyDispatchCandidates],
+  );
+  const selectedTaskDemandProfile = useMemo(
+    () => buildTaskDemandProfile(selectedTask),
+    [selectedTask],
+  );
   const selectedTaskExecutionRunsQuery = useQuery<
     TaskExecutionRunSnapshot[],
     ApiError
@@ -1457,6 +1549,24 @@ export default function BoardDetailPage() {
     },
   });
   const selectedTaskExecutionRuns = selectedTaskExecutionRunsQuery.data ?? [];
+  const boardSiloRequestsQuery = useQuery({
+    queryKey: ["board", boardId, "silo-spawn-requests"],
+    queryFn: () => fetchSiloSpawnRequestsForBoard(boardId ?? ""),
+    enabled: Boolean(isSignedIn && boardId && isOrgAdmin && isDetailOpen),
+    refetchInterval: 30_000,
+    refetchOnMount: "always",
+  });
+  const boardSiloRequests = useMemo(
+    () => boardSiloRequestsQuery.data ?? [],
+    [boardSiloRequestsQuery.data],
+  );
+  const boardOpenSiloRequestsCount = useMemo(
+    () =>
+      boardSiloRequests.filter((request) =>
+        ["requested", "planned", "spawning"].includes(request.status),
+      ).length,
+    [boardSiloRequests],
+  );
 
   const [board, setBoard] = useState<Board | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -1922,15 +2032,17 @@ export default function BoardDetailPage() {
 
   useEffect(() => {
     if (!isDetailOpen) return;
-    if (!symphonyEnabledSilos.length) return;
+    if (!symphonyDispatchCandidates.length) return;
     if (
       newExecutionRunSiloSlug &&
-      symphonyEnabledSilos.some((silo) => silo.slug === newExecutionRunSiloSlug)
+      symphonyDispatchCandidates.some(
+        (candidate) => candidate.silo.slug === newExecutionRunSiloSlug,
+      )
     ) {
       return;
     }
-    setNewExecutionRunSiloSlug(symphonyEnabledSilos[0]?.slug ?? "");
-  }, [isDetailOpen, newExecutionRunSiloSlug, symphonyEnabledSilos]);
+    setNewExecutionRunSiloSlug(symphonyDispatchCandidates[0]?.silo.slug ?? "");
+  }, [isDetailOpen, newExecutionRunSiloSlug, symphonyDispatchCandidates]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -4849,6 +4961,94 @@ export default function BoardDetailPage() {
                 </p>
               )}
             </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Silo requests
+                </p>
+                <div className="flex items-center gap-2">
+                  {isOrgAdmin && selectedTask ? (
+                    <Link
+                      href={`/silos/requests?board_id=${encodeURIComponent(boardId)}&task_id=${encodeURIComponent(
+                        selectedTask.id,
+                      )}&task_title=${encodeURIComponent(selectedTask.title)}&priority=high`}
+                      className="inline-flex h-9 items-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Request from task
+                    </Link>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push("/silos/requests")}
+                  >
+                    View all
+                  </Button>
+                </div>
+              </div>
+              {boardSiloRequestsQuery.isLoading ? (
+                <p className="text-sm text-slate-500">Loading silo requests…</p>
+              ) : boardSiloRequests.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No board-scoped silo requests. {boardOpenSiloRequestsCount > 0
+                    ? `${boardOpenSiloRequestsCount} open elsewhere.`
+                    : "Create one from the silo requests queue when this board needs a dedicated operating silo."}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {boardSiloRequests.slice(0, 3).map((request) => (
+                    <div
+                      key={request.id}
+                      className="rounded-xl border border-slate-200 bg-white p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">
+                            {request.display_name}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {request.silo_kind} · {request.status}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${siloRequestPriorityClass(request.priority)}`}
+                        >
+                          {request.priority}
+                        </span>
+                        {request.materialized_silo_slug ? (
+                          <Link
+                            href={`/silos/${request.materialized_silo_slug}`}
+                            className="text-xs font-medium text-blue-700 hover:text-blue-900"
+                          >
+                            Open silo
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/silos/new?request=${request.id}`}
+                            className="text-xs font-medium text-blue-700 hover:text-blue-900"
+                          >
+                            Materialize
+                          </Link>
+                        )}
+                      </div>
+                      {request.summary ? (
+                        <p className="mt-2 text-xs text-slate-600">{request.summary}</p>
+                      ) : null}
+                      {request.source_task_title ? (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Demand source: {request.source_task_title}
+                        </p>
+                      ) : null}
+                      {describeBoardSiloRequestPressure(request, selectedTask) ? (
+                        <p className="mt-1 text-xs font-medium text-amber-700">
+                          {describeBoardSiloRequestPressure(request, selectedTask)}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Custom fields
@@ -5071,6 +5271,136 @@ export default function BoardDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  {selectedTaskDemandProfile ? (
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            Task demand
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900">
+                            {selectedTaskDemandProfile.label}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+                          {selectedTask?.priority ? (
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                              Priority {selectedTask.priority}
+                            </span>
+                          ) : null}
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                            Status {selectedTask?.status ?? DASH}
+                          </span>
+                          {selectedTask?.approvals_pending_count ? (
+                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-700">
+                              {selectedTask.approvals_pending_count} approvals pending
+                            </span>
+                          ) : null}
+                          {selectedTask?.is_blocked ? (
+                            <span className="rounded-full bg-rose-100 px-2.5 py-1 text-rose-700">
+                              Dependency blocked
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">
+                        {selectedTaskDemandProfile.guidance}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                        {selectedTaskDemandProfile.reasons.map((reason) => (
+                          <span
+                            key={`task-demand-${reason.label}`}
+                            className={cn(
+                              "rounded-full px-2.5 py-1",
+                              dispatchReasonClass(reason.tone),
+                            )}
+                          >
+                            {reason.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {selectedDispatchCandidate ? (
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            Recommended silo
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900">
+                            {selectedDispatchCandidate.silo.name}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-xs font-medium",
+                            selectedDispatchCandidate.tone === "success" &&
+                              "bg-emerald-100 text-emerald-700",
+                            selectedDispatchCandidate.tone === "warning" &&
+                              "bg-amber-100 text-amber-700",
+                            selectedDispatchCandidate.tone === "danger" &&
+                              "bg-rose-100 text-rose-700",
+                            selectedDispatchCandidate.tone === "neutral" &&
+                              "bg-slate-100 text-slate-700",
+                          )}
+                        >
+                          {selectedDispatchCandidate.readinessLabel}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">
+                        {selectedDispatchCandidate.guidance}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                        {selectedDispatchCandidate.reasons.map((reason) => (
+                          <span
+                            key={`${selectedDispatchCandidate.silo.slug}-${reason.label}`}
+                            className={cn(
+                              "rounded-full px-2.5 py-1",
+                              dispatchReasonClass(reason.tone),
+                            )}
+                          >
+                            {reason.label}
+                          </span>
+                        ))}
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                          Active {selectedDispatchCandidate.silo.active_run_count}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                          Blocked {selectedDispatchCandidate.silo.blocked_run_count}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                          Failed {selectedDispatchCandidate.silo.failed_run_count}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                  {symphonyDispatchCandidates.length > 1 ? (
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Best available
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {symphonyDispatchCandidates.slice(0, 3).map((candidate) => (
+                          <Button
+                            key={candidate.silo.slug}
+                            type="button"
+                            variant={
+                              candidate.silo.slug === newExecutionRunSiloSlug
+                                ? "default"
+                                : "outline"
+                            }
+                            size="sm"
+                            onClick={() => setNewExecutionRunSiloSlug(candidate.silo.slug)}
+                            disabled={isCreatingExecutionRun}
+                            className="h-8 px-2 text-xs"
+                          >
+                            {candidate.silo.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -5085,9 +5415,9 @@ export default function BoardDetailPage() {
                           <SelectValue placeholder="Select silo" />
                         </SelectTrigger>
                         <SelectContent>
-                          {symphonyEnabledSilos.map((silo) => (
-                            <SelectItem key={silo.slug} value={silo.slug}>
-                              {silo.name}
+                          {symphonyDispatchCandidates.map((candidate) => (
+                            <SelectItem key={candidate.silo.slug} value={candidate.silo.slug}>
+                              {candidate.silo.name} · {candidate.readinessLabel}
                             </SelectItem>
                           ))}
                         </SelectContent>
