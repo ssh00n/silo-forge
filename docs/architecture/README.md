@@ -11,6 +11,7 @@
 
 ## Working docs
 
+- [System Overview](./system-overview.md)
 - [Silo MVP](./silo-mvp.md)
 - [Symphony upstream strategy](./symphony-upstream-strategy.md)
 - [Product transition pre-E2E](./product-transition-pre-e2e.md)

@@ -1,187 +1,433 @@
 # Silo Forge
 
-[![CI](https://github.com/ssh00n/silo-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/ssh00n/silo-forge/actions/workflows/ci.yml) ![Static Badge](https://img.shields.io/badge/Join-Slack-active?style=flat&color=blue&link=https%3A%2F%2Fjoin.slack.com%2Ft%2Foc-mission-control%2Fshared_invite%2Fzt-3qpcm57xh-AI9C~smc3MDBVzEhvwf7gg)
+[![CI](https://github.com/ssh00n/silo-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/ssh00n/silo-forge/actions/workflows/ci.yml)
 
-Forked from `abhi1693/openclaw-mission-control`. This working tree keeps the upstream MIT license and attribution. See [`NOTICE`](./NOTICE) and [`docs/architecture/product-transition-pre-e2e.md`](./docs/architecture/product-transition-pre-e2e.md).
+Forked from `abhi1693/openclaw-mission-control`. This repository keeps the upstream MIT license and attribution. See [NOTICE](./NOTICE).
 
-Silo Forge is a control plane for building and operating agent silos, with unified visibility, approval controls, and gateway-aware orchestration.
-It gives operators a single interface for silo provisioning, work orchestration, agent and gateway management, approval-driven governance, and API-backed automation.
+Silo Forge is a silo-centric control plane for operating small agent organizations.
+Its core job is not just to create silos, but to help an operator:
 
-<img width="1896" height="869" alt="Silo Forge dashboard" src="https://github.com/user-attachments/assets/49a3c823-6aaf-4c56-8328-fb1485ee940f" />
-<img width="1896" height="858" alt="image" src="https://github.com/user-attachments/assets/2bfee13a-3dab-4f4a-9135-e47bb6949dcf" />
-<img width="1890" height="865" alt="image" src="https://github.com/user-attachments/assets/84c2e867-5dc7-4a36-9290-e29179d2a659" />
-<img width="1912" height="881" alt="image" src="https://github.com/user-attachments/assets/3bbd825c-9969-4bbf-bf31-987f9168f370" />
-<img width="1902" height="878" alt="image" src="https://github.com/user-attachments/assets/eea09632-60e4-4d6d-9e6e-bdfa0ac97630" />
+- create and configure silos
+- assign runtime-capable work to the right silo
+- observe health, workload, and progress
+- intervene when runs fail, block, or need approval
 
-## Platform overview
+This repository is the product center and control plane.
+The execution runtime lives in the sibling repository [`silo-forge-symphony`](https://github.com/ssh00n/silo-forge-symphony).
 
-Silo Forge is designed to be the day-to-day control surface for small execution organizations.
-Instead of splitting work across multiple tools, teams can provision silos, plan, execute, review, and audit activity in one system.
+## What The Product Does
 
-Core operational areas:
+Silo Forge is designed around one operational loop:
 
-- Silo orchestration: manage organizations, silos, board groups, boards, tasks, and tags.
-- Agent operations: create, inspect, and manage agent lifecycle from a unified control surface.
-- Governance and approvals: route sensitive actions through explicit approval flows.
-- Gateway management: connect and operate gateway integrations for distributed environments.
-- Activity visibility: review a timeline of system actions for faster debugging and accountability.
-- API-first model: support both web workflows and automation clients from the same platform.
+1. define or materialize a silo
+2. give work to that silo
+3. watch runtime progress
+4. respond to failures, approvals, and blocked work
+5. keep the organization explainable through activity and contracts
 
-## Use cases
+The current product surface is centered on:
 
-- Multi-team agent operations: run multiple boards and board groups across organizations from a single control plane.
-- Human-in-the-loop execution: require approvals before sensitive actions and keep decision trails attached to work.
-- Distributed runtime control: connect gateways and operate remote execution environments without changing operator workflow.
-- Audit and incident review: use activity history to reconstruct what happened, when it happened, and who initiated it.
-- API-backed process integration: connect internal workflows and automation clients to the same operational model used in the UI.
+- `Dashboard`
+  - operator-first overview of silo health, active assignments, runtime pressure, approvals, and telemetry
+- `Silos`
+  - silo inventory with health and workload posture
+- `Silo detail`
+  - configuration, runtime posture, current work, and operator next actions
+- `Boards / Tasks`
+  - task-centric workflow, approvals, comments, and runtime dispatch
+- `Activity`
+  - timeline of task, approval, runtime, queue, webhook, and silo events
 
-## What makes Silo Forge different
+`Silo Requests` exists, but it is a secondary planning queue. The core UX is silo operations.
 
-- Operations-first design: built for running agent work reliably, not just creating tasks.
-- Governance built in: approvals, auth modes, and clear control boundaries are first-class.
-- Gateway-aware orchestration: built to operate both local and connected runtime environments.
-- Unified UI and API model: operators and automation act on the same objects and lifecycle.
-- Team-scale structure: organizations, silos, board groups, boards, tasks, tags, and users in one system of record.
+## Repository Roles
 
-## Who it is for
+### This repo: `silo-forge`
 
-- Platform teams running OpenClaw-derived runtime systems in self-hosted or internal environments.
-- Operations and engineering teams that need clear approval and auditability controls.
-- Organizations that want API-accessible operations without losing a usable web UI.
+This repository owns:
 
-## Get started in minutes
+- the web UI
+- the FastAPI control plane
+- the Postgres-backed system of record
+- operator workflows
+- activity and telemetry surfaces
+- contract source-of-truth for cross-service execution flows
 
-### Option A: One-command production-style bootstrap
+### Sibling repo: `silo-forge-symphony`
 
-If you haven't cloned the repo yet, you can run the installer in one line:
+The sibling runtime repository owns:
+
+- accepting dispatch requests from the control plane
+- preparing workspace and runtime execution
+- running Symphony turns
+- reporting execution callbacks back into Silo Forge
+
+The two repositories are intentionally separate:
+
+- `silo-forge` is the product and control plane
+- `silo-forge-symphony` is the execution runtime integration layer
+
+## Architecture
+
+### High-level components
+
+- `frontend/`
+  - Next.js operator UI
+- `backend/`
+  - FastAPI API, persistence, orchestration, metrics, activity, approvals
+- `Postgres`
+  - source of truth for silos, tasks, runs, approvals, activity, telemetry snapshots
+- `Redis + worker`
+  - dispatch queue and async execution handoff
+- `silo-forge-symphony`
+  - runtime bridge and callback emitter
+- `contracts/`
+  - source-of-truth schemas for execution, activity, queue, and telemetry boundaries
+
+### Runtime flow
+
+The most important runtime path is:
+
+1. an operator opens a task on a board
+2. Silo Forge evaluates task demand and available silos
+3. the operator dispatches a run to a selected silo
+4. backend creates a `TaskExecutionRun`
+5. backend enqueues a dispatch job to Redis
+6. worker consumes the job and sends a dispatch request to Symphony
+7. Symphony runs the work and emits callbacks
+8. backend updates run state and activity
+9. UI surfaces refresh:
+   - task detail
+   - dashboard
+   - board live feed
+   - activity feed
+   - silo workload views
+
+### Core data model
+
+The most important product objects are:
+
+- `Organization`
+  - top-level boundary for users, boards, silos, and governance
+- `Silo`
+  - the main operating unit in the product
+- `SiloRole`
+  - role definition inside a silo, such as gateway-backed or symphony-backed roles
+- `Board`
+  - task workspace and operator collaboration context
+- `Task`
+  - work item that can produce approvals, activity, and runtime runs
+- `TaskExecutionRun`
+  - concrete runtime execution attempt attached to a task and silo
+- `Approval`
+  - governance gate for risky or escalated work
+- `ActivityEvent`
+  - timeline record for product-visible events
+
+## How Frontend, Backend, And Symphony Work Together
+
+### Frontend
+
+The frontend is not a thin shell. It contains shared operator policy and presentation logic for silo-centric UX.
+
+Important frontend layers:
+
+- `frontend/src/app/`
+  - route-level pages such as dashboard, boards, silos, activity
+- `frontend/src/lib/silo-ops/`
+  - centralized silo operator policy
+  - health taxonomy
+  - task demand classification
+  - dispatch candidate scoring
+  - shared view-models
+  - presentation helpers
+- `frontend/src/lib/runtime-runs.ts`
+  - runtime operator state, guidance, and parsing
+- `frontend/src/lib/activity-events.ts`
+  - activity-feed payload interpretation
+
+The frontend currently treats these as core shared vocabularies:
+
+- silo health
+  - `Healthy`
+  - `Busy`
+  - `Degraded`
+  - `Blocked`
+  - `Needs setup`
+- task demand
+  - approval pressure
+  - blocked dependency pressure
+  - active follow-up
+  - standard demand
+- dispatch continuity
+  - current silo
+  - last used silo
+  - alternative silo
+
+### Backend
+
+The backend owns authoritative state and orchestration.
+
+Important backend areas:
+
+- `backend/app/api/`
+  - HTTP API
+- `backend/app/services/silos/`
+  - silo creation, preview, detail, runtime validate/apply, provision plan
+- `backend/app/services/task_execution_runs.py`
+  - create, retry, cancel, acknowledge, escalate, update runtime runs
+- `backend/app/services/task_execution_dispatch.py`
+  - dispatch payload generation for Symphony
+- `backend/app/services/task_execution_worker.py`
+  - async dispatch execution
+- `backend/app/api/task_execution_callbacks.py`
+  - callback ingestion from Symphony
+- `backend/app/api/metrics.py`
+  - dashboard-oriented read models
+- `backend/app/contracts/`
+  - runtime validation/finalization at service boundaries
+
+The backend does not try to duplicate every frontend policy.
+Instead it exposes minimal read models where centralization is valuable, such as:
+
+- `SiloDetailRead.operational_summary`
+- dashboard runtime metrics
+- telemetry snapshots
+
+That split is intentional:
+
+- backend owns durable state and minimal operational summaries
+- frontend owns shared operator shaping through `silo-ops`
+
+### Symphony
+
+`silo-forge-symphony` is the runtime execution side.
+
+It receives dispatch requests from Silo Forge and returns callback updates such as:
+
+- queued
+- dispatching
+- running
+- succeeded
+- failed
+- blocked
+- cancelled
+
+It also sends richer runtime metadata used by the control plane, including fields such as:
+
+- `completion_kind`
+- `failure_reason`
+- `block_reason`
+- `cancel_reason`
+- `stall_reason`
+- `last_event`
+- `last_message`
+- `session_id`
+- `turn_count`
+- `duration_ms`
+
+This is what makes the operator surfaces in Silo Forge more than a generic task board.
+
+## Contracts And Service Boundaries
+
+Cross-service boundaries are defined in [contracts/](./contracts/).
+
+These schemas cover:
+
+- execution dispatch request / acceptance / callback
+- activity payloads
+- queue payloads and queue envelope
+- telemetry payloads
+
+Generated artifacts are consumed separately by each service:
+
+- frontend
+  - `frontend/src/contracts/generated/`
+- backend
+  - `backend/app/contracts/generated_schemas.py`
+- sibling runtime
+  - `silo-forge-symphony/src/contracts/generated/`
+
+Refresh them with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ssh00n/silo-forge/master/install.sh | bash
+make contracts-gen
 ```
 
-This clones the repository into `./silo-forge` if no local checkout is found in your current directory.
-
-If you already cloned the repo:
+Check for drift with:
 
 ```bash
-./install.sh
+make contracts-check
 ```
 
-The installer is interactive and will:
+This keeps the source-of-truth centralized without making services import each other directly.
 
-- Ask for deployment mode (`docker` or `local`).
-- Install missing system dependencies when possible.
-- Generate and configure environment files.
-- Bootstrap and start the selected deployment mode.
+## Local Development
 
-Installer support matrix: [`docs/installer-support.md`](./docs/installer-support.md)
-
-### Option B: Manual setup
-
-### Prerequisites
-
-- **Supported platforms**: Linux and macOS. On macOS, Docker mode requires [Docker Desktop](https://www.docker.com/products/docker-desktop/); local mode requires [Homebrew](https://brew.sh) and Node.js 22+.
-- Docker Engine
-- Docker Compose v2 (`docker compose`)
-
-### 1. Configure environment
+### Fastest path
 
 ```bash
-cp .env.example .env
+make setup
+make local-dev-up
 ```
 
-Before startup:
+This bootstraps the local stack used for end-to-end control-plane work:
 
-- Set `LOCAL_AUTH_TOKEN` to a non-placeholder value (minimum 50 characters) when `AUTH_MODE=local`.
-- Ensure `BASE_URL` matches the public backend origin if you are not using `http://localhost:8000`.
-- `NEXT_PUBLIC_API_URL=auto` (default) resolves to `http(s)://<current-host>:8000`.
-  - Set an explicit URL when your API is behind a reverse proxy or non-default port.
+- Postgres
+- Redis
+- backend
+- frontend
+- worker
+- optional local Symphony bridge when `../symphony` exists
 
-### 2. Start Silo Forge
+Useful commands:
 
 ```bash
-docker compose -f compose.yml --env-file .env up -d --build
+make local-dev-status
+make local-dev-down
+make local-dev-reset
 ```
 
-If you are iterating on the UI in Docker and want automatic frontend rebuilds on
-source changes, run:
+Preflight:
 
 ```bash
-docker compose -f compose.yml --env-file .env up --build --watch
+bash scripts/local_e2e_preflight.sh
 ```
 
-Notes:
-
-- Compose Watch requires Docker Compose **2.22.0+**.
-- You can also run watch separately after startup:
+Seed demo data:
 
 ```bash
-docker compose -f compose.yml --env-file .env up -d --build
-docker compose -f compose.yml --env-file .env watch
+cd backend && ./.venv/bin/python scripts/seed_demo.py
 ```
 
-After pulling new changes, rebuild and recreate all services:
+### Manual loop
+
+Backend:
 
 ```bash
-docker compose -f compose.yml --env-file .env up -d --build --force-recreate
+cd backend
+uv run uvicorn app.main:app --reload --port 8000
 ```
 
-For a fully clean rebuild (no cached build layers):
+Frontend:
 
 ```bash
-docker compose -f compose.yml --env-file .env build --no-cache --pull
-docker compose -f compose.yml --env-file .env up -d --force-recreate
+cd frontend
+npm run dev
 ```
 
-### 3. Open the application
+## Key Workflows
 
-- Silo Forge UI: http://localhost:3000
-- Backend health: http://localhost:8000/healthz
+### 1. Silo operations
 
-### 4. Stop the stack
+- create a silo
+- assign gateway-backed roles
+- validate runtime
+- apply runtime
+- observe silo health and current work
+- use `What next` guidance in silo detail
+
+### 2. Task-to-silo execution
+
+- open a task
+- inspect task demand
+- inspect current silo or last used silo
+- continue on the same silo when continuity matters
+- choose an alternative silo when health or pressure requires it
+- dispatch a runtime run
+
+### 3. Runtime operator flow
+
+For each execution run the operator can:
+
+- retry
+- cancel
+- acknowledge
+- escalate
+
+Escalation feeds into approvals and task review flows, and the outcome is reflected back in runtime guidance.
+
+### 4. Activity and telemetry
+
+The operator can inspect:
+
+- activity timeline
+- dashboard recent activity
+- board live feed
+- queue worker telemetry
+- webhook delivery telemetry
+- runtime state transitions
+
+## Current Product Direction
+
+The product is currently being shaped around this principle:
+
+- core UX is silo operations
+- secondary UX is planning and capacity requests
+
+That means the most important surfaces are:
+
+- `Dashboard`
+- `Silos`
+- `Silo detail`
+- `Board task detail`
+
+And the main questions the product should answer are:
+
+- which silo is healthy?
+- which silo is busy, degraded, or blocked?
+- which silo is currently carrying a task?
+- should the operator continue on the same silo or switch?
+- what should the operator do next?
+
+## Project Layout
+
+```text
+backend/                 FastAPI control plane
+backend/app/api/         HTTP routes
+backend/app/services/    orchestration and read models
+backend/app/contracts/   backend-side contract validation/finalization
+backend/tests/           pytest suite
+
+frontend/                Next.js operator UI
+frontend/src/app/        route surfaces
+frontend/src/lib/        client-side shared logic
+frontend/src/lib/silo-ops/
+                         centralized silo operator policy and view-models
+frontend/src/api/generated/
+                         generated API client
+
+contracts/               cross-service schema source-of-truth
+docs/                    architecture, testing, and operations notes
+scripts/                 local dev and generation utilities
+```
+
+## Testing
+
+Closest CI-parity run:
 
 ```bash
-docker compose -f compose.yml --env-file .env down
+make check
 ```
 
-## Authentication
+Common targeted commands:
 
-Silo Forge supports two authentication modes:
+```bash
+make contracts-check
+cd backend && ./.venv/bin/python -m pytest
+cd frontend && npm run lint
+cd frontend && npm run test
+```
 
-- `local`: shared bearer token mode (default for self-hosted use)
-- `clerk`: Clerk JWT mode
+## Related Documentation
 
-Environment templates:
-
-- Root: [`.env.example`](./.env.example)
-- Backend: [`backend/.env.example`](./backend/.env.example)
-- Frontend: [`frontend/.env.example`](./frontend/.env.example)
-
-## Documentation
-
-Complete guides for deployment, production, troubleshooting, and testing are in [`/docs`](./docs/).
-
-Contract source-of-truth for cross-service execution flows lives in [`contracts/`](./contracts/).
-Run `make contracts-gen` to refresh generated artifacts for the backend, frontend, and the optional sibling [`silo-forge-symphony`](https://github.com/ssh00n/silo-forge-symphony) checkout.
-
-## Project status
-
-Silo Forge is under active development.
-
-- Features and APIs may change between releases.
-- Validate and harden your configuration before production use.
-
-## Contributing
-
-Issues and pull requests are welcome.
-
-- [Contributing guide](./CONTRIBUTING.md)
-- [Open issues](https://github.com/ssh00n/silo-forge/issues)
+- [Architecture index](./docs/architecture/README.md)
+- [Silo Control Plane Roadmap](./docs/architecture/silo-control-plane-roadmap.md)
+- [Silo Ops Refactor Plan](./docs/architecture/silo-ops-refactor-plan.md)
+- [OpenAPI vs Contracts Boundary](./docs/architecture/openapi-vs-contracts-boundary.md)
+- [Local dev stack](./docs/testing/local-dev-stack.md)
+- [Local E2E silo runtime flow](./docs/testing/local-e2e-silo-runtime.md)
 
 ## License
 
-This project is licensed under the MIT License. See [`LICENSE`](./LICENSE).
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=ssh00n/silo-forge&type=date&legend=top-left)](https://www.star-history.com/#ssh00n/silo-forge&type=date&legend=top-left)
+MIT. See [LICENSE](./LICENSE).
