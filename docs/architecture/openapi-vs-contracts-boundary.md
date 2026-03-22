@@ -51,6 +51,7 @@ Primary role:
 - execution callback payloads
 - activity payloads shared across frontend/backend/runtime boundaries
 - queue/job payloads shared across backend worker boundaries
+- telemetry/log payloads shared across worker and runtime observability boundaries
 
 Examples:
 
@@ -129,6 +130,7 @@ Only consume:
 - task/approval activity payloads
 - board/gateway activity payloads
 - queue/job payloads
+- telemetry payloads for worker/runtime events
 
 ## Expansion policy
 

@@ -7,6 +7,7 @@ import random
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from app.contracts.telemetry import finalize_queue_worker_event_payload
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.services.openclaw.lifecycle_queue import TASK_TYPE as LIFECYCLE_RECONCILE_TASK_TYPE
@@ -26,6 +27,35 @@ from app.services.webhooks.queue import TASK_TYPE as WEBHOOK_TASK_TYPE
 
 logger = get_logger(__name__)
 _WORKER_BLOCK_TIMEOUT_SECONDS = 5.0
+
+
+def _worker_telemetry(
+    *,
+    status: str,
+    task_type: str | None = None,
+    attempt: int | None = None,
+    error: object | None = None,
+    count: int | None = None,
+    throttle_seconds: float | None = None,
+    retry_delay_seconds: float | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "queue_name": settings.rq_queue_name,
+        "status": status,
+    }
+    if task_type is not None:
+        payload["task_type"] = task_type
+    if attempt is not None:
+        payload["attempt"] = attempt
+    if error is not None:
+        payload["error"] = str(error)
+    if count is not None:
+        payload["count"] = count
+    if throttle_seconds is not None:
+        payload["throttle_seconds"] = throttle_seconds
+    if retry_delay_seconds is not None:
+        payload["retry_delay_seconds"] = retry_delay_seconds
+    return finalize_queue_worker_event_payload(payload)
 
 
 @dataclass(frozen=True)
@@ -81,7 +111,7 @@ async def flush_queue(*, block: bool = False, block_timeout: float = 0) -> int:
         except Exception:
             logger.exception(
                 "queue.worker.dequeue_failed",
-                extra={"queue_name": settings.rq_queue_name},
+                extra=_worker_telemetry(status="dequeue_failed"),
             )
             continue
 
@@ -92,10 +122,7 @@ async def flush_queue(*, block: bool = False, block_timeout: float = 0) -> int:
         if handler is None:
             logger.warning(
                 "queue.worker.task_unhandled",
-                extra={
-                    "task_type": task.task_type,
-                    "queue_name": settings.rq_queue_name,
-                },
+                extra=_worker_telemetry(status="task_unhandled", task_type=task.task_type),
             )
             continue
 
@@ -104,34 +131,41 @@ async def flush_queue(*, block: bool = False, block_timeout: float = 0) -> int:
             processed += 1
             logger.info(
                 "queue.worker.success",
-                extra={
-                    "task_type": task.task_type,
-                    "attempt": task.attempts,
-                },
+                extra=_worker_telemetry(
+                    status="succeeded",
+                    task_type=task.task_type,
+                    attempt=task.attempts,
+                ),
             )
         except Exception as exc:
             logger.exception(
                 "queue.worker.failed",
-                extra={
-                    "task_type": task.task_type,
-                    "attempt": task.attempts,
-                    "error": str(exc),
-                },
+                extra=_worker_telemetry(
+                    status="failed",
+                    task_type=task.task_type,
+                    attempt=task.attempts,
+                    error=exc,
+                ),
             )
             base_delay = handler.attempts_to_delay(task.attempts)
             delay = base_delay + _compute_jitter(base_delay)
             if not handler.requeue(task, delay):
                 logger.warning(
                     "queue.worker.drop_task",
-                    extra={
-                        "task_type": task.task_type,
-                        "attempt": task.attempts,
-                    },
+                    extra=_worker_telemetry(
+                        status="dropped",
+                        task_type=task.task_type,
+                        attempt=task.attempts,
+                        retry_delay_seconds=delay,
+                    ),
                 )
         await asyncio.sleep(settings.rq_dispatch_throttle_seconds)
 
     if processed > 0:
-        logger.info("queue.worker.batch_complete", extra={"count": processed})
+        logger.info(
+            "queue.worker.batch_complete",
+            extra=_worker_telemetry(status="batch_complete", count=processed),
+        )
     return processed
 
 
@@ -146,7 +180,7 @@ async def _run_worker_loop() -> None:
         except Exception:
             logger.exception(
                 "queue.worker.loop_failed",
-                extra={"queue_name": settings.rq_queue_name},
+                extra=_worker_telemetry(status="loop_failed"),
             )
             await asyncio.sleep(1)
 
@@ -155,9 +189,12 @@ def run_worker() -> None:
     """RQ entrypoint for running continuous queue processing."""
     logger.info(
         "queue.worker.batch_started",
-        extra={"throttle_seconds": settings.rq_dispatch_throttle_seconds},
+        extra=_worker_telemetry(
+            status="batch_started",
+            throttle_seconds=settings.rq_dispatch_throttle_seconds,
+        ),
     )
     try:
         asyncio.run(_run_worker_loop())
     finally:
-        logger.info("queue.worker.stopped", extra={"queue_name": settings.rq_queue_name})
+        logger.info("queue.worker.stopped", extra=_worker_telemetry(status="stopped"))

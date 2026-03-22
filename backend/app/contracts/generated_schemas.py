@@ -979,6 +979,160 @@ SCHEMAS = json.loads(
         "format": "date-time"
       }
     }
+  },
+  "telemetry__queue_worker_event_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/telemetry/queue-worker-event.payload.schema.json",
+    "title": "SiloForgeQueueWorkerEventTelemetryPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "queue_name",
+      "status"
+    ],
+    "properties": {
+      "queue_name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "batch_started",
+          "dequeue_failed",
+          "task_unhandled",
+          "succeeded",
+          "failed",
+          "dropped",
+          "batch_complete",
+          "loop_failed",
+          "stopped"
+        ]
+      },
+      "task_type": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "attempt": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "count": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0
+      },
+      "throttle_seconds": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0
+      },
+      "retry_delay_seconds": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0
+      }
+    }
+  },
+  "telemetry__webhook_delivery_result_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/telemetry/webhook-delivery-result.payload.schema.json",
+    "title": "SiloForgeWebhookDeliveryResultTelemetryPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "attempt",
+      "status"
+    ],
+    "properties": {
+      "board_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "webhook_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "payload_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "minLength": 1
+      },
+      "attempt": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "succeeded",
+          "failed",
+          "requeued",
+          "batch_complete",
+          "batch_started",
+          "batch_finished"
+        ]
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "retry_delay_seconds": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0
+      },
+      "count": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0
+      },
+      "duration_ms": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0
+      },
+      "throttle_seconds": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0
+      }
+    }
   }
 }
     """
@@ -1001,6 +1155,12 @@ QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON = SCHEMAS[
     "queue__task_execution_dispatch_payload_schema_json"
 ]
 QUEUE__WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__webhook_delivery_payload_schema_json"]
+TELEMETRY__QUEUE_WORKER_EVENT_PAYLOAD_SCHEMA_JSON = SCHEMAS[
+    "telemetry__queue_worker_event_payload_schema_json"
+]
+TELEMETRY__WEBHOOK_DELIVERY_RESULT_PAYLOAD_SCHEMA_JSON = SCHEMAS[
+    "telemetry__webhook_delivery_result_payload_schema_json"
+]
 
 ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS_VALUES = (
     "queued",

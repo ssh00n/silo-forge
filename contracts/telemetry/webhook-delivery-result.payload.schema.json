@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/telemetry/webhook-delivery-result.payload.schema.json",
+  "title": "SiloForgeWebhookDeliveryResultTelemetryPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "attempt",
+    "status"
+  ],
+  "properties": {
+    "board_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "webhook_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "payload_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "succeeded",
+        "failed",
+        "requeued",
+        "batch_complete",
+        "batch_started",
+        "batch_finished"
+      ]
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "retry_delay_seconds": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "duration_ms": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "throttle_seconds": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.silo-forge.dev/telemetry/queue-worker-event.payload.schema.json",
+  "title": "SiloForgeQueueWorkerEventTelemetryPayload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "queue_name",
+    "status"
+  ],
+  "properties": {
+    "queue_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "batch_started",
+        "dequeue_failed",
+        "task_unhandled",
+        "succeeded",
+        "failed",
+        "dropped",
+        "batch_complete",
+        "loop_failed",
+        "stopped"
+      ]
+    },
+    "task_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "attempt": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "error": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "throttle_seconds": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "retry_delay_seconds": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    }
+  }
+}

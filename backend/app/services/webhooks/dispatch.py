@@ -9,6 +9,7 @@ from uuid import UUID
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.contracts.telemetry import finalize_webhook_delivery_result_payload
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.session import async_session_maker
@@ -25,6 +26,36 @@ from app.services.webhooks.queue import (
 )
 
 logger = get_logger(__name__)
+
+
+def _webhook_delivery_telemetry(
+    *,
+    item: QueuedInboundDelivery,
+    status: str,
+    error: object | None = None,
+    retry_delay_seconds: float | None = None,
+    count: int | None = None,
+    duration_ms: int | None = None,
+    throttle_seconds: float | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "board_id": str(item.board_id),
+        "webhook_id": str(item.webhook_id),
+        "payload_id": str(item.payload_id),
+        "attempt": item.attempts,
+        "status": status,
+    }
+    if error is not None:
+        payload["error"] = str(error)
+    if retry_delay_seconds is not None:
+        payload["retry_delay_seconds"] = retry_delay_seconds
+    if count is not None:
+        payload["count"] = count
+    if duration_ms is not None:
+        payload["duration_ms"] = duration_ms
+    if throttle_seconds is not None:
+        payload["throttle_seconds"] = throttle_seconds
+    return finalize_webhook_delivery_result_payload(payload)
 
 
 def _build_payload_preview(payload_value: object) -> str:
@@ -217,34 +248,43 @@ async def flush_webhook_delivery_queue(*, block: bool = False, block_timeout: fl
             processed += 1
             logger.info(
                 "webhook.dispatch.success",
-                extra={
-                    "payload_id": str(item.payload_id),
-                    "webhook_id": str(item.webhook_id),
-                    "board_id": str(item.board_id),
-                    "attempt": item.attempts,
-                },
+                extra=_webhook_delivery_telemetry(item=item, status="succeeded"),
             )
         except Exception as exc:
             logger.exception(
                 "webhook.dispatch.failed",
-                extra={
-                    "payload_id": str(item.payload_id),
-                    "webhook_id": str(item.webhook_id),
-                    "board_id": str(item.board_id),
-                    "attempt": item.attempts,
-                    "error": str(exc),
-                },
+                extra=_webhook_delivery_telemetry(item=item, status="failed", error=exc),
             )
             delay = _compute_webhook_retry_delay(item.attempts)
             jitter = _compute_webhook_retry_jitter(delay)
             try:
                 requeue_if_failed(item, delay_seconds=delay + jitter)
+                logger.info(
+                    "webhook.dispatch.requeued",
+                    extra=_webhook_delivery_telemetry(
+                        item=item,
+                        status="requeued",
+                        retry_delay_seconds=delay + jitter,
+                    ),
+                )
             except TypeError:
                 requeue_if_failed(item)
         time.sleep(0.0)
         await asyncio.sleep(settings.rq_dispatch_throttle_seconds)
     if processed > 0:
-        logger.info("webhook.dispatch.batch_complete", extra={"count": processed})
+        logger.info(
+            "webhook.dispatch.batch_complete",
+            extra=finalize_webhook_delivery_result_payload(
+                {
+                    "board_id": None,
+                    "webhook_id": None,
+                    "payload_id": None,
+                    "attempt": 0,
+                    "status": "batch_complete",
+                    "count": processed,
+                }
+            ),
+        )
     return processed
 
 
@@ -280,9 +320,30 @@ def run_flush_webhook_delivery_queue() -> None:
     """RQ entrypoint for running the async queue flush from worker jobs."""
     logger.info(
         "webhook.dispatch.batch_started",
-        extra={"throttle_seconds": settings.rq_dispatch_throttle_seconds},
+        extra=finalize_webhook_delivery_result_payload(
+            {
+                "board_id": None,
+                "webhook_id": None,
+                "payload_id": None,
+                "attempt": 0,
+                "status": "batch_started",
+                "throttle_seconds": settings.rq_dispatch_throttle_seconds,
+            }
+        ),
     )
     start = time.time()
     asyncio.run(flush_webhook_delivery_queue())
     elapsed_ms = int((time.time() - start) * 1000)
-    logger.info("webhook.dispatch.batch_finished", extra={"duration_ms": elapsed_ms})
+    logger.info(
+        "webhook.dispatch.batch_finished",
+        extra=finalize_webhook_delivery_result_payload(
+            {
+                "board_id": None,
+                "webhook_id": None,
+                "payload_id": None,
+                "attempt": 0,
+                "status": "batch_finished",
+                "duration_ms": elapsed_ms,
+            }
+        ),
+    )

@@ -42,6 +42,7 @@ Start with the narrowest high-value surface:
 5. task and approval activity payloads used across feed surfaces
 6. board and gateway notification payloads used across feed surfaces
 7. queue/job payloads used by background workers
+8. telemetry payloads used across worker/runtime observability paths
 
 Do not try to centralize every model at once.
 
@@ -81,7 +82,7 @@ Move to a standalone package only after:
 Use:
 
 - `OpenAPI` for synchronous HTTP APIs
-- `JSON Schema` for callback payloads and internal queue/job payloads
+- `JSON Schema` for callback payloads, internal queue/job payloads, and telemetry payloads
 
 Add `AsyncAPI` only if event streaming contracts become a first-class public surface.
 
@@ -130,6 +131,7 @@ Current status:
 - task and approval activity payloads now use the same schema + finalizer pattern
 - board and gateway activity payloads now follow the same schema + finalizer pattern
 - queue/job payloads now have shared schemas for dispatch, webhook delivery, and lifecycle reconcile
+- telemetry payloads are the next high-signal boundary for worker/runtime observability
 - next step is runtime-side callback validation and wider type adoption on top of generated artifacts
 
 ### Phase 2: backend and frontend adoption
