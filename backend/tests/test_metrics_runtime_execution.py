@@ -57,6 +57,14 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
         pr_url="https://github.com/example/repo/pull/9",
         branch_name="feature/runtime-metrics",
         result_payload={
+            "issue_identifier": "MC-9",
+            "runner_kind": "codex",
+            "completion_kind": "normal",
+            "last_event": "turn_completed",
+            "last_message": "Worker completed normally",
+            "session_id": "session-9",
+            "turn_count": 3,
+            "duration_ms": 90000,
             "usage": {
                 "input_tokens": 120,
                 "output_tokens": 80,
@@ -94,6 +102,14 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
     assert recent.board_name == "Delivery"
     assert recent.total_tokens == 200
     assert recent.pr_url == "https://github.com/example/repo/pull/9"
+    assert recent.issue_identifier == "MC-9"
+    assert recent.runner_kind == "codex"
+    assert recent.completion_kind == "normal"
+    assert recent.last_event == "turn_completed"
+    assert recent.last_message == "Worker completed normally"
+    assert recent.session_id == "session-9"
+    assert recent.turn_count == 3
+    assert recent.duration_ms == 90000
     assert recent.created_at == datetime(2026, 3, 21, 11, 45, 0)
     assert recent.started_at == datetime(2026, 3, 21, 11, 50, 0)
     assert recent.completed_at == datetime(2026, 3, 21, 12, 0, 0)

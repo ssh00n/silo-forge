@@ -475,6 +475,28 @@ def _usage_triplet(payload: dict[str, object] | None) -> tuple[int, int, int]:
     )
 
 
+def _result_text(payload: dict[str, object] | None, key: str) -> str | None:
+    if not payload:
+        return None
+    value = payload.get(key)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _result_int(payload: dict[str, object] | None, key: str) -> int | None:
+    if not payload:
+        return None
+    value = payload.get(key)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        return int(value.strip())
+    return None
+
+
 async def _runtime_execution_metrics(
     session: AsyncSession,
     range_spec: RangeSpec,
@@ -546,6 +568,14 @@ async def _runtime_execution_metrics(
                 summary=run.summary,
                 branch_name=run.branch_name,
                 pr_url=run.pr_url,
+                issue_identifier=_result_text(run.result_payload, "issue_identifier"),
+                runner_kind=_result_text(run.result_payload, "runner_kind"),
+                completion_kind=_result_text(run.result_payload, "completion_kind"),
+                last_event=_result_text(run.result_payload, "last_event"),
+                last_message=_result_text(run.result_payload, "last_message"),
+                session_id=_result_text(run.result_payload, "session_id"),
+                turn_count=_result_int(run.result_payload, "turn_count"),
+                duration_ms=_result_int(run.result_payload, "duration_ms"),
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 total_tokens=total_tokens,
