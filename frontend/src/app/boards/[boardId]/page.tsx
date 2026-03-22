@@ -2861,6 +2861,52 @@ export default function BoardDetailPage() {
     };
   }, [orderedLiveFeed]);
 
+  const taskWorkerOpsSummary = useMemo<LiveFeedOpsSummary>(() => {
+    const taskId = selectedTask?.id ?? null;
+    const relevant = orderedLiveFeed.filter((item) => {
+      if (!item.event_type.startsWith("queue.worker.")) return false;
+      if (!taskId) return true;
+      return item.task_id === taskId || item.task_id === null;
+    });
+    const latest = relevant[0] ?? null;
+    return {
+      latestLabel: latest ? liveFeedEventLabel(latest.event_type) : "No signal",
+      latestAt: latest?.created_at ?? null,
+      successCount: relevant.filter(
+        (item) =>
+          item.event_type === "queue.worker.success" ||
+          item.event_type === "queue.worker.batch_complete",
+      ).length,
+      failureCount: relevant.filter(
+        (item) =>
+          item.event_type === "queue.worker.failed" ||
+          item.event_type === "queue.worker.dequeue_failed",
+      ).length,
+    };
+  }, [orderedLiveFeed, selectedTask]);
+
+  const taskWebhookOpsSummary = useMemo<LiveFeedOpsSummary>(() => {
+    const taskId = selectedTask?.id ?? null;
+    const relevant = orderedLiveFeed.filter((item) => {
+      if (!item.event_type.startsWith("webhook.dispatch.")) return false;
+      if (!taskId) return true;
+      return item.task_id === taskId || item.task_id === null;
+    });
+    const latest = relevant[0] ?? null;
+    return {
+      latestLabel: latest ? liveFeedEventLabel(latest.event_type) : "No signal",
+      latestAt: latest?.created_at ?? null,
+      successCount: relevant.filter(
+        (item) =>
+          item.event_type === "webhook.dispatch.success" ||
+          item.event_type === "webhook.dispatch.batch_complete",
+      ).length,
+      failureCount: relevant.filter(
+        (item) => item.event_type === "webhook.dispatch.failed",
+      ).length,
+    };
+  }, [orderedLiveFeed, selectedTask]);
+
   const assignableAgents = useMemo(
     () => agents.filter((agent) => !agent.is_board_lead),
     [agents],
@@ -4855,6 +4901,50 @@ export default function BoardDetailPage() {
                 {selectedTaskExecutionRunsQuery.isFetching ? (
                   <span className="text-xs text-slate-400">Refreshing…</span>
                 ) : null}
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        Worker Ops
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {taskWorkerOpsSummary.latestLabel}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {taskWorkerOpsSummary.latestAt
+                        ? formatRelativeTimestamp(taskWorkerOpsSummary.latestAt)
+                        : "No signal"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-4 text-xs text-slate-600">
+                    <span>Success {taskWorkerOpsSummary.successCount}</span>
+                    <span>Failures {taskWorkerOpsSummary.failureCount}</span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        Webhook Ops
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {taskWebhookOpsSummary.latestLabel}
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {taskWebhookOpsSummary.latestAt
+                        ? formatRelativeTimestamp(taskWebhookOpsSummary.latestAt)
+                        : "No signal"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center gap-4 text-xs text-slate-600">
+                    <span>Success {taskWebhookOpsSummary.successCount}</span>
+                    <span>Failures {taskWebhookOpsSummary.failureCount}</span>
+                  </div>
+                </div>
               </div>
               {selectedTaskExecutionRunsQuery.isLoading ? (
                 <p className="text-sm text-slate-500">Loading runtime runs…</p>
