@@ -22,6 +22,8 @@ import type {
   DashboardMetrics,
   DashboardMetricsApiV1MetricsDashboardGetParams,
   DashboardRuntimeExecutionMetrics,
+  DashboardTelemetryOpsMetrics,
+  DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetParams,
   HTTPValidationError,
 } from ".././model";
 
@@ -538,6 +540,289 @@ export function useDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeG
 } {
   const queryOptions =
     getDashboardExecutionRuntimeMetricsApiV1MetricsExecutionRuntimeGetQueryOptions(
+      params,
+      options,
+    );
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
+    TData,
+    TError
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Return worker and webhook telemetry snapshot for accessible boards.
+ * @summary Dashboard Telemetry Ops Metrics
+ */
+export type dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponse200 =
+  {
+    data: DashboardTelemetryOpsMetrics;
+    status: 200;
+  };
+
+export type dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponse422 =
+  {
+    data: HTTPValidationError;
+    status: 422;
+  };
+
+export type dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponseSuccess =
+  dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponse200 & {
+    headers: Headers;
+  };
+export type dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponseError =
+  dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponse422 & {
+    headers: Headers;
+  };
+
+export type dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponse =
+  | dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponseSuccess
+  | dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponseError;
+
+export const getDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetUrl = (
+  params?: DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/metrics/telemetry-ops?${stringifiedParams}`
+    : `/api/v1/metrics/telemetry-ops`;
+};
+
+export const dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet = async (
+  params?: DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetParams,
+  options?: RequestInit,
+): Promise<dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponse> => {
+  return customFetch<dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetResponse>(
+    getDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetQueryKey =
+  (params?: DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetParams) => {
+    return [
+      `/api/v1/metrics/telemetry-ops`,
+      ...(params ? [params] : []),
+    ] as const;
+  };
+
+export const getDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet>
+    >,
+    TError = HTTPValidationError,
+  >(
+    params?: DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetParams,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >;
+      request?: SecondParameter<typeof customFetch>;
+    },
+  ) => {
+    const { query: queryOptions, request: requestOptions } = options ?? {};
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetQueryKey(
+        params,
+      );
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+        >
+      >
+    > = ({ signal }) =>
+      dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet(params, {
+        signal,
+        ...requestOptions,
+      });
+
+    return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> };
+  };
+
+export type DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet>
+    >
+  >;
+export type DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetQueryError =
+  HTTPValidationError;
+
+export function useDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet<
+  TData = Awaited<
+    ReturnType<typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params:
+    | undefined
+    | DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet<
+  TData = Awaited<
+    ReturnType<typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+            >
+          >
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+export function useDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet<
+  TData = Awaited<
+    ReturnType<typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+};
+/**
+ * @summary Dashboard Telemetry Ops Metrics
+ */
+
+export function useDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet<
+  TData = Awaited<
+    ReturnType<typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  params?: DashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof dashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & {
+  queryKey: DataTag<QueryKey, TData, TError>;
+} {
+  const queryOptions =
+    getDashboardTelemetryOpsMetricsApiV1MetricsTelemetryOpsGetQueryOptions(
       params,
       options,
     );

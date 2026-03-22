@@ -22,7 +22,6 @@ import type {
 
 import type {
   HTTPValidationError,
-  TaskExecutionRunCallback,
   TaskExecutionRunCreate,
   TaskExecutionRunRead,
   TaskExecutionRunUpdate,
@@ -1658,7 +1657,6 @@ export const getReceiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallb
 export const receiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallbacksSymphonyPost =
   async (
     runId: string,
-    taskExecutionRunCallback: TaskExecutionRunCallback,
     options?: RequestInit,
   ): Promise<receiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallbacksSymphonyPostResponse> => {
     return customFetch<receiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallbacksSymphonyPostResponse>(
@@ -1668,8 +1666,6 @@ export const receiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallback
       {
         ...options,
         method: "POST",
-        headers: { "Content-Type": "application/json", ...options?.headers },
-        body: JSON.stringify(taskExecutionRunCallback),
       },
     );
   };
@@ -1683,7 +1679,7 @@ export const getReceiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallb
         >
       >,
       TError,
-      { runId: string; data: TaskExecutionRunCallback },
+      { runId: string },
       TContext
     >;
     request?: SecondParameter<typeof customFetch>;
@@ -1694,7 +1690,7 @@ export const getReceiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallb
       >
     >,
     TError,
-    { runId: string; data: TaskExecutionRunCallback },
+    { runId: string },
     TContext
   > => {
     const mutationKey = [
@@ -1714,13 +1710,12 @@ export const getReceiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallb
           typeof receiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallbacksSymphonyPost
         >
       >,
-      { runId: string; data: TaskExecutionRunCallback }
+      { runId: string }
     > = (props) => {
-      const { runId, data } = props ?? {};
+      const { runId } = props ?? {};
 
       return receiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallbacksSymphonyPost(
         runId,
-        data,
         requestOptions,
       );
     };
@@ -1736,8 +1731,7 @@ export type ReceiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallbacks
       >
     >
   >;
-export type ReceiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallbacksSymphonyPostMutationBody =
-  TaskExecutionRunCallback;
+
 export type ReceiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallbacksSymphonyPostMutationError =
   HTTPValidationError;
 
@@ -1754,7 +1748,7 @@ export const useReceiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallb
           >
         >,
         TError,
-        { runId: string; data: TaskExecutionRunCallback },
+        { runId: string },
         TContext
       >;
       request?: SecondParameter<typeof customFetch>;
@@ -1767,7 +1761,7 @@ export const useReceiveSymphonyExecutionCallbackApiV1TaskExecutionRunsRunIdCallb
       >
     >,
     TError,
-    { runId: string; data: TaskExecutionRunCallback },
+    { runId: string },
     TContext
   > => {
     return useMutation(

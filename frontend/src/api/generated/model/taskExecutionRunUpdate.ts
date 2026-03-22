@@ -11,10 +11,17 @@ import type { TaskExecutionRunUpdateResultPayload } from "./taskExecutionRunUpda
  */
 export interface TaskExecutionRunUpdate {
   branch_name?: string | null;
+  completion_kind?: string | null;
+  duration_ms?: number | null;
   error_message?: string | null;
   external_run_id?: string | null;
+  issue_identifier?: string | null;
+  last_event?: string | null;
+  last_message?: string | null;
   pr_url?: string | null;
   result_payload?: TaskExecutionRunUpdateResultPayload;
+  runner_kind?: string | null;
+  session_id?: string | null;
   status?:
     | "queued"
     | "dispatching"
@@ -25,5 +32,6 @@ export interface TaskExecutionRunUpdate {
     | "blocked"
     | null;
   summary?: string | null;
+  turn_count?: number | null;
   workspace_path?: string | null;
 }
