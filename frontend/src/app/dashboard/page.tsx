@@ -143,6 +143,108 @@ const DASHBOARD_ACTIVITY_FILTERS: Array<{
   { value: "gateway", label: "Gateway" },
 ];
 
+const dashboardActivityLabel = (eventType: string): string => {
+  if (eventType === "task.execution_run.created") return "Run queued";
+  if (eventType === "task.execution_run.dispatched") return "Run sent";
+  if (eventType === "task.execution_run.retried") return "Run retried";
+  if (eventType === "task.execution_run.updated") return "Run update";
+  if (eventType === "task.execution_run.report") return "Run report";
+  if (eventType === "silo.runtime.validate") return "Runtime validate";
+  if (eventType === "silo.runtime.apply") return "Runtime apply";
+  if (eventType === "queue.worker.batch_started") return "Worker start";
+  if (eventType === "queue.worker.batch_complete") return "Worker batch";
+  if (eventType === "queue.worker.stopped") return "Worker stopped";
+  if (eventType === "queue.worker.success") return "Worker success";
+  if (eventType === "queue.worker.failed") return "Worker failed";
+  if (eventType.startsWith("queue.worker.")) return "Worker";
+  if (eventType === "webhook.dispatch.batch_started") return "Webhook batch";
+  if (eventType === "webhook.dispatch.batch_complete") return "Webhook batch";
+  if (eventType === "webhook.dispatch.batch_finished") return "Webhook finished";
+  if (eventType === "webhook.dispatch.success") return "Webhook sent";
+  if (eventType === "webhook.dispatch.failed") return "Webhook failed";
+  if (eventType === "webhook.dispatch.requeued") return "Webhook retried";
+  if (eventType.startsWith("webhook.dispatch.")) return "Webhook";
+  if (eventType === "task.status_changed") return "Status";
+  if (eventType === "task.created") return "Created";
+  if (eventType === "approval.created") return "Approval";
+  if (eventType === "approval.updated") return "Approval update";
+  if (eventType === "approval.approved") return "Approved";
+  if (eventType === "approval.rejected") return "Rejected";
+  if (eventType.startsWith("agent.") && eventType.endsWith(".failed")) return "Lifecycle failed";
+  if (eventType.startsWith("agent.") && eventType.endsWith(".direct")) return "Lifecycle";
+  if (eventType === "agent.heartbeat") return "Heartbeat";
+  if (eventType === "agent.wakeup.sent") return "Wakeup";
+  if (eventType === "agent.nudge.sent") return "Nudge";
+  if (eventType === "agent.nudge.failed") return "Nudge failed";
+  if (eventType === "agent.soul.updated") return "SOUL updated";
+  if (eventType.startsWith("gateway.")) return "Gateway";
+  if (eventType.startsWith("board.")) return "Board";
+  if (eventType.startsWith("task.")) return "Task";
+  return eventType;
+};
+
+const dashboardActivityPillClass = (eventType: string): string => {
+  if (eventType === "task.execution_run.created") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType === "task.execution_run.dispatched") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType === "task.execution_run.retried") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+  if (eventType === "task.execution_run.updated") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "task.execution_run.report") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (eventType === "silo.runtime.validate") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (eventType === "silo.runtime.apply") {
+    return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  }
+  if (eventType === "queue.worker.success" || eventType === "queue.worker.batch_complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "queue.worker.failed" || eventType === "queue.worker.dequeue_failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType.startsWith("queue.worker.")) {
+    return "border-slate-200 bg-slate-100 text-slate-700";
+  }
+  if (eventType === "webhook.dispatch.success" || eventType === "webhook.dispatch.batch_complete") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (eventType === "webhook.dispatch.failed") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+  if (eventType === "webhook.dispatch.requeued") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (eventType.startsWith("webhook.dispatch.")) {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  const category = activityCategoryForEvent(eventType);
+  if (category === "runtime" || category === "runs") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+  if (category === "gateway") {
+    return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
+  }
+  if (category === "agents") {
+    return "border-violet-200 bg-violet-50 text-violet-700";
+  }
+  if (category === "approvals") {
+    return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  }
+  if (category === "tasks") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  return "border-slate-200 bg-slate-100 text-slate-700";
+};
+
 const latestActivityTimestamp = (items: ActivityEventRead[]): string | null => {
   let latestTime = 0;
   items.forEach((item) => {
@@ -1373,7 +1475,14 @@ export default function DashboardPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1 overflow-hidden">
                               <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                                <p className="uppercase tracking-wider text-slate-500">
+                                <span
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium ${dashboardActivityPillClass(
+                                    event.event_type,
+                                  )}`}
+                                >
+                                  {dashboardActivityLabel(event.event_type)}
+                                </span>
+                                <p className="uppercase tracking-wider text-slate-400">
                                   {event.event_type}
                                 </p>
                                 {content.runtimeStatus ? (
