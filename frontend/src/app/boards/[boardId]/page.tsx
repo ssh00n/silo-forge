@@ -5329,22 +5329,44 @@ export default function BoardDetailPage() {
                             </span>
                           ))}
                       </div>
-                      {assignedDispatchSilo.candidate &&
-                      assignedDispatchSilo.candidate.silo.slug !== newExecutionRunSiloSlug ? (
-                        <div className="mt-3">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setNewExecutionRunSiloSlug(
-                                assignedDispatchSilo.candidate!.silo.slug,
-                              )
-                            }
-                            disabled={isCreatingExecutionRun}
-                          >
-                            Continue on this silo
-                          </Button>
+                      {assignedDispatchSilo.candidate ||
+                      (canWrite && canRetryRuntimeRun(assignedDispatchSilo.run.status)) ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {assignedDispatchSilo.candidate &&
+                          assignedDispatchSilo.candidate.silo.slug !==
+                            newExecutionRunSiloSlug ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setNewExecutionRunSiloSlug(
+                                  assignedDispatchSilo.candidate!.silo.slug,
+                                )
+                              }
+                              disabled={isCreatingExecutionRun}
+                            >
+                              Continue on this silo
+                            </Button>
+                          ) : null}
+                          {canWrite &&
+                          canRetryRuntimeRun(assignedDispatchSilo.run.status) ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                void handleRetryExecutionRun(assignedDispatchSilo.run)
+                              }
+                              disabled={
+                                retryingExecutionRunId === assignedDispatchSilo.run.id
+                              }
+                            >
+                              {retryingExecutionRunId === assignedDispatchSilo.run.id
+                                ? "Retrying…"
+                                : "Retry on this silo"}
+                            </Button>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -5404,7 +5426,11 @@ export default function BoardDetailPage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                            Recommended silo
+                            {assignedDispatchSilo &&
+                            selectedDispatchCandidate.silo.slug !==
+                              assignedDispatchSilo.run.silo_slug
+                              ? "Alternative silo"
+                              : "Recommended silo"}
                           </p>
                           <p className="mt-1 text-sm font-semibold text-slate-900">
                             {selectedDispatchCandidate.silo.name}
