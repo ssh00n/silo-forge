@@ -23,6 +23,14 @@ export type RuntimeRunSnapshot = {
   summary?: string | null;
   branch_name?: string | null;
   pr_url?: string | null;
+  issue_identifier?: string | null;
+  runner_kind?: string | null;
+  completion_kind?: string | null;
+  last_event?: string | null;
+  last_message?: string | null;
+  session_id?: string | null;
+  turn_count?: number | null;
+  duration_ms?: number | null;
 };
 
 export type RuntimeRunActivityPayload = Partial<ActivityExecutionRunPayload>;

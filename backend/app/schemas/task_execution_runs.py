@@ -50,7 +50,12 @@ class TaskExecutionRunUpdate(SQLModel):
     summary: str | None = None
     error_message: str | None = None
     issue_identifier: str | None = None
+    runner_kind: str | None = None
     completion_kind: str | None = None
+    last_event: str | None = None
+    last_message: str | None = None
+    session_id: str | None = None
+    turn_count: int | None = None
     duration_ms: int | None = None
     result_payload: dict[str, Any] | None = None
 
@@ -62,7 +67,11 @@ class TaskExecutionRunUpdate(SQLModel):
         "summary",
         "error_message",
         "issue_identifier",
+        "runner_kind",
         "completion_kind",
+        "last_event",
+        "last_message",
+        "session_id",
         mode="before",
     )
     @classmethod
@@ -97,6 +106,14 @@ class TaskExecutionRunRead(SQLModel):
     pr_url: str | None = None
     summary: str | None = None
     error_message: str | None = None
+    issue_identifier: str | None = None
+    runner_kind: str | None = None
+    completion_kind: str | None = None
+    last_event: str | None = None
+    last_message: str | None = None
+    session_id: str | None = None
+    turn_count: int | None = None
+    duration_ms: int | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     created_at: datetime
@@ -114,7 +131,12 @@ class TaskExecutionRunCallback(SQLModel):
     summary: str | None = None
     error_message: str | None = None
     issue_identifier: str | None = None
+    runner_kind: str | None = None
     completion_kind: str | None = None
+    last_event: str | None = None
+    last_message: str | None = None
+    session_id: str | None = None
+    turn_count: int | None = None
     duration_ms: int | None = None
     result_payload: dict[str, Any] | None = None
 
@@ -126,7 +148,11 @@ class TaskExecutionRunCallback(SQLModel):
         "summary",
         "error_message",
         "issue_identifier",
+        "runner_kind",
         "completion_kind",
+        "last_event",
+        "last_message",
+        "session_id",
         mode="before",
     )
     @classmethod
@@ -137,10 +163,10 @@ class TaskExecutionRunCallback(SQLModel):
             return trimmed or None
         return value
 
-    @field_validator("duration_ms")
+    @field_validator("duration_ms", "turn_count")
     @classmethod
-    def validate_duration_ms(cls, value: int | None) -> int | None:
-        """Reject negative callback durations."""
+    def validate_non_negative_ints(cls, value: int | None) -> int | None:
+        """Reject negative callback counters and durations."""
         if value is not None and value < 0:
-            raise ValueError("duration_ms must be >= 0")
+            raise ValueError("callback integer fields must be >= 0")
         return value
