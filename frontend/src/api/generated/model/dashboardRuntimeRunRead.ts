@@ -13,16 +13,24 @@ export interface DashboardRuntimeRunRead {
   board_name: string;
   branch_name?: string | null;
   completed_at?: string | null;
+  completion_kind?: string | null;
   created_at: string;
+  duration_ms?: number | null;
   input_tokens?: number;
+  issue_identifier?: string | null;
+  last_event?: string | null;
+  last_message?: string | null;
   output_tokens?: number;
   pr_url?: string | null;
   run_id: string;
+  runner_kind?: string | null;
+  session_id?: string | null;
   started_at?: string | null;
   status: string;
   summary?: string | null;
   task_id: string;
   task_title: string;
   total_tokens?: number;
+  turn_count?: number | null;
   updated_at: string;
 }

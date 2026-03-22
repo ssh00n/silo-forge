@@ -427,6 +427,14 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
                     "completion_kind": "normal",
                     "duration_ms": 65000,
                     "result_payload": {
+                        "issue_identifier": "MC-live-2",
+                        "runner_kind": "codex",
+                        "completion_kind": "normal",
+                        "last_event": "turn_completed",
+                        "last_message": "Worker completed normally",
+                        "session_id": "session-22",
+                        "turn_count": 2,
+                        "duration_ms": 65000,
                         "pull_request": 22,
                         "usage": {"total_tokens": 320},
                     },
@@ -434,6 +442,14 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
             )
 
         assert response.status_code == 200
+        assert response.json()["runner_kind"] == "codex"
+        assert response.json()["issue_identifier"] == "MC-live-2"
+        assert response.json()["completion_kind"] == "normal"
+        assert response.json()["last_event"] == "turn_completed"
+        assert response.json()["last_message"] == "Worker completed normally"
+        assert response.json()["session_id"] == "session-22"
+        assert response.json()["turn_count"] == 2
+        assert response.json()["duration_ms"] == 65000
         async with session_maker() as session:
             refreshed_task = await session.get(Task, task.id)
             assert refreshed_task is not None
@@ -458,7 +474,12 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
             assert comments[0].payload["pull_request"] == 22
             assert comments[0].payload["total_tokens"] == 320
             assert comments[0].payload["issue_identifier"] == "MC-live-2"
+            assert comments[0].payload["runner_kind"] == "codex"
             assert comments[0].payload["completion_kind"] == "normal"
+            assert comments[0].payload["last_event"] == "turn_completed"
+            assert comments[0].payload["last_message"] == "Worker completed normally"
+            assert comments[0].payload["session_id"] == "session-22"
+            assert comments[0].payload["turn_count"] == 2
             assert comments[0].payload["duration_ms"] == 65000
     finally:
         settings.symphony_callback_token = original_callback_token

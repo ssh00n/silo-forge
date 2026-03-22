@@ -63,7 +63,11 @@ import {
   formatTimestamp,
   parseTimestamp,
 } from "@/lib/formatters";
-import { type RuntimeRunSnapshot, runtimeRunTimingLabel } from "@/lib/runtime-runs";
+import {
+  formatRuntimeDurationMs,
+  type RuntimeRunSnapshot,
+  runtimeRunTimingLabel,
+} from "@/lib/runtime-runs";
 
 type SessionSummary = {
   key: string;
@@ -106,6 +110,14 @@ type DashboardRuntimeRunSnapshot = RuntimeRunSnapshot & {
   run_id: string;
   board_name: string;
   task_title: string;
+  issue_identifier?: string | null;
+  runner_kind?: string | null;
+  completion_kind?: string | null;
+  last_event?: string | null;
+  last_message?: string | null;
+  session_id?: string | null;
+  turn_count?: number | null;
+  duration_ms?: number | null;
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
@@ -1953,6 +1965,21 @@ export default function DashboardPage() {
                     runtimeMetrics.recent_runs.map((run) => (
                       (() => {
                         const duration = runtimeRunTimingLabel(run);
+                        const detailRows = [
+                          run.issue_identifier ? { label: "Issue", value: run.issue_identifier } : null,
+                          run.runner_kind ? { label: "Runner", value: run.runner_kind } : null,
+                          run.completion_kind ? { label: "Completion", value: run.completion_kind } : null,
+                          run.turn_count != null ? { label: "Turns", value: String(run.turn_count) } : null,
+                          run.session_id ? { label: "Session", value: run.session_id } : null,
+                          run.last_event ? { label: "Event", value: run.last_event } : null,
+                          run.duration_ms != null
+                            ? { label: "Duration", value: formatRuntimeDurationMs(run.duration_ms) }
+                            : null,
+                          run.total_tokens > 0
+                            ? { label: "Tokens", value: compactNumber(run.total_tokens) }
+                            : null,
+                          run.last_message ? { label: "Last message", value: run.last_message } : null,
+                        ].filter((row): row is { label: string; value: string } => row !== null);
                         return (
                           <div
                             key={run.run_id}
@@ -1987,6 +2014,7 @@ export default function DashboardPage() {
                                 <p className="mt-1 line-clamp-2 text-xs text-slate-600">
                                   {run.summary?.trim() || "No runtime summary yet."}
                                 </p>
+                                <RuntimeRunMetaGrid details={detailRows} itemKey={run.run_id} />
                               </div>
                               <div className="shrink-0 text-right">
                                 <p className="text-xs font-medium text-slate-700">

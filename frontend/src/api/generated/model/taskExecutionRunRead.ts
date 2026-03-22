@@ -16,18 +16,25 @@ export interface TaskExecutionRunRead {
   board_id: string;
   branch_name?: string | null;
   completed_at?: string | null;
+  completion_kind?: string | null;
   created_at: string;
   dispatch_payload?: TaskExecutionRunReadDispatchPayload;
+  duration_ms?: number | null;
   error_message?: string | null;
   executor_kind?: "symphony";
   external_run_id?: string | null;
   id: string;
+  issue_identifier?: string | null;
+  last_event?: string | null;
+  last_message?: string | null;
   organization_id: string;
   pr_url?: string | null;
   requested_by_agent_id?: string | null;
   requested_by_user_id?: string | null;
   result_payload?: TaskExecutionRunReadResultPayload;
   role_slug: string;
+  runner_kind?: string | null;
+  session_id?: string | null;
   silo_id: string;
   silo_slug: string;
   started_at?: string | null;
@@ -35,6 +42,7 @@ export interface TaskExecutionRunRead {
   summary?: string | null;
   task_id: string;
   task_snapshot?: TaskExecutionRunReadTaskSnapshot;
+  turn_count?: number | null;
   updated_at: string;
   workspace_path?: string | null;
 }

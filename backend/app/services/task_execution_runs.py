@@ -403,7 +403,12 @@ class TaskExecutionRunService:
                 summary=payload.summary,
                 error_message=payload.error_message,
                 issue_identifier=payload.issue_identifier,
+                runner_kind=payload.runner_kind,
                 completion_kind=payload.completion_kind,
+                last_event=payload.last_event,
+                last_message=payload.last_message,
+                session_id=payload.session_id,
+                turn_count=payload.turn_count,
                 duration_ms=payload.duration_ms,
                 result_payload=self._merge_callback_result_payload(payload=payload),
             ),
@@ -419,8 +424,18 @@ class TaskExecutionRunService:
         )
         if payload.issue_identifier is not None:
             result_payload["issue_identifier"] = payload.issue_identifier
+        if payload.runner_kind is not None:
+            result_payload["runner_kind"] = payload.runner_kind
         if payload.completion_kind is not None:
             result_payload["completion_kind"] = payload.completion_kind
+        if payload.last_event is not None:
+            result_payload["last_event"] = payload.last_event
+        if payload.last_message is not None:
+            result_payload["last_message"] = payload.last_message
+        if payload.session_id is not None:
+            result_payload["session_id"] = payload.session_id
+        if payload.turn_count is not None:
+            result_payload["turn_count"] = payload.turn_count
         if payload.duration_ms is not None:
             result_payload["duration_ms"] = payload.duration_ms
         return result_payload or None
@@ -992,6 +1007,22 @@ class TaskExecutionRunService:
             pr_url=run.pr_url,
             summary=run.summary,
             error_message=run.error_message,
+            issue_identifier=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "issue_identifier"
+            ),
+            runner_kind=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "runner_kind"
+            ),
+            completion_kind=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "completion_kind"
+            ),
+            last_event=TaskExecutionRunService._extract_result_text(run.result_payload, "last_event"),
+            last_message=TaskExecutionRunService._extract_result_text(
+                run.result_payload, "last_message"
+            ),
+            session_id=TaskExecutionRunService._extract_result_text(run.result_payload, "session_id"),
+            turn_count=TaskExecutionRunService._extract_result_int(run.result_payload, "turn_count"),
+            duration_ms=TaskExecutionRunService._extract_result_int(run.result_payload, "duration_ms"),
             started_at=run.started_at,
             completed_at=run.completed_at,
             created_at=run.created_at,

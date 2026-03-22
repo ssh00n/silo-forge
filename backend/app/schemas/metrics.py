@@ -108,6 +108,14 @@ class DashboardRuntimeRunRead(SQLModel):
     summary: str | None = None
     branch_name: str | None = None
     pr_url: str | None = None
+    issue_identifier: str | None = None
+    runner_kind: str | None = None
+    completion_kind: str | None = None
+    last_event: str | None = None
+    last_message: str | None = None
+    session_id: str | None = None
+    turn_count: int | None = None
+    duration_ms: int | None = None
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0

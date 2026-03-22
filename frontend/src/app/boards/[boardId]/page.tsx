@@ -131,6 +131,7 @@ import { cn } from "@/lib/utils";
 import { usePageActive } from "@/hooks/usePageActive";
 import { fetchSilos } from "@/lib/silos";
 import {
+  formatRuntimeDurationMs,
   type TaskExecutionRunResponse,
   type TaskExecutionRunSnapshot,
   type TaskExecutionRunsResponse,
@@ -961,9 +962,19 @@ const TaskExecutionRunCard = memo(function TaskExecutionRunCard({
     run.external_run_id
       ? { label: "External run", value: run.external_run_id }
       : null,
+    run.issue_identifier ? { label: "Issue", value: run.issue_identifier } : null,
+    run.runner_kind ? { label: "Runner", value: run.runner_kind } : null,
+    run.completion_kind ? { label: "Completion", value: run.completion_kind } : null,
+    run.turn_count != null ? { label: "Turns", value: String(run.turn_count) } : null,
+    run.session_id ? { label: "Session", value: run.session_id } : null,
+    run.last_event ? { label: "Event", value: run.last_event } : null,
+    run.duration_ms != null
+      ? { label: "Duration", value: formatRuntimeDurationMs(run.duration_ms) }
+      : null,
     totalTokens > 0
       ? { label: "Tokens", value: formatTokenCount(totalTokens) }
       : null,
+    run.last_message ? { label: "Last message", value: run.last_message } : null,
     errorMessage ? { label: "Error", value: errorMessage } : null,
   ].filter((row): row is { label: string; value: string } => row !== null);
 
