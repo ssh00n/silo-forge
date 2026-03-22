@@ -32,6 +32,8 @@ class SiloSpawnRequestBase(SQLModel):
     source_task_id: UUID | None = None
     desired_role: str | None = None
     source_task_title: str | None = None
+    source_task_status: str | None = None
+    source_task_priority: str | None = None
     runtime_preference: str | None = None
     summary: str | None = None
     desired_state: dict[str, object] | None = None
@@ -74,10 +76,18 @@ class SiloSpawnRequestUpdate(SQLModel):
     status: SiloSpawnRequestStatus | None = None
     priority: SiloSpawnRequestPriority | None = None
     source_task_title: str | None = None
+    source_task_status: str | None = None
+    source_task_priority: str | None = None
     summary: str | None = None
     desired_state: dict[str, object] | None = None
 
-    @field_validator("source_task_title", "summary", mode="before")
+    @field_validator(
+        "source_task_title",
+        "source_task_status",
+        "source_task_priority",
+        "summary",
+        mode="before",
+    )
     @classmethod
     def _normalize_summary(cls, value: object) -> object:
         if isinstance(value, str):
@@ -92,6 +102,8 @@ class SiloSpawnRequestRead(SiloSpawnRequestBase):
     requested_by_user_id: UUID | None = None
     source_task_id: UUID | None = None
     source_task_title: str | None = None
+    source_task_status: str | None = None
+    source_task_priority: str | None = None
     materialized_silo_id: UUID | None = None
     materialized_silo_slug: str | None = None
     materialized_at: datetime | None = None

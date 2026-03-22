@@ -450,6 +450,8 @@ export const resolveActivityFeedContent = (
     const scope = readString(requestPayload, ["scope"]);
     const siloKind = readString(requestPayload, ["silo_kind"]);
     const sourceTaskTitle = readString(requestPayload, ["source_task_title"]);
+    const sourceTaskStatus = readString(requestPayload, ["source_task_status"]);
+    const sourceTaskPriority = readString(requestPayload, ["source_task_priority"]);
     const materializedSiloSlug = readString(requestPayload, ["materialized_silo_slug"]);
     const details: ActivityDetailRow[] = [];
     if (status) details.push({ label: "Status", value: status });
@@ -458,6 +460,8 @@ export const resolveActivityFeedContent = (
     if (scope) details.push({ label: "Scope", value: scope });
     if (siloKind) details.push({ label: "Shape", value: siloKind });
     if (sourceTaskTitle) details.push({ label: "Demand", value: sourceTaskTitle });
+    if (sourceTaskStatus) details.push({ label: "Demand status", value: sourceTaskStatus });
+    if (sourceTaskPriority) details.push({ label: "Demand priority", value: sourceTaskPriority });
     if (materializedSiloSlug) details.push({ label: "Silo", value: materializedSiloSlug });
     return {
       summary: normalizedMessage || `Silo request updated: ${displayName}.`,

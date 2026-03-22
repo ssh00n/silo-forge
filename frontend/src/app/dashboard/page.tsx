@@ -75,7 +75,11 @@ import {
   runtimeRunOperatorGuidance,
   runtimeRunTimingLabel,
 } from "@/lib/runtime-runs";
-import { fetchSiloSpawnRequests } from "@/lib/silo-spawn-requests";
+import {
+  describeSiloRequestPressure,
+  fetchSiloSpawnRequests,
+  isOpenSiloRequestStatus,
+} from "@/lib/silo-spawn-requests";
 import { cn } from "@/lib/utils";
 
 type SessionSummary = {
@@ -190,6 +194,8 @@ type SiloRequestsSummary = {
   urgentCount: number;
   highCount: number;
   materializedRecentCount: number;
+  demandLinkedCount: number;
+  activeWorkloadCount: number;
 };
 
 type StreamedActivityEvent = ActivityEventRead;
@@ -982,9 +988,6 @@ function InfoBlock({
   );
 }
 
-const isOpenSiloRequestStatus = (status: string): boolean =>
-  status === "requested" || status === "planned" || status === "spawning" || status === "running";
-
 export default function DashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -1181,6 +1184,10 @@ export default function DashboardPage() {
           acc.openCount += 1;
           if (request.priority === "urgent") acc.urgentCount += 1;
           if (request.priority === "high") acc.highCount += 1;
+          if (request.source_task_title) acc.demandLinkedCount += 1;
+          if (describeSiloRequestPressure(request) === "Active workload pressure") {
+            acc.activeWorkloadCount += 1;
+          }
         }
         if (request.materialized_at) {
           const materializedAt = new Date(request.materialized_at).getTime();
@@ -1193,7 +1200,14 @@ export default function DashboardPage() {
         }
         return acc;
       },
-      { openCount: 0, urgentCount: 0, highCount: 0, materializedRecentCount: 0 },
+      {
+        openCount: 0,
+        urgentCount: 0,
+        highCount: 0,
+        materializedRecentCount: 0,
+        demandLinkedCount: 0,
+        activeWorkloadCount: 0,
+      },
     );
   }, [siloRequestsQuery.data]);
 
@@ -1791,6 +1805,14 @@ export default function DashboardPage() {
                   { label: "Open", value: formatCount(siloRequestsSummary.openCount) },
                   { label: "Urgent", value: formatCount(siloRequestsSummary.urgentCount) },
                   { label: "High", value: formatCount(siloRequestsSummary.highCount) },
+                  {
+                    label: "Demand-linked",
+                    value: formatCount(siloRequestsSummary.demandLinkedCount),
+                  },
+                  {
+                    label: "Active workload",
+                    value: formatCount(siloRequestsSummary.activeWorkloadCount),
+                  },
                   {
                     label: "Materialized",
                     value: formatCount(siloRequestsSummary.materializedRecentCount),

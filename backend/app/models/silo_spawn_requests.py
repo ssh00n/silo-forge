@@ -42,6 +42,8 @@ class SiloSpawnRequest(TenantScoped, table=True):
     priority: str = Field(default="normal", index=True)
     desired_role: str | None = None
     source_task_title: str | None = None
+    source_task_status: str | None = None
+    source_task_priority: str | None = None
     runtime_preference: str | None = None
     status: str = Field(default="requested", index=True)
     summary: str | None = None

@@ -106,3 +106,70 @@ export function hasSiloConfigChanges(args: {
     return normalizedDraft !== (role.gateway_id ?? null);
   });
 }
+
+export function getGatewayRuntimeRoleCount(detail: SiloDetail): number {
+  return detail.roles.filter((role) => role.runtime_kind === "gateway").length;
+}
+
+export function getSiloHealthSummary(detail: SiloDetail): {
+  label: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+  guidance: string;
+} {
+  const warningCount = collectSiloWarnings(detail).length;
+  const blockedTargets = getBlockedProvisionTargetCount(detail);
+  const gatewayRoleCount = getGatewayRuntimeRoleCount(detail);
+  const assignedGatewayRoles = getAssignedGatewayRoleCount(detail);
+  const latestRuntime = detail.latest_runtime_operation;
+
+  if (blockedTargets > 0 || warningCount > 0) {
+    return {
+      label: "Needs attention",
+      tone: blockedTargets > 0 ? "danger" : "warning",
+      guidance: "Resolve runtime warnings or blocked targets before trusting this silo.",
+    };
+  }
+
+  if (gatewayRoleCount > 0 && assignedGatewayRoles < gatewayRoleCount) {
+    return {
+      label: "Incomplete",
+      tone: "warning",
+      guidance: "Assign gateway-backed roles before expecting healthy execution.",
+    };
+  }
+
+  if (latestRuntime?.mode === "apply" && getLatestRuntimeBlockedCount(detail) === 0) {
+    return {
+      label: "Ready",
+      tone: "success",
+      guidance: "The latest runtime apply completed without blocked targets.",
+    };
+  }
+
+  if (getReadyProvisionTargetCount(detail) > 0) {
+    return {
+      label: "Ready to apply",
+      tone: "neutral",
+      guidance: "The silo is configured enough to validate or apply runtime.",
+    };
+  }
+
+  return {
+    label: "Draft",
+    tone: "neutral",
+    guidance: "This silo exists, but it has not been driven into an operational state yet.",
+  };
+}
+
+export function getSiloRuntimePosture(detail: SiloDetail): string {
+  const latestRuntime = detail.latest_runtime_operation;
+  if (!latestRuntime) return "No runtime operation yet";
+  if (latestRuntime.mode === "apply") {
+    return getLatestRuntimeBlockedCount(detail) > 0
+      ? "Latest apply needs follow-up"
+      : "Latest apply completed";
+  }
+  return getLatestRuntimeBlockedCount(detail) > 0
+    ? "Latest validate found blockers"
+    : "Latest validate completed";
+}

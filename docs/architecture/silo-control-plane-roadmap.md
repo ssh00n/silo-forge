@@ -152,6 +152,31 @@ Needed:
 
 The next roadmap should be driven by product value, not by abstract architecture purity.
 
+## Core Vs Secondary UX
+
+### Core UX
+
+This is the part the product must get right first.
+
+- create and configure a silo
+- give work to a silo
+- see whether the silo is healthy, ready, blocked, or degraded
+- inspect current runtime progress and failures
+- intervene with retry, cancel, acknowledge, or escalation
+
+If these flows are weak, the product is not yet aligned with the real operator need.
+
+### Secondary UX
+
+These flows are valuable, but they sit on top of a strong core.
+
+- silo request intake and prioritization
+- capacity planning and demand forecasting
+- long-horizon organization design
+- future fleet planning and expansion workflows
+
+`Silo requests` should stay in the product, but it should not dominate the main operator entry experience.
+
 ### Priority 1. Complete The Runtime Operator Loop
 
 Why first:
@@ -179,6 +204,7 @@ Must include:
 - role/gateway assignment health
 - visible silo inventory and health
 - ability to understand which agents belong to which silo
+- silo-first overview pages that emphasize health, readiness, and current work over planning queues
 
 ### Priority 3. Add Silo Spawn And Agent Management
 

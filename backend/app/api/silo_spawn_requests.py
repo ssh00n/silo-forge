@@ -54,6 +54,8 @@ def _activity_payload(request: SiloSpawnRequest) -> dict[str, object]:
         "desired_role": request.desired_role,
         "source_task_id": str(request.source_task_id) if request.source_task_id else None,
         "source_task_title": request.source_task_title,
+        "source_task_status": request.source_task_status,
+        "source_task_priority": request.source_task_priority,
         "runtime_preference": request.runtime_preference,
         "materialized_silo_id": str(request.materialized_silo_id)
         if request.materialized_silo_id
@@ -167,6 +169,8 @@ async def create_silo_spawn_request(
         desired_role=payload.desired_role,
         source_task_id=payload.source_task_id,
         source_task_title=payload.source_task_title or (task.title if task else None),
+        source_task_status=payload.source_task_status or (task.status if task else None),
+        source_task_priority=payload.source_task_priority or (task.priority if task else None),
         runtime_preference=payload.runtime_preference,
         summary=payload.summary,
         desired_state=payload.desired_state,
@@ -247,6 +251,10 @@ async def update_silo_spawn_request(
         request.desired_state = payload.desired_state
     if payload.source_task_title is not None:
         request.source_task_title = payload.source_task_title
+    if payload.source_task_status is not None:
+        request.source_task_status = payload.source_task_status
+    if payload.source_task_priority is not None:
+        request.source_task_priority = payload.source_task_priority
     request.updated_at = utcnow()
     session.add(request)
     await session.commit()

@@ -20,6 +20,8 @@ export type SiloSpawnRequest = {
   requested_by_user_id: string | null;
   source_task_id: string | null;
   source_task_title: string | null;
+  source_task_status: string | null;
+  source_task_priority: string | null;
   materialized_silo_id: string | null;
   materialized_silo_slug: string | null;
   materialized_at: string | null;
@@ -97,6 +99,8 @@ export async function updateSiloSpawnRequest(
     status?: SiloSpawnRequestStatus;
     priority?: SiloSpawnRequestPriority;
     source_task_title?: string | null;
+    source_task_status?: string | null;
+    source_task_priority?: string | null;
     summary?: string | null;
     desired_state?: Record<string, unknown> | null;
   },
@@ -116,4 +120,28 @@ export async function fetchBoardOptions(): Promise<BoardRead[]> {
     method: "GET",
   });
   return response.data.items;
+}
+
+export function isOpenSiloRequestStatus(status: SiloSpawnRequestStatus): boolean {
+  return (
+    status === "requested" ||
+    status === "planned" ||
+    status === "spawning" ||
+    status === "running"
+  );
+}
+
+export function describeSiloRequestPressure(
+  request: Pick<
+    SiloSpawnRequest,
+    "source_task_title" | "source_task_status" | "source_task_priority" | "priority"
+  >,
+): string | null {
+  if (!request.source_task_title) return null;
+  if (request.source_task_status === "review") return "Approval or review pressure";
+  if (request.source_task_status === "in_progress") return "Active workload pressure";
+  if (request.source_task_priority === "high" || request.priority === "urgent") {
+    return "High priority workload";
+  }
+  return "Task-linked workload";
 }

@@ -162,6 +162,8 @@ async def test_silo_spawn_request_records_activity() -> None:
         assert events[-1].board_id == board.id
         assert events[-1].payload["priority"] == "urgent"
         assert events[-1].payload["source_task_title"] == "Investigate workload pressure"
+        assert events[-1].payload["source_task_status"] == "inbox"
+        assert events[-1].payload["source_task_priority"] == "high"
     finally:
         await engine.dispose()
 
@@ -298,6 +300,8 @@ async def test_create_board_scoped_silo_spawn_request_links_source_task() -> Non
         assert response.status_code == 201
         assert response.json()["source_task_id"] == str(task.id)
         assert response.json()["source_task_title"] == task.title
+        assert response.json()["source_task_status"] == task.status
+        assert response.json()["source_task_priority"] == task.priority
     finally:
         await engine.dispose()
 

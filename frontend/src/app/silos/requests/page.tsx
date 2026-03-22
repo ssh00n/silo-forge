@@ -407,6 +407,9 @@ export default function SiloRequestsPage() {
                         <p className="mt-1 font-medium text-slate-900">
                           {request.source_task_title}
                         </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {describeSiloRequestPressure(request) ?? "Linked task demand"}
+                        </p>
                       </div>
                     ) : null}
                     <p>{request.summary ?? "No summary yet."}</p>
@@ -472,6 +475,14 @@ export default function SiloRequestsPage() {
                     {request.materialized_at ? (
                       <p className="text-xs text-emerald-600">
                         Materialized {new Date(request.materialized_at).toLocaleString()}
+                      </p>
+                    ) : null}
+                    {isOpenSiloRequestStatus(request.status) && request.source_task_status ? (
+                      <p className="text-xs text-slate-500">
+                        Demand snapshot: {request.source_task_status}
+                        {request.source_task_priority
+                          ? ` · ${request.source_task_priority}`
+                          : ""}
                       </p>
                     ) : null}
                     <p className="text-xs text-slate-400">

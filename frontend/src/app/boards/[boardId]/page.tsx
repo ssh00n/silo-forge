@@ -130,7 +130,10 @@ import {
 import { AGENT_EMOJI_GLYPHS } from "@/lib/agent-emoji";
 import { cn } from "@/lib/utils";
 import { usePageActive } from "@/hooks/usePageActive";
-import { fetchSiloSpawnRequestsForBoard } from "@/lib/silo-spawn-requests";
+import {
+  describeSiloRequestPressure,
+  fetchSiloSpawnRequestsForBoard,
+} from "@/lib/silo-spawn-requests";
 import { fetchSilos } from "@/lib/silos";
 import {
   canAcknowledgeRuntimeRun,
@@ -210,6 +213,46 @@ const siloRequestPriorityClass = (priority: string): string => {
   if (priority === "high") return "bg-amber-50 text-amber-700 border border-amber-200";
   if (priority === "low") return "bg-slate-100 text-slate-600 border border-slate-200";
   return "bg-blue-50 text-blue-700 border border-blue-200";
+};
+
+const describeBoardSiloRequestPressure = (
+  request: {
+    source_task_id?: string | null;
+    source_task_title?: string | null;
+    source_task_status?: string | null;
+    source_task_priority?: string | null;
+    priority: string;
+  },
+  selectedTask: Task | null,
+): string | null => {
+  if (!selectedTask || request.source_task_id !== selectedTask.id) {
+    return describeSiloRequestPressure({
+      source_task_title: request.source_task_title ?? null,
+      source_task_status: request.source_task_status ?? null,
+      source_task_priority: request.source_task_priority ?? null,
+      priority:
+        request.priority === "low" ||
+        request.priority === "normal" ||
+        request.priority === "high" ||
+        request.priority === "urgent"
+          ? request.priority
+          : "normal",
+    });
+  }
+  if (selectedTask.approvals_pending_count > 0) return "Approval pressure";
+  if (selectedTask.is_blocked) return "Blocked dependency pressure";
+  return describeSiloRequestPressure({
+    source_task_title: request.source_task_title ?? selectedTask.title,
+    source_task_status: selectedTask.status,
+    source_task_priority: selectedTask.priority,
+    priority:
+      request.priority === "low" ||
+      request.priority === "normal" ||
+      request.priority === "high" ||
+      request.priority === "urgent"
+        ? request.priority
+        : "normal",
+  });
 };
 
 const DASH = "—";
@@ -4969,6 +5012,11 @@ export default function BoardDetailPage() {
                       {request.source_task_title ? (
                         <p className="mt-2 text-xs text-slate-500">
                           Demand source: {request.source_task_title}
+                        </p>
+                      ) : null}
+                      {describeBoardSiloRequestPressure(request, selectedTask) ? (
+                        <p className="mt-1 text-xs font-medium text-amber-700">
+                          {describeBoardSiloRequestPressure(request, selectedTask)}
                         </p>
                       ) : null}
                     </div>

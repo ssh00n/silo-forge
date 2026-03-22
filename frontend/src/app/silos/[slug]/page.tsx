@@ -29,9 +29,12 @@ import {
   collectSiloWarnings,
   getAssignedGatewayRoleCount,
   getBlockedProvisionTargetCount,
+  getGatewayRuntimeRoleCount,
   getLatestRuntimeAttemptedCount,
   getLatestRuntimeBlockedCount,
   getReadyProvisionTargetCount,
+  getSiloHealthSummary,
+  getSiloRuntimePosture,
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
 } from "@/lib/silo-detail";
@@ -126,11 +129,14 @@ export default function SiloDetailPage() {
   const assignedGatewayRoleCount = detail ? getAssignedGatewayRoleCount(detail) : 0;
   const readyTargetCount = detail ? getReadyProvisionTargetCount(detail) : 0;
   const blockedTargetCount = detail ? getBlockedProvisionTargetCount(detail) : 0;
+  const gatewayRuntimeRoleCount = detail ? getGatewayRuntimeRoleCount(detail) : 0;
   const latestRuntimeAttemptedCount = detail
     ? getLatestRuntimeAttemptedCount(detail)
     : 0;
   const latestRuntimeBlockedCount = detail ? getLatestRuntimeBlockedCount(detail) : 0;
   const canApplyRuntime = detail ? hasActionableProvisionTargets(detail) : false;
+  const healthSummary = detail ? getSiloHealthSummary(detail) : null;
+  const runtimePosture = detail ? getSiloRuntimePosture(detail) : "Loading";
   const configDirty = detail
     ? hasSiloConfigChanges({
         detail,
@@ -220,6 +226,40 @@ export default function SiloDetailPage() {
         </div>
       ) : null}
 
+      {detail ? (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Silo operations</p>
+              <p className="mt-1 text-sm text-slate-600">
+                {healthSummary?.guidance}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-medium">
+              <span
+                className={`rounded-full px-3 py-1 ${
+                  healthSummary?.tone === "success"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : healthSummary?.tone === "danger"
+                      ? "bg-rose-100 text-rose-800"
+                      : healthSummary?.tone === "warning"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-white text-slate-700"
+                }`}
+              >
+                {healthSummary?.label}
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-slate-700">
+                {assignedGatewayRoleCount}/{gatewayRuntimeRoleCount} assigned
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-slate-700">
+                {runtimePosture}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {detail?.latest_runtime_operation ? (
         <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -288,40 +328,59 @@ export default function SiloDetailPage() {
           <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Roles</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Health</p>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold text-slate-900">{detail.silo.role_count}</p>
+                <p className="text-3xl font-semibold text-slate-900">
+                  {healthSummary?.label ?? "Draft"}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">{detail.silo.status}</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Telemetry</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Assignments</p>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-semibold text-slate-900">
-                  {detail.silo.enable_telemetry ? "On" : "Off"}
+                  {assignedGatewayRoleCount}/{gatewayRuntimeRoleCount}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">gateway-backed roles assigned</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Runtime</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-slate-900">
+                  {runtimePosture}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  {latestRuntimeAttemptedCount} attempted · {latestRuntimeBlockedCount} blocked
                 </p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Symphony</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Capabilities</p>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-semibold text-slate-900">
-                  {detail.silo.enable_symphony ? "On" : "Off"}
+                  {detail.silo.enable_symphony ? "Symphony" : "Gateway"}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  Telemetry {detail.silo.enable_telemetry ? "on" : "off"} · {detail.silo.role_count} roles
                 </p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Runtime Ready</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Ready targets</p>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-semibold text-slate-900">
-                  {readyTargetCount}
-                </p>
+                <p className="text-3xl font-semibold text-slate-900">{readyTargetCount}</p>
+                <p className="mt-2 text-sm text-slate-500">targets can accept apply/validate</p>
               </CardContent>
             </Card>
             <Card>
@@ -330,16 +389,7 @@ export default function SiloDetailPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-semibold text-slate-900">{blockedTargetCount}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Assigned</p>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold text-slate-900">
-                  {assignedGatewayRoleCount}
-                </p>
+                <p className="mt-2 text-sm text-slate-500">targets still need operator follow-up</p>
               </CardContent>
             </Card>
           </div>

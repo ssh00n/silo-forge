@@ -177,6 +177,12 @@ class SiloService:
                     "silo_kind": spawn_request.silo_kind,
                     "priority": spawn_request.priority,
                     "board_id": str(spawn_request.board_id) if spawn_request.board_id else None,
+                    "source_task_id": str(spawn_request.source_task_id)
+                    if spawn_request.source_task_id
+                    else None,
+                    "source_task_title": spawn_request.source_task_title,
+                    "source_task_status": spawn_request.source_task_status,
+                    "source_task_priority": spawn_request.source_task_priority,
                     "materialized_silo_id": str(silo.id),
                     "materialized_silo_slug": silo.slug,
                 },
