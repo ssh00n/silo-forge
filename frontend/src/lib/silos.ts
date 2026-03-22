@@ -80,6 +80,13 @@ export type SiloWorkloadRun = {
 
 export type SiloDetail = {
   silo: SiloSummary;
+  operational_summary: {
+    health_label: string;
+    health_tone: "success" | "warning" | "danger" | "neutral";
+    health_guidance: string;
+    runtime_posture: string;
+    workload_guidance: string;
+  } | null;
   desired_state: {
     slug: string;
     name: string;

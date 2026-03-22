@@ -282,6 +282,10 @@ async def test_get_silo_detail_includes_workload_summary() -> None:
         assert payload["workload_summary"]["blocked_run_count"] == 1
         assert payload["workload_summary"]["recent_runs"][0]["task_title"] == "Investigate flaky runtime"
         assert payload["workload_summary"]["recent_runs"][0]["block_reason"] == "approval_pending"
+        assert payload["operational_summary"]["health_label"] == "Blocked"
+        assert payload["operational_summary"]["health_tone"] == "danger"
+        assert payload["operational_summary"]["runtime_posture"] == "No runtime operation yet"
+        assert "Blocked runs need operator attention" in payload["operational_summary"]["workload_guidance"]
     finally:
         await engine.dispose()
 

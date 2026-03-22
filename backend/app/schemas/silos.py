@@ -347,6 +347,16 @@ class SiloWorkloadSummaryRead(SQLModel):
     last_activity_at: str | None = None
 
 
+class SiloOperationalSummaryRead(SQLModel):
+    """Backend-computed operator summary for silo detail surfaces."""
+
+    health_label: str
+    health_tone: Literal["success", "warning", "danger", "neutral"] = "neutral"
+    health_guidance: str
+    runtime_posture: str
+    workload_guidance: str
+
+
 class SiloDetailRead(SQLModel):
     """Detailed silo view for operator-facing Silo Detail pages."""
 
@@ -360,3 +370,4 @@ class SiloDetailRead(SQLModel):
     provision_plan: SiloProvisionPlanRead | None = None
     latest_runtime_operation: SiloRuntimeHistoryEntryRead | None = None
     workload_summary: SiloWorkloadSummaryRead | None = None
+    operational_summary: SiloOperationalSummaryRead | None = None

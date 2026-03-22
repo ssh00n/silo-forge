@@ -117,6 +117,13 @@ export const buildSiloOverviewCards = (
 const buildSiloDetailHealthSummary = (
   detail: SiloDetail,
 ): SiloDetailOpsViewModel["healthSummary"] => {
+  if (detail.operational_summary) {
+    return {
+      label: detail.operational_summary.health_label,
+      tone: detail.operational_summary.health_tone,
+      guidance: detail.operational_summary.health_guidance,
+    };
+  }
   const baseHealth = buildSiloHealthModel(detail.silo);
   const overviewPosture = buildSiloOverviewPosture(detail.silo);
   const warningCount = collectSiloWarnings(detail).length;
@@ -168,6 +175,9 @@ const buildSiloDetailHealthSummary = (
 };
 
 const buildSiloRuntimePosture = (detail: SiloDetail): string => {
+  if (detail.operational_summary?.runtime_posture) {
+    return detail.operational_summary.runtime_posture;
+  }
   const latestRuntime = detail.latest_runtime_operation;
   if (!latestRuntime) return "No runtime operation yet";
   if (latestRuntime.mode === "apply") {
@@ -181,6 +191,9 @@ const buildSiloRuntimePosture = (detail: SiloDetail): string => {
 };
 
 const buildSiloWorkloadGuidance = (detail: SiloDetail): string => {
+  if (detail.operational_summary?.workload_guidance) {
+    return detail.operational_summary.workload_guidance;
+  }
   const workload = detail.workload_summary;
   if (!workload || workload.recent_runs.length === 0) {
     return "No runtime work has been dispatched to this silo yet.";
