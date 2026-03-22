@@ -11,6 +11,10 @@ export type SiloSummary = {
   enable_symphony: boolean;
   enable_telemetry: boolean;
   role_count: number;
+  active_run_count: number;
+  blocked_run_count: number;
+  failed_run_count: number;
+  last_activity_at: string | null;
 };
 
 export type SiloSecretBinding = {
@@ -46,6 +50,34 @@ export type RuntimeOperationResult = {
   warnings: string[];
 };
 
+export type SiloWorkloadRun = {
+  id: string;
+  board_id: string;
+  task_id: string;
+  task_title: string;
+  task_status: string | null;
+  task_priority: string | null;
+  role_slug: string;
+  status:
+    | "queued"
+    | "dispatching"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "cancelled"
+    | "blocked";
+  summary: string | null;
+  completion_kind: string | null;
+  failure_reason: string | null;
+  block_reason: string | null;
+  cancel_reason: string | null;
+  stall_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
 export type SiloDetail = {
   silo: SiloSummary;
   desired_state: {
@@ -77,6 +109,15 @@ export type SiloDetail = {
     created_at: string;
     results: RuntimeOperationResult[];
     warnings: string[];
+  } | null;
+  workload_summary: {
+    active_run_count: number;
+    queued_run_count: number;
+    running_run_count: number;
+    blocked_run_count: number;
+    failed_run_count: number;
+    recent_runs: SiloWorkloadRun[];
+    last_activity_at: string | null;
   } | null;
 };
 

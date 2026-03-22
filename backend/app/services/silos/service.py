@@ -6,7 +6,7 @@ import re
 from uuid import UUID
 
 from sqlalchemy import asc, desc
-from sqlmodel import col
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.time import utcnow
@@ -19,6 +19,7 @@ from app.models.silo_runtime_operations import (
     SiloRuntimeOperationResult,
 )
 from app.models.silos import Silo
+from app.models.task_execution_runs import TaskExecutionRun
 from app.schemas.silos import (
     RuntimeBundleApplyResponseRead,
     RuntimeBundleValidateResponseRead,
@@ -29,6 +30,8 @@ from app.schemas.silos import (
     SiloPreviewRead,
     SiloRead,
     SiloRoleDesiredState,
+    SiloWorkloadRunRead,
+    SiloWorkloadSummaryRead,
     SiloRuntimeHistoryEntryRead,
     SiloRuntimeOperationRead,
     SiloUpdate,
@@ -230,6 +233,10 @@ class SiloService:
             enable_symphony=silo.enable_symphony,
             enable_telemetry=silo.enable_telemetry,
             role_count=len(preview.roles),
+            active_run_count=0,
+            blocked_run_count=0,
+            failed_run_count=0,
+            last_activity_at=None,
         )
 
     async def update_silo(
@@ -316,6 +323,7 @@ class SiloService:
         results: list[SiloRead] = []
         for silo in silos:
             roles = await crud.list_by(self._session, SiloRole, silo_id=silo.id)
+            workload_summary = await self._workload_summary(silo_id=silo.id)
             results.append(
                 SiloRead(
                     id=str(silo.id),
@@ -327,6 +335,10 @@ class SiloService:
                     enable_symphony=silo.enable_symphony,
                     enable_telemetry=silo.enable_telemetry,
                     role_count=len(roles),
+                    active_run_count=workload_summary.active_run_count,
+                    blocked_run_count=workload_summary.blocked_run_count,
+                    failed_run_count=workload_summary.failed_run_count,
+                    last_activity_at=workload_summary.last_activity_at,
                 ),
             )
         return results
@@ -345,6 +357,7 @@ class SiloService:
         if silo is None:
             return None
         roles = await crud.list_by(self._session, SiloRole, silo_id=silo.id)
+        workload_summary = await self._workload_summary(silo_id=silo.id)
         return SiloRead(
             id=str(silo.id),
             slug=silo.slug,
@@ -355,6 +368,10 @@ class SiloService:
             enable_symphony=silo.enable_symphony,
             enable_telemetry=silo.enable_telemetry,
             role_count=len(roles),
+            active_run_count=workload_summary.active_run_count,
+            blocked_run_count=workload_summary.blocked_run_count,
+            failed_run_count=workload_summary.failed_run_count,
+            last_activity_at=workload_summary.last_activity_at,
         )
 
     async def get_silo_detail(self, *, organization_id: UUID, slug: str) -> SiloDetailRead | None:
@@ -408,6 +425,7 @@ class SiloService:
             slug=slug,
         )
         latest_runtime_operation = await self._latest_runtime_operation(silo_id=silo.id)
+        workload_summary = await self._workload_summary(silo_id=silo.id)
         source_request = await crud.get_one_by(
             self._session,
             SiloSpawnRequest,
@@ -424,6 +442,7 @@ class SiloService:
             roles=roles,
             provision_plan=provision_plan,
             latest_runtime_operation=latest_runtime_operation,
+            workload_summary=workload_summary,
         )
 
     def _assignment_map(
@@ -482,7 +501,69 @@ class SiloService:
             ],
         )
 
+    async def _workload_summary(self, *, silo_id: UUID) -> SiloWorkloadSummaryRead:
+        if self._session is None:
+            return SiloWorkloadSummaryRead()
+
+        rows = await self._session.exec(
+            select(TaskExecutionRun)
+            .where(col(TaskExecutionRun.silo_id) == silo_id)
+            .order_by(col(TaskExecutionRun.updated_at).desc(), col(TaskExecutionRun.created_at).desc()),
+        )
+        runs = rows.all()
+        if not runs:
+            return SiloWorkloadSummaryRead()
+
+        recent_runs = [self._to_workload_run(run) for run in runs[:5]]
+        queued_count = sum(1 for run in runs if run.status in {"queued", "dispatching"})
+        running_count = sum(1 for run in runs if run.status == "running")
+        blocked_count = sum(1 for run in runs if run.status == "blocked")
+        failed_count = sum(1 for run in runs if run.status in {"failed", "cancelled"})
+        active_count = sum(1 for run in runs if run.status in {"queued", "dispatching", "running"})
+
+        return SiloWorkloadSummaryRead(
+            active_run_count=active_count,
+            queued_run_count=queued_count,
+            running_run_count=running_count,
+            blocked_run_count=blocked_count,
+            failed_run_count=failed_count,
+            recent_runs=recent_runs,
+            last_activity_at=runs[0].updated_at.isoformat(),
+        )
+
+    @staticmethod
+    def _to_workload_run(run: TaskExecutionRun) -> SiloWorkloadRunRead:
+        task_snapshot = run.task_snapshot if isinstance(run.task_snapshot, dict) else {}
+        result_payload = run.result_payload if isinstance(run.result_payload, dict) else {}
+        return SiloWorkloadRunRead(
+            id=str(run.id),
+            board_id=str(run.board_id),
+            task_id=str(run.task_id),
+            task_title=str(task_snapshot.get("title") or "Untitled task"),
+            task_status=_text_or_none(task_snapshot.get("status")),
+            task_priority=_text_or_none(task_snapshot.get("priority")),
+            role_slug=run.role_slug,
+            status=run.status,  # type: ignore[arg-type]
+            summary=run.summary,
+            completion_kind=_text_or_none(result_payload.get("completion_kind")),
+            failure_reason=_text_or_none(result_payload.get("failure_reason")),
+            block_reason=_text_or_none(result_payload.get("block_reason")),
+            cancel_reason=_text_or_none(result_payload.get("cancel_reason")),
+            stall_reason=_text_or_none(result_payload.get("stall_reason")),
+            created_at=run.created_at.isoformat(),
+            updated_at=run.updated_at.isoformat(),
+            started_at=run.started_at.isoformat() if run.started_at else None,
+            completed_at=run.completed_at.isoformat() if run.completed_at else None,
+        )
+
 
 def _slugify(value: str) -> str:
     normalized = _SLUG_SANITIZER_RE.sub("-", value.strip().lower()).strip("-")
     return normalized or "silo"
+
+
+def _text_or_none(value: object) -> str | None:
+    if isinstance(value, str):
+        trimmed = value.strip()
+        return trimmed or None
+    return None

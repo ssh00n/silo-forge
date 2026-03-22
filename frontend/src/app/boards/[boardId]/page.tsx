@@ -208,11 +208,72 @@ type LiveFeedOpsSummary = {
   failureCount: number;
 };
 
+type SymphonyDispatchSilo = Awaited<ReturnType<typeof fetchSilos>>[number];
+
+type SiloDispatchCandidate = {
+  silo: SymphonyDispatchSilo;
+  readinessLabel: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+  guidance: string;
+  score: number;
+};
+
 const siloRequestPriorityClass = (priority: string): string => {
   if (priority === "urgent") return "bg-rose-50 text-rose-700 border border-rose-200";
   if (priority === "high") return "bg-amber-50 text-amber-700 border border-amber-200";
   if (priority === "low") return "bg-slate-100 text-slate-600 border border-slate-200";
   return "bg-blue-50 text-blue-700 border border-blue-200";
+};
+
+const buildSiloDispatchCandidate = (
+  silo: SymphonyDispatchSilo,
+  task: Task | null,
+): SiloDispatchCandidate => {
+  const hasPressure = silo.blocked_run_count > 0 || silo.failed_run_count > 0;
+  const isBusy = silo.active_run_count > 0;
+  const taskNeedsUrgentAttention = Boolean(
+    task && (task.approvals_pending_count > 0 || task.is_blocked || task.priority === "high"),
+  );
+
+  if (hasPressure) {
+    return {
+      silo,
+      readinessLabel: "Needs attention",
+      tone: "danger",
+      guidance: "Recent blocked or failed runtime work should be resolved before dispatching more work here.",
+      score: 300 + silo.blocked_run_count * 10 + silo.failed_run_count * 10,
+    };
+  }
+
+  if (silo.status !== "active") {
+    return {
+      silo,
+      readinessLabel: silo.status === "provisioning" ? "Applying" : "Needs setup",
+      tone: "warning",
+      guidance: "This silo is not yet in a steady operating state. Verify readiness before dispatching work.",
+      score: 200,
+    };
+  }
+
+  if (isBusy) {
+    return {
+      silo,
+      readinessLabel: "Available but busy",
+      tone: taskNeedsUrgentAttention ? "warning" : "neutral",
+      guidance: taskNeedsUrgentAttention
+        ? "This silo can run work, but it already has active load and may not be ideal for urgent follow-up."
+        : "This silo is healthy but already carrying active work.",
+      score: 100 + silo.active_run_count * 10,
+    };
+  }
+
+  return {
+    silo,
+    readinessLabel: "Ready now",
+    tone: "success",
+    guidance: "Healthy, idle, and ready to accept a new runtime run.",
+    score: 0,
+  };
 };
 
 const describeBoardSiloRequestPressure = (
@@ -1502,6 +1563,20 @@ export default function BoardDetailPage() {
     () => (silosQuery.data ?? []).filter((silo) => silo.enable_symphony),
     [silosQuery.data],
   );
+  const symphonyDispatchCandidates = useMemo(
+    () =>
+      [...symphonyEnabledSilos]
+        .map((silo) => buildSiloDispatchCandidate(silo, selectedTask))
+        .sort((left, right) => left.score - right.score || left.silo.name.localeCompare(right.silo.name)),
+    [selectedTask, symphonyEnabledSilos],
+  );
+  const selectedDispatchCandidate = useMemo(
+    () =>
+      symphonyDispatchCandidates.find(
+        (candidate) => candidate.silo.slug === newExecutionRunSiloSlug,
+      ) ?? symphonyDispatchCandidates[0] ?? null,
+    [newExecutionRunSiloSlug, symphonyDispatchCandidates],
+  );
   const selectedTaskExecutionRunsQuery = useQuery<
     TaskExecutionRunSnapshot[],
     ApiError
@@ -2009,15 +2084,17 @@ export default function BoardDetailPage() {
 
   useEffect(() => {
     if (!isDetailOpen) return;
-    if (!symphonyEnabledSilos.length) return;
+    if (!symphonyDispatchCandidates.length) return;
     if (
       newExecutionRunSiloSlug &&
-      symphonyEnabledSilos.some((silo) => silo.slug === newExecutionRunSiloSlug)
+      symphonyDispatchCandidates.some(
+        (candidate) => candidate.silo.slug === newExecutionRunSiloSlug,
+      )
     ) {
       return;
     }
-    setNewExecutionRunSiloSlug(symphonyEnabledSilos[0]?.slug ?? "");
-  }, [isDetailOpen, newExecutionRunSiloSlug, symphonyEnabledSilos]);
+    setNewExecutionRunSiloSlug(symphonyDispatchCandidates[0]?.silo.slug ?? "");
+  }, [isDetailOpen, newExecutionRunSiloSlug, symphonyDispatchCandidates]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -5246,6 +5323,75 @@ export default function BoardDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  {selectedDispatchCandidate ? (
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            Recommended silo
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900">
+                            {selectedDispatchCandidate.silo.name}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-xs font-medium",
+                            selectedDispatchCandidate.tone === "success" &&
+                              "bg-emerald-100 text-emerald-700",
+                            selectedDispatchCandidate.tone === "warning" &&
+                              "bg-amber-100 text-amber-700",
+                            selectedDispatchCandidate.tone === "danger" &&
+                              "bg-rose-100 text-rose-700",
+                            selectedDispatchCandidate.tone === "neutral" &&
+                              "bg-slate-100 text-slate-700",
+                          )}
+                        >
+                          {selectedDispatchCandidate.readinessLabel}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">
+                        {selectedDispatchCandidate.guidance}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                          Active {selectedDispatchCandidate.silo.active_run_count}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                          Blocked {selectedDispatchCandidate.silo.blocked_run_count}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                          Failed {selectedDispatchCandidate.silo.failed_run_count}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                  {symphonyDispatchCandidates.length > 1 ? (
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Best available
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {symphonyDispatchCandidates.slice(0, 3).map((candidate) => (
+                          <Button
+                            key={candidate.silo.slug}
+                            type="button"
+                            variant={
+                              candidate.silo.slug === newExecutionRunSiloSlug
+                                ? "default"
+                                : "outline"
+                            }
+                            size="sm"
+                            onClick={() => setNewExecutionRunSiloSlug(candidate.silo.slug)}
+                            disabled={isCreatingExecutionRun}
+                            className="h-8 px-2 text-xs"
+                          >
+                            {candidate.silo.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -5260,9 +5406,9 @@ export default function BoardDetailPage() {
                           <SelectValue placeholder="Select silo" />
                         </SelectTrigger>
                         <SelectContent>
-                          {symphonyEnabledSilos.map((silo) => (
-                            <SelectItem key={silo.slug} value={silo.slug}>
-                              {silo.name}
+                          {symphonyDispatchCandidates.map((candidate) => (
+                            <SelectItem key={candidate.silo.slug} value={candidate.silo.slug}>
+                              {candidate.silo.name} · {candidate.readinessLabel}
                             </SelectItem>
                           ))}
                         </SelectContent>

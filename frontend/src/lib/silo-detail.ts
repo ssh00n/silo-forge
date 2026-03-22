@@ -173,3 +173,20 @@ export function getSiloRuntimePosture(detail: SiloDetail): string {
     ? "Latest validate found blockers"
     : "Latest validate completed";
 }
+
+export function getSiloWorkloadGuidance(detail: SiloDetail): string {
+  const workload = detail.workload_summary;
+  if (!workload || workload.recent_runs.length === 0) {
+    return "No runtime work has been dispatched to this silo yet.";
+  }
+  if (workload.blocked_run_count > 0) {
+    return "Blocked runs need operator attention before this silo can be trusted with more work.";
+  }
+  if (workload.failed_run_count > 0) {
+    return "Recent runtime failures should be investigated before scaling this silo further.";
+  }
+  if (workload.active_run_count > 0) {
+    return "This silo is actively carrying runtime work right now.";
+  }
+  return "Recent runs completed; review the latest work before assigning more load.";
+}

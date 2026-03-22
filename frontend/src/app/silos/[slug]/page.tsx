@@ -35,6 +35,7 @@ import {
   getReadyProvisionTargetCount,
   getSiloHealthSummary,
   getSiloRuntimePosture,
+  getSiloWorkloadGuidance,
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
 } from "@/lib/silo-detail";
@@ -137,6 +138,7 @@ export default function SiloDetailPage() {
   const canApplyRuntime = detail ? hasActionableProvisionTargets(detail) : false;
   const healthSummary = detail ? getSiloHealthSummary(detail) : null;
   const runtimePosture = detail ? getSiloRuntimePosture(detail) : "Loading";
+  const workloadGuidance = detail ? getSiloWorkloadGuidance(detail) : "Loading";
   const configDirty = detail
     ? hasSiloConfigChanges({
         detail,
@@ -301,6 +303,105 @@ export default function SiloDetailPage() {
             >
               Open requests
             </Link>
+          </div>
+        </div>
+      ) : null}
+
+      {detail?.workload_summary ? (
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Current work</p>
+              <p className="mt-1 text-sm text-slate-600">{workloadGuidance}</p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-medium">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                {detail.workload_summary.active_run_count} active
+              </span>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800">
+                {detail.workload_summary.blocked_run_count} blocked
+              </span>
+              <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-800">
+                {detail.workload_summary.failed_run_count} failed
+              </span>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Queued</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {detail.workload_summary.queued_run_count}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Running</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {detail.workload_summary.running_run_count}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Blocked</p>
+              <p className="mt-1 text-2xl font-semibold text-amber-700">
+                {detail.workload_summary.blocked_run_count}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Failed</p>
+              <p className="mt-1 text-2xl font-semibold text-rose-700">
+                {detail.workload_summary.failed_run_count}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 space-y-3">
+            {detail.workload_summary.recent_runs.length > 0 ? (
+              detail.workload_summary.recent_runs.map((run) => (
+                <div
+                  key={run.id}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900">{run.task_title}</p>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
+                          {run.status}
+                        </span>
+                        {run.task_priority ? (
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
+                            {run.task_priority}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Role {run.role_slug}
+                        {run.task_status ? ` · Task ${run.task_status}` : ""}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/boards/${run.board_id}?taskId=${run.task_id}`}
+                      className="text-sm font-medium text-blue-700 hover:text-blue-900"
+                    >
+                      Open task
+                    </Link>
+                  </div>
+                  {run.summary ? (
+                    <p className="mt-2 text-sm text-slate-700">{run.summary}</p>
+                  ) : null}
+                  {run.failure_reason || run.block_reason || run.cancel_reason || run.stall_reason ? (
+                    <p className="mt-2 text-xs text-slate-500">
+                      {run.failure_reason ??
+                        run.block_reason ??
+                        run.cancel_reason ??
+                        run.stall_reason}
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500">
+                No task-backed runtime runs have been dispatched to this silo yet.
+              </p>
+            )}
           </div>
         </div>
       ) : null}
