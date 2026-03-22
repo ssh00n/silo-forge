@@ -7,13 +7,13 @@ import pytest
 
 from app.core.time import utcnow
 from app.services.openclaw.lifecycle_queue import QueuedAgentLifecycleReconcile
+from app.services.queue import QueuedTask
 from app.services.task_execution_queue import (
     QueuedTaskExecutionDispatch,
     decode_task_execution_dispatch_task,
     enqueue_task_execution_dispatch,
 )
-from app.services.queue import QueuedTask
-from app.services.webhooks.queue import QueuedInboundDelivery, decode_webhook_task
+from app.services.webhooks.queue import decode_webhook_task
 
 
 def test_enqueue_task_execution_dispatch_emits_contract_payload(

@@ -5,30 +5,32 @@ from __future__ import annotations
 import re
 from uuid import UUID
 
+from sqlalchemy import asc, desc
+from sqlmodel import col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.time import utcnow
 from app.db import crud
 from app.models.gateways import Gateway
+from app.models.silo_roles import SiloRole
 from app.models.silo_runtime_operations import (
     SiloRuntimeOperation,
     SiloRuntimeOperationResult,
 )
-from app.models.silo_roles import SiloRole
 from app.models.silos import Silo
 from app.schemas.silos import (
+    RuntimeBundleApplyResponseRead,
+    RuntimeBundleValidateResponseRead,
     SiloBlueprintRead,
     SiloCreate,
     SiloDetailRead,
     SiloGatewayAssignment,
     SiloPreviewRead,
     SiloRead,
-    SiloUpdate,
+    SiloRoleDesiredState,
     SiloRuntimeHistoryEntryRead,
     SiloRuntimeOperationRead,
-    RuntimeBundleApplyResponseRead,
-    RuntimeBundleValidateResponseRead,
-    SiloRoleDesiredState,
+    SiloUpdate,
 )
 from app.services.silos.blueprints import build_default_four_agent_blueprint
 
@@ -95,7 +97,9 @@ class SiloService:
                     channel_name=role.channel_name,
                     gateway_id=gateway_id,
                     gateway_name=target.gateway_name if target else None,
-                    workspace_root=assignment.workspace_root if assignment and assignment.workspace_root else (target.workspace_root if target else None),
+                    workspace_root=assignment.workspace_root
+                    if assignment and assignment.workspace_root
+                    else (target.workspace_root if target else None),
                     secret_bindings=list(role.secret_bindings),
                 ),
             )
@@ -167,7 +171,9 @@ class SiloService:
                     gateway_id=gateway_id,
                     gateway_name=gateway_name,
                     workspace_root=role.workspace_root,
-                    secret_bindings=[binding.model_dump(mode="json") for binding in role.secret_bindings],
+                    secret_bindings=[
+                        binding.model_dump(mode="json") for binding in role.secret_bindings
+                    ],
                     created_at=now,
                     updated_at=now,
                 ),
@@ -389,7 +395,7 @@ class SiloService:
             self._session,
             SiloRuntimeOperation,
             silo_id=silo_id,
-            order_by=(SiloRuntimeOperation.created_at.desc(),),
+            order_by=(desc(col(SiloRuntimeOperation.created_at)),),
             limit=1,
         )
         if not operations:
@@ -399,7 +405,7 @@ class SiloService:
             self._session,
             SiloRuntimeOperationResult,
             operation_id=operation.id,
-            order_by=(SiloRuntimeOperationResult.created_at.asc(),),
+            order_by=(asc(col(SiloRuntimeOperationResult.created_at)),),
         )
         return SiloRuntimeHistoryEntryRead(
             mode="apply" if operation.mode == "apply" else "validate",
@@ -422,6 +428,7 @@ class SiloService:
                 for row in result_rows
             ],
         )
+
 
 def _slugify(value: str) -> str:
     normalized = _SLUG_SANITIZER_RE.sub("-", value.strip().lower()).strip("-")

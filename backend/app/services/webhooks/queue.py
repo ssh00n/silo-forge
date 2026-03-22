@@ -7,12 +7,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from app.core.config import settings
-from app.core.logging import get_logger
 from app.contracts.queue import (
     finalize_webhook_delivery_queue_payload,
     parse_webhook_delivery_queue_payload,
 )
+from app.core.config import settings
+from app.core.logging import get_logger
 from app.services.queue import QueuedTask, dequeue_task, enqueue_task
 from app.services.queue import requeue_if_failed as generic_requeue_if_failed
 

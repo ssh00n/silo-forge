@@ -20,9 +20,9 @@ from app.api.deps import (
     get_board_for_user_write,
     require_user_or_agent,
 )
+from app.contracts.activity import finalize_approval_activity_payload
 from app.core.logging import get_logger
 from app.core.time import utcnow
-from app.contracts.activity import finalize_approval_activity_payload
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
 from app.models.agents import Agent
@@ -297,7 +297,7 @@ def _approval_activity_payload(
     *,
     lead_agent_id: UUID | None,
     notification_status: str,
-    error: str | None = None,
+    error: object | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "approval_id": str(approval.id),
@@ -310,7 +310,7 @@ def _approval_activity_payload(
         "lead_agent_id": str(lead_agent_id) if lead_agent_id else None,
     }
     if error:
-        payload["error"] = error
+        payload["error"] = str(error)
     return finalize_approval_activity_payload(payload)
 
 

@@ -6,6 +6,12 @@ cd "$REPO_ROOT"
 
 python3 scripts/generate_contract_artifacts.py
 
+if [ -x backend/.venv/bin/ruff ]; then
+  backend/.venv/bin/ruff format backend/app/contracts/generated_schemas.py >/dev/null
+elif command -v ruff >/dev/null 2>&1; then
+  ruff format backend/app/contracts/generated_schemas.py >/dev/null
+fi
+
 paths=(
   backend/app/contracts/generated_schemas.py
   frontend/src/contracts/generated/schemas.ts

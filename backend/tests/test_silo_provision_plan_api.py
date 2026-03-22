@@ -68,7 +68,9 @@ async def test_preview_silo_provision_plan_marks_symphony_target_as_unsupported(
 
     assert response.status_code == 200
     body = response.json()
-    symphony_target = next(target for target in body["targets"] if target["role_slug"] == "symphony")
+    symphony_target = next(
+        target for target in body["targets"] if target["role_slug"] == "symphony"
+    )
     assert symphony_target["supports_picoclaw_bundle_apply"] is False
     assert symphony_target["bundle"] is None
     assert "not yet rendered" in symphony_target["warnings"][0]

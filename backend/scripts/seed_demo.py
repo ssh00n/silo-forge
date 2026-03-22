@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from uuid import uuid4
 
-from sqlmodel import select
+from sqlmodel import col, select
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
@@ -36,8 +35,8 @@ async def run() -> None:
     from app.models.gateways import Gateway
     from app.models.organization_members import OrganizationMember
     from app.models.organizations import Organization
-    from app.models.silos import Silo
     from app.models.silo_roles import SiloRole
+    from app.models.silos import Silo
     from app.models.tasks import Task
     from app.models.users import User
     from app.schemas.silos import SiloCreate, SiloGatewayAssignment, SiloUpdate
@@ -187,7 +186,7 @@ async def run() -> None:
             await session.exec(
                 select(Agent).where(
                     Agent.board_id == board.id,
-                    Agent.is_board_lead.is_(True),
+                    col(Agent.is_board_lead).is_(True),
                 ),
             )
         ).first()
@@ -305,15 +304,17 @@ async def run() -> None:
                 ),
             )
         ).first()
-        role_rows = []
+        role_rows: list[SiloRole] = []
         if refreshed_silo is not None:
-            role_rows = (
-                await session.exec(
-                    select(SiloRole)
-                    .where(SiloRole.silo_id == refreshed_silo.id)
-                    .order_by(SiloRole.created_at.asc()),
-                )
-            ).all()
+            role_rows = list(
+                (
+                    await session.exec(
+                        select(SiloRole)
+                        .where(SiloRole.silo_id == refreshed_silo.id)
+                        .order_by(col(SiloRole.created_at).asc()),
+                    )
+                ).all()
+            )
 
         print("Seed complete")
         print(f"Organization: {organization.name} ({organization.id})")

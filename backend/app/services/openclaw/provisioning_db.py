@@ -1288,8 +1288,7 @@ class AgentLifecycleService(OpenClawDBService):
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=(
-                        "board_id is required when converting a gateway-main agent "
-                        "to board scope"
+                        "board_id is required when converting a gateway-main agent to board scope"
                     ),
                 )
             board = await self.require_board(updates["board_id"])

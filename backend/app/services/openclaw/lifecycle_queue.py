@@ -7,13 +7,13 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from app.core.config import settings
-from app.core.logging import get_logger
-from app.core.time import utcnow
 from app.contracts.queue import (
     finalize_agent_lifecycle_reconcile_queue_payload,
     parse_agent_lifecycle_reconcile_queue_payload,
 )
+from app.core.config import settings
+from app.core.logging import get_logger
+from app.core.time import utcnow
 from app.services.queue import QueuedTask, enqueue_task_with_delay
 from app.services.queue import requeue_if_failed as generic_requeue_if_failed
 

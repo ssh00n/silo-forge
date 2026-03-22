@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import APIRouter, FastAPI
-import httpx
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel, col, select
@@ -21,16 +21,16 @@ from app.db.session import get_session
 from app.models.activity_events import ActivityEvent
 from app.models.agents import Agent
 from app.models.boards import Board
-from app.models.organizations import Organization
 from app.models.organization_members import OrganizationMember
+from app.models.organizations import Organization
 from app.models.silo_roles import SiloRole
 from app.models.silos import Silo
 from app.models.tasks import Task
 from app.models.users import User
-from app.services.organizations import OrganizationContext
-from app.services.task_execution_worker import _maybe_simulate_stub_callback_loop
-from app.services.task_execution_runs import TaskExecutionRunService
 from app.schemas.task_execution_runs import TaskExecutionRunCreate
+from app.services.organizations import OrganizationContext
+from app.services.task_execution_runs import TaskExecutionRunService
+from app.services.task_execution_worker import _maybe_simulate_stub_callback_loop
 
 
 async def _make_engine() -> tuple[object, async_sessionmaker[AsyncSession]]:
@@ -62,7 +62,9 @@ def _build_test_app(
     return app
 
 
-async def _seed_context(session: AsyncSession) -> tuple[OrganizationContext, Board, Task, Silo, Agent]:
+async def _seed_context(
+    session: AsyncSession,
+) -> tuple[OrganizationContext, Board, Task, Silo, Agent]:
     user = User(
         id=uuid4(),
         clerk_user_id=f"clerk_{uuid4().hex}",
@@ -127,7 +129,13 @@ async def _seed_context(session: AsyncSession) -> tuple[OrganizationContext, Boa
     session.add(symphony_role)
     session.add(lead)
     await session.commit()
-    return OrganizationContext(organization=organization, member=membership), board, task, silo, lead
+    return (
+        OrganizationContext(organization=organization, member=membership),
+        board,
+        task,
+        silo,
+        lead,
+    )
 
 
 @pytest.mark.asyncio
@@ -195,7 +203,9 @@ async def test_dispatch_endpoint_enqueues_background_task(monkeypatch: pytest.Mo
     )
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post(
                 f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs/{created.id}/dispatch"
             )
@@ -335,7 +345,9 @@ async def test_symphony_callback_updates_execution_run_status(
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post(
                 f"/api/v1/task-execution-runs/{created.id}/callbacks/symphony",
                 headers={"X-Symphony-Token": "callback-token"},
@@ -371,7 +383,9 @@ async def test_symphony_callback_updates_execution_run_status(
             assert "feature/live" in updated_event.message
             assert updated_event.payload is not None
             assert updated_event.payload["status"] == "running"
-            assert updated_event.payload["workspace_path"] == "/srv/symphony/mission-control/MC-live"
+            assert (
+                updated_event.payload["workspace_path"] == "/srv/symphony/mission-control/MC-live"
+            )
     finally:
         settings.symphony_callback_token = original_callback_token
         await engine.dispose()
@@ -396,7 +410,9 @@ async def test_symphony_callback_succeeded_moves_task_to_review_and_records_comm
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post(
                 f"/api/v1/task-execution-runs/{created.id}/callbacks/symphony",
                 headers={"X-Symphony-Token": "callback-token"},
@@ -465,7 +481,9 @@ async def test_symphony_callback_rejects_contract_payload_shape_mismatches() -> 
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post(
                 f"/api/v1/task-execution-runs/{created.id}/callbacks/symphony",
                 headers={"X-Symphony-Token": "callback-token"},
@@ -504,7 +522,9 @@ async def test_symphony_callback_succeeded_respects_review_comment_gate() -> Non
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post(
                 f"/api/v1/task-execution-runs/{created.id}/callbacks/symphony",
                 headers={"X-Symphony-Token": "callback-token"},

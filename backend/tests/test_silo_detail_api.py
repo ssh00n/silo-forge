@@ -18,8 +18,8 @@ from app.api.silo_runtime import router as silo_runtime_router
 from app.api.silos import router as silos_router
 from app.db.session import get_session
 from app.models.gateways import Gateway
-from app.models.organizations import Organization
 from app.models.organization_members import OrganizationMember
+from app.models.organizations import Organization
 from app.models.users import User
 from app.services.organizations import OrganizationContext
 
@@ -92,7 +92,9 @@ async def test_get_silo_detail_returns_roles_and_plan() -> None:
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             create_response = await client.post(
                 "/api/v1/silos",
                 json={
@@ -144,7 +146,9 @@ async def test_get_silo_detail_includes_latest_runtime_operation(
     )
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             create_response = await client.post(
                 "/api/v1/silos",
                 json={
@@ -182,7 +186,9 @@ async def test_get_silo_detail_returns_404_for_unknown_slug() -> None:
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.get("/api/v1/silos/missing/detail")
 
         assert response.status_code == 404

@@ -65,7 +65,9 @@ def finalize_queued_task_envelope(payload: dict[str, Any]) -> dict[str, Any]:
 def parse_task_execution_dispatch_queue_payload(
     payload: dict[str, Any],
 ) -> TaskExecutionDispatchQueuePayloadContract:
-    validate_contract_payload(schema=QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON, payload=payload)
+    validate_contract_payload(
+        schema=QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON, payload=payload
+    )
     return TaskExecutionDispatchQueuePayloadContract.model_validate(payload)
 
 

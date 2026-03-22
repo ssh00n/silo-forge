@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
+
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.db.session import async_session_maker
 from app.schemas.task_execution_runs import TaskExecutionRunCallback, TaskExecutionRunRead
 from app.services.queue import QueuedTask
-from app.services.task_execution_runs import TaskExecutionRunService
 from app.services.task_execution_queue import decode_task_execution_dispatch_task
+from app.services.task_execution_runs import TaskExecutionRunService
 
 logger = get_logger(__name__)
 
@@ -19,7 +22,7 @@ logger = get_logger(__name__)
 async def _maybe_simulate_stub_callback_loop(
     *,
     dispatched_run: TaskExecutionRunRead,
-    session_factory: Callable[[], object] = async_session_maker,
+    session_factory: Callable[[], AbstractAsyncContextManager[AsyncSession]] = async_session_maker,
 ) -> None:
     """Close the local loop for stub dispatches when no real bridge is configured."""
     dispatch_acceptance = None

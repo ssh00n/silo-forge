@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 class ContractValidationError(ValueError):
@@ -20,7 +20,7 @@ def _repo_root() -> Path:
 def load_contract_schema(relative_path: str) -> dict[str, Any]:
     """Load and cache a contract schema from the repo-level contracts directory."""
     path = _repo_root() / relative_path
-    return json.loads(path.read_text(encoding="utf-8"))
+    return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
 
 
 def validate_contract_payload(*, schema: dict[str, Any], payload: Any) -> None:
@@ -110,7 +110,8 @@ def _primary_type(expected_type: Any, value: Any) -> str | None:
     if isinstance(expected_type, list):
         for item in expected_type:
             if _matches_type(item, value):
-                return item
+                if isinstance(item, str):
+                    return item
         return None
     if isinstance(expected_type, str) and _matches_type(expected_type, value):
         return expected_type

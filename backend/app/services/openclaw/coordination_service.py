@@ -11,6 +11,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlmodel import col, select
 
+from app.contracts.activity import finalize_gateway_activity_payload
 from app.core.config import settings
 from app.core.logging import TRACE_LEVEL
 from app.core.time import utcnow
@@ -26,7 +27,6 @@ from app.schemas.gateway_coordination import (
     GatewayMainAskUserRequest,
     GatewayMainAskUserResponse,
 )
-from app.contracts.activity import finalize_gateway_activity_payload
 from app.services.activity_log import record_activity
 from app.services.openclaw.db_service import OpenClawDBService
 from app.services.openclaw.exceptions import (

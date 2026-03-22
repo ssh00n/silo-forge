@@ -17,15 +17,15 @@ from app.api.task_execution_runs import router as task_execution_runs_router
 from app.db.session import get_session
 from app.models.activity_events import ActivityEvent
 from app.models.boards import Board
-from app.models.organizations import Organization
 from app.models.organization_members import OrganizationMember
+from app.models.organizations import Organization
 from app.models.silo_roles import SiloRole
 from app.models.silos import Silo
 from app.models.tasks import Task
 from app.models.users import User
+from app.schemas.task_execution_runs import TaskExecutionRunRead
 from app.services.organizations import OrganizationContext
 from app.services.task_execution_runs import TaskExecutionRunService
-from app.schemas.task_execution_runs import TaskExecutionRunRead
 
 
 async def _make_engine() -> tuple[object, async_sessionmaker[AsyncSession]]:
@@ -122,7 +122,9 @@ async def test_create_task_execution_run_queues_symphony_run() -> None:
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post(
                 f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs",
                 json={"silo_slug": silo.slug},
@@ -164,7 +166,9 @@ async def test_list_task_execution_runs_returns_newest_first() -> None:
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             first = await client.post(
                 f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs",
                 json={"silo_slug": silo.slug},
@@ -189,7 +193,9 @@ async def test_list_task_execution_runs_returns_newest_first() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_dispatch_task_execution_run_creates_and_enqueues(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_create_dispatch_task_execution_run_creates_and_enqueues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     engine, session_maker = await _make_engine()
     async with session_maker() as session:
         ctx, board, task, silo = await _seed_context(session)
@@ -201,7 +207,9 @@ async def test_create_dispatch_task_execution_run_creates_and_enqueues(monkeypat
     )
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post(
                 f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs/dispatch",
                 json={
@@ -231,7 +239,9 @@ async def test_update_task_execution_run_persists_result_fields() -> None:
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             create_response = await client.post(
                 f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs",
                 json={"silo_slug": silo.slug},
@@ -272,7 +282,9 @@ async def test_create_task_execution_run_rejects_silos_without_symphony() -> Non
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post(
                 f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs",
                 json={"silo_slug": silo.slug},
@@ -292,7 +304,9 @@ async def test_retry_task_execution_run_clones_failed_run_into_new_queue_entry()
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             create_response = await client.post(
                 f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs",
                 json={
@@ -347,7 +361,9 @@ async def test_retry_task_execution_run_clones_failed_run_into_new_queue_entry()
 
 
 @pytest.mark.asyncio
-async def test_retry_dispatch_task_execution_run_enqueues_replacement(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_retry_dispatch_task_execution_run_enqueues_replacement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     engine, session_maker = await _make_engine()
     async with session_maker() as session:
         ctx, board, task, silo = await _seed_context(session)
@@ -359,7 +375,9 @@ async def test_retry_dispatch_task_execution_run_enqueues_replacement(monkeypatc
     )
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             create_response = await client.post(
                 f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs",
                 json={"silo_slug": silo.slug},
@@ -422,7 +440,9 @@ async def test_create_dispatch_task_execution_run_falls_back_to_immediate_dispat
     )
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post(
                 f"/api/v1/boards/{board.id}/tasks/{task.id}/execution-runs/dispatch",
                 json={"silo_slug": silo.slug},

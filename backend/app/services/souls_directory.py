@@ -107,7 +107,7 @@ async def fetch_soul_markdown(
     normalized_slug = slug.strip().strip("/")
     if normalized_slug.endswith(".md"):
         normalized_slug = normalized_slug[: -len(".md")]
-    url = f"{SOULS_DIRECTORY_BASE_URL}/api/souls/" f"{normalized_handle}/{normalized_slug}.md"
+    url = f"{SOULS_DIRECTORY_BASE_URL}/api/souls/{normalized_handle}/{normalized_slug}.md"
 
     owns_client = client is None
     if client is None:

@@ -5,307 +5,985 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal, TypeAlias
 
-SCHEMAS = {
-    "activity__approval_payload_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/activity/approval.payload.schema.json',
-     'title': 'SiloForgeApprovalActivityPayload',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['approval_id', 'board_id', 'action_type', 'approval_status', 'notification_status'],
-     'properties': {'approval_id': {'type': 'string', 'minLength': 1},
-                    'board_id': {'type': 'string', 'minLength': 1},
-                    'task_id': {'type': ['string', 'null']},
-                    'agent_id': {'type': ['string', 'null']},
-                    'action_type': {'type': 'string', 'minLength': 1},
-                    'approval_status': {'type': 'string', 'minLength': 1},
-                    'notification_status': {'type': 'string', 'minLength': 1},
-                    'lead_agent_id': {'type': ['string', 'null']},
-                    'error': {'type': ['string', 'null']}}},
-    "activity__board_payload_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/activity/board.payload.schema.json',
-     'title': 'SiloForgeBoardActivityPayload',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['notification_kind',
-                  'notification_status',
-                  'board_id',
-                  'board_name',
-                  'target_agent_id',
-                  'target_agent_name'],
-     'properties': {'notification_kind': {'type': 'string', 'minLength': 1},
-                    'notification_status': {'type': 'string', 'minLength': 1},
-                    'board_id': {'type': 'string', 'minLength': 1},
-                    'board_name': {'type': 'string', 'minLength': 1},
-                    'target_agent_id': {'type': 'string', 'minLength': 1},
-                    'target_agent_name': {'type': 'string', 'minLength': 1},
-                    'source_board_id': {'type': ['string', 'null']},
-                    'source_board_name': {'type': ['string', 'null']},
-                    'board_group_id': {'type': ['string', 'null']},
-                    'board_group_name': {'type': ['string', 'null']},
-                    'changed_fields': {'type': ['array', 'null'], 'items': {'type': 'string'}},
-                    'error': {'type': ['string', 'null']}}},
-    "activity__execution_run_payload_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/activity/execution-run.payload.schema.json',
-     'title': 'SiloForgeExecutionRunActivityPayload',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['executor_kind', 'run_id', 'run_short_id', 'silo_id', 'role_slug', 'status'],
-     'properties': {'executor_kind': {'type': 'string', 'enum': ['symphony']},
-                    'run_id': {'type': 'string', 'minLength': 1},
-                    'run_short_id': {'type': 'string', 'minLength': 1},
-                    'organization_id': {'type': 'string'},
-                    'board_id': {'type': 'string'},
-                    'task_id': {'type': 'string'},
-                    'silo_id': {'type': 'string', 'minLength': 1},
-                    'silo_slug': {'type': 'string'},
-                    'role_slug': {'type': 'string', 'minLength': 1},
-                    'status': {'type': 'string',
-                               'enum': ['queued',
-                                        'dispatching',
-                                        'running',
-                                        'succeeded',
-                                        'failed',
-                                        'cancelled',
-                                        'blocked']},
-                    'adapter_mode': {'type': 'string'},
-                    'branch_hint': {'type': 'string'},
-                    'branch_name': {'type': 'string'},
-                    'workspace_path': {'type': 'string'},
-                    'external_run_id': {'type': 'string'},
-                    'summary': {'type': 'string'},
-                    'pr_url': {'type': 'string', 'format': 'uri'},
-                    'pull_request': {'type': 'integer', 'minimum': 0},
-                    'total_tokens': {'type': 'integer', 'minimum': 0},
-                    'error_message': {'type': 'string'},
-                    'issue_identifier': {'type': 'string'},
-                    'runner_kind': {'type': 'string'},
-                    'completion_kind': {'type': 'string'},
-                    'last_event': {'type': 'string'},
-                    'last_message': {'type': 'string'},
-                    'session_id': {'type': 'string'},
-                    'turn_count': {'type': 'integer', 'minimum': 0},
-                    'duration_ms': {'type': 'integer', 'minimum': 0},
-                    'has_prompt_override': {'type': 'boolean'},
-                    'retried_from_run_id': {'type': 'string'}}},
-    "activity__gateway_payload_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/activity/gateway.payload.schema.json',
-     'title': 'SiloForgeGatewayActivityPayload',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['notification_kind', 'notification_status'],
-     'properties': {'notification_kind': {'type': 'string', 'minLength': 1},
-                    'notification_status': {'type': 'string', 'minLength': 1},
-                    'board_id': {'type': ['string', 'null']},
-                    'board_name': {'type': ['string', 'null']},
-                    'actor_agent_id': {'type': ['string', 'null']},
-                    'target_agent_id': {'type': ['string', 'null']},
-                    'target_agent_name': {'type': ['string', 'null']},
-                    'gateway_id': {'type': ['string', 'null']},
-                    'gateway_name': {'type': ['string', 'null']},
-                    'action': {'type': ['string', 'null']},
-                    'delivery_status': {'type': ['string', 'null']},
-                    'target_kind': {'type': ['string', 'null']},
-                    'workspace_path': {'type': ['string', 'null']},
-                    'session_key': {'type': ['string', 'null']},
-                    'error': {'type': ['string', 'null']}}},
-    "activity__task_payload_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/activity/task.payload.schema.json',
-     'title': 'SiloForgeTaskActivityPayload',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['task_id', 'board_id', 'task_title', 'status'],
-     'properties': {'task_id': {'type': 'string', 'minLength': 1},
-                    'board_id': {'type': 'string', 'minLength': 1},
-                    'task_title': {'type': 'string', 'minLength': 1},
-                    'status': {'type': 'string', 'minLength': 1},
-                    'assigned_agent_id': {'type': ['string', 'null']},
-                    'priority': {'type': ['string', 'integer', 'null']},
-                    'previous_status': {'type': ['string', 'null']},
-                    'reason': {'type': ['string', 'null']},
-                    'dependency_task_id': {'type': ['string', 'null']},
-                    'dependency_task_title': {'type': ['string', 'null']},
-                    'dependency_task_status': {'type': ['string', 'null']},
-                    'target_agent_id': {'type': ['string', 'null']},
-                    'target_agent_name': {'type': ['string', 'null']},
-                    'notification_kind': {'type': ['string', 'null']},
-                    'notification_status': {'type': ['string', 'null']},
-                    'error': {'type': ['string', 'null']}}},
-    "execution__callback_payload_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/execution/callback.payload.schema.json',
-     'title': 'SiloForgeExecutionCallbackPayload',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['status'],
-     'properties': {'status': {'type': 'string',
-                               'enum': ['queued',
-                                        'dispatching',
-                                        'running',
-                                        'succeeded',
-                                        'failed',
-                                        'cancelled',
-                                        'blocked']},
-                    'external_run_id': {'type': ['string', 'null']},
-                    'workspace_path': {'type': ['string', 'null']},
-                    'branch_name': {'type': ['string', 'null']},
-                    'pr_url': {'type': ['string', 'null'], 'format': 'uri'},
-                    'summary': {'type': ['string', 'null']},
-                    'error_message': {'type': ['string', 'null']},
-                    'issue_identifier': {'type': ['string', 'null']},
-                    'completion_kind': {'type': ['string', 'null']},
-                    'duration_ms': {'type': ['integer', 'null'], 'minimum': 0},
-                    'result_payload': {'type': ['object', 'null'],
-                                       'properties': {'issue_identifier': {'type': ['string', 'null']},
-                                                      'completion_kind': {'type': ['string', 'null']},
-                                                      'last_event': {'type': ['string', 'null']},
-                                                      'last_message': {'type': ['string', 'null']},
-                                                      'session_id': {'type': ['string', 'null']},
-                                                      'turn_count': {'type': ['integer', 'null'],
-                                                                     'minimum': 0},
-                                                      'duration_ms': {'type': ['integer', 'null'],
-                                                                      'minimum': 0},
-                                                      'usage': {'type': ['object', 'null'],
-                                                                'additionalProperties': False,
-                                                                'properties': {'input_tokens': {'type': ['integer',
-                                                                                                         'null'],
-                                                                                                'minimum': 0},
-                                                                               'output_tokens': {'type': ['integer',
-                                                                                                          'null'],
-                                                                                                 'minimum': 0},
-                                                                               'total_tokens': {'type': ['integer',
-                                                                                                         'null'],
-                                                                                                'minimum': 0}}}},
-                                       'additionalProperties': True}}},
-    "execution__dispatch_acceptance_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/execution/dispatch.acceptance.schema.json',
-     'title': 'SiloForgeExecutionDispatchAcceptance',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['accepted',
-                  'adapter_mode',
-                  'external_run_id',
-                  'workspace_path',
-                  'branch_name',
-                  'summary'],
-     'properties': {'accepted': {'type': 'boolean'},
-                    'adapter_mode': {'type': 'string', 'enum': ['http', 'stub']},
-                    'external_run_id': {'type': 'string', 'minLength': 1},
-                    'workspace_path': {'type': 'string', 'minLength': 1},
-                    'branch_name': {'type': 'string', 'minLength': 1},
-                    'summary': {'type': 'string', 'minLength': 1}}},
-    "execution__dispatch_request_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/execution/dispatch.request.schema.json',
-     'title': 'SiloForgeExecutionDispatchRequest',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['execution_run_id',
-                  'silo_slug',
-                  'role_slug',
-                  'workspace_root',
-                  'callback_url',
-                  'issue',
-                  'adapter_mode'],
-     'properties': {'execution_run_id': {'type': 'string', 'minLength': 1},
-                    'silo_slug': {'type': 'string', 'minLength': 1},
-                    'role_slug': {'type': 'string', 'minLength': 1},
-                    'workspace_root': {'type': 'string', 'minLength': 1},
-                    'callback_url': {'type': 'string', 'format': 'uri'},
-                    'prompt_override': {'type': ['string', 'null']},
-                    'adapter_mode': {'type': 'string', 'enum': ['http', 'stub']},
-                    'issue': {'type': 'object',
-                              'additionalProperties': False,
-                              'required': ['id',
-                                           'identifier',
-                                           'title',
-                                           'description',
-                                           'priority',
-                                           'state',
-                                           'branch_name',
-                                           'url',
-                                           'labels',
-                                           'blocked_by',
-                                           'created_at',
-                                           'updated_at'],
-                              'properties': {'id': {'type': 'string', 'minLength': 1},
-                                             'identifier': {'type': 'string', 'minLength': 1},
-                                             'title': {'type': 'string', 'minLength': 1},
-                                             'description': {'type': ['string', 'null']},
-                                             'priority': {'type': ['integer', 'null']},
-                                             'state': {'type': 'string', 'minLength': 1},
-                                             'branch_name': {'type': ['string', 'null']},
-                                             'url': {'type': ['string', 'null'], 'format': 'uri'},
-                                             'labels': {'type': 'array', 'items': {'type': 'string'}},
-                                             'blocked_by': {'type': 'array',
-                                                            'items': {'type': 'object',
-                                                                      'additionalProperties': False,
-                                                                      'required': ['id',
-                                                                                   'identifier',
-                                                                                   'state'],
-                                                                      'properties': {'id': {'type': ['string',
-                                                                                                     'null']},
-                                                                                     'identifier': {'type': ['string',
-                                                                                                             'null']},
-                                                                                     'state': {'type': ['string',
-                                                                                                        'null']}}}},
-                                             'created_at': {'type': ['string', 'null'],
-                                                            'format': 'date-time'},
-                                             'updated_at': {'type': ['string', 'null'],
-                                                            'format': 'date-time'}}}}},
-    "queue__agent_lifecycle_reconcile_payload_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/queue/agent-lifecycle-reconcile.payload.schema.json',
-     'title': 'SiloForgeAgentLifecycleReconcileQueuePayload',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['agent_id', 'gateway_id', 'generation', 'checkin_deadline_at'],
-     'properties': {'agent_id': {'type': 'string', 'minLength': 1},
-                    'gateway_id': {'type': 'string', 'minLength': 1},
-                    'board_id': {'type': ['string', 'null']},
-                    'generation': {'type': 'integer', 'minimum': 0},
-                    'checkin_deadline_at': {'type': 'string', 'format': 'date-time'}}},
-    "queue__task_envelope_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/queue/task-envelope.schema.json',
-     'title': 'SiloForgeQueuedTaskEnvelope',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['task_type', 'payload', 'created_at'],
-     'properties': {'task_type': {'type': 'string', 'minLength': 1},
-                    'payload': {'type': 'object'},
-                    'created_at': {'type': 'string', 'format': 'date-time'},
-                    'attempts': {'type': 'integer', 'minimum': 0}}},
-    "queue__task_execution_dispatch_payload_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/queue/task-execution-dispatch.payload.schema.json',
-     'title': 'SiloForgeTaskExecutionDispatchQueuePayload',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['organization_id', 'board_id', 'task_id', 'run_id'],
-     'properties': {'organization_id': {'type': 'string', 'minLength': 1},
-                    'board_id': {'type': 'string', 'minLength': 1},
-                    'task_id': {'type': 'string', 'minLength': 1},
-                    'run_id': {'type': 'string', 'minLength': 1}}},
-    "queue__webhook_delivery_payload_schema_json":
-    {'$schema': 'https://json-schema.org/draft/2020-12/schema',
-     '$id': 'https://schemas.silo-forge.dev/queue/webhook-delivery.payload.schema.json',
-     'title': 'SiloForgeWebhookDeliveryQueuePayload',
-     'type': 'object',
-     'additionalProperties': False,
-     'required': ['board_id', 'webhook_id', 'payload_id', 'received_at'],
-     'properties': {'board_id': {'type': 'string', 'minLength': 1},
-                    'webhook_id': {'type': 'string', 'minLength': 1},
-                    'payload_id': {'type': 'string', 'minLength': 1},
-                    'received_at': {'type': 'string', 'format': 'date-time'}}},
+SCHEMAS = json.loads(
+    r"""
+{
+  "activity__approval_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/activity/approval.payload.schema.json",
+    "title": "SiloForgeApprovalActivityPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "approval_id",
+      "board_id",
+      "action_type",
+      "approval_status",
+      "notification_status"
+    ],
+    "properties": {
+      "approval_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "board_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "task_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "agent_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "action_type": {
+        "type": "string",
+        "minLength": 1
+      },
+      "approval_status": {
+        "type": "string",
+        "minLength": 1
+      },
+      "notification_status": {
+        "type": "string",
+        "minLength": 1
+      },
+      "lead_agent_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "activity__board_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/activity/board.payload.schema.json",
+    "title": "SiloForgeBoardActivityPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "notification_kind",
+      "notification_status",
+      "board_id",
+      "board_name",
+      "target_agent_id",
+      "target_agent_name"
+    ],
+    "properties": {
+      "notification_kind": {
+        "type": "string",
+        "minLength": 1
+      },
+      "notification_status": {
+        "type": "string",
+        "minLength": 1
+      },
+      "board_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "board_name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "target_agent_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "target_agent_name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "source_board_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "source_board_name": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "board_group_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "board_group_name": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "changed_fields": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string"
+        }
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "activity__execution_run_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/activity/execution-run.payload.schema.json",
+    "title": "SiloForgeExecutionRunActivityPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "executor_kind",
+      "run_id",
+      "run_short_id",
+      "silo_id",
+      "role_slug",
+      "status"
+    ],
+    "properties": {
+      "executor_kind": {
+        "type": "string",
+        "enum": [
+          "symphony"
+        ]
+      },
+      "run_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "run_short_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "organization_id": {
+        "type": "string"
+      },
+      "board_id": {
+        "type": "string"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "silo_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "silo_slug": {
+        "type": "string"
+      },
+      "role_slug": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "dispatching",
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled",
+          "blocked"
+        ]
+      },
+      "adapter_mode": {
+        "type": "string"
+      },
+      "branch_hint": {
+        "type": "string"
+      },
+      "branch_name": {
+        "type": "string"
+      },
+      "workspace_path": {
+        "type": "string"
+      },
+      "external_run_id": {
+        "type": "string"
+      },
+      "summary": {
+        "type": "string"
+      },
+      "pr_url": {
+        "type": "string",
+        "format": "uri"
+      },
+      "pull_request": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "total_tokens": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "error_message": {
+        "type": "string"
+      },
+      "issue_identifier": {
+        "type": "string"
+      },
+      "runner_kind": {
+        "type": "string"
+      },
+      "completion_kind": {
+        "type": "string"
+      },
+      "last_event": {
+        "type": "string"
+      },
+      "last_message": {
+        "type": "string"
+      },
+      "session_id": {
+        "type": "string"
+      },
+      "turn_count": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "duration_ms": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "has_prompt_override": {
+        "type": "boolean"
+      },
+      "retried_from_run_id": {
+        "type": "string"
+      }
+    }
+  },
+  "activity__gateway_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/activity/gateway.payload.schema.json",
+    "title": "SiloForgeGatewayActivityPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "notification_kind",
+      "notification_status"
+    ],
+    "properties": {
+      "notification_kind": {
+        "type": "string",
+        "minLength": 1
+      },
+      "notification_status": {
+        "type": "string",
+        "minLength": 1
+      },
+      "board_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "board_name": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "actor_agent_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "target_agent_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "target_agent_name": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "gateway_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "gateway_name": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "action": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "delivery_status": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "target_kind": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "workspace_path": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "session_key": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "activity__task_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/activity/task.payload.schema.json",
+    "title": "SiloForgeTaskActivityPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_id",
+      "board_id",
+      "task_title",
+      "status"
+    ],
+    "properties": {
+      "task_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "board_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "task_title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "minLength": 1
+      },
+      "assigned_agent_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "priority": {
+        "type": [
+          "string",
+          "integer",
+          "null"
+        ]
+      },
+      "previous_status": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "reason": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "dependency_task_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "dependency_task_title": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "dependency_task_status": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "target_agent_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "target_agent_name": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "notification_kind": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "notification_status": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "error": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    }
+  },
+  "execution__callback_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/execution/callback.payload.schema.json",
+    "title": "SiloForgeExecutionCallbackPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "status"
+    ],
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "dispatching",
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled",
+          "blocked"
+        ]
+      },
+      "external_run_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "workspace_path": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "branch_name": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "pr_url": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uri"
+      },
+      "summary": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "error_message": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "issue_identifier": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "completion_kind": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "duration_ms": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0
+      },
+      "result_payload": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "issue_identifier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completion_kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_event": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "turn_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "duration_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "usage": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "input_tokens": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "output_tokens": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "total_tokens": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "execution__dispatch_acceptance_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/execution/dispatch.acceptance.schema.json",
+    "title": "SiloForgeExecutionDispatchAcceptance",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "accepted",
+      "adapter_mode",
+      "external_run_id",
+      "workspace_path",
+      "branch_name",
+      "summary"
+    ],
+    "properties": {
+      "accepted": {
+        "type": "boolean"
+      },
+      "adapter_mode": {
+        "type": "string",
+        "enum": [
+          "http",
+          "stub"
+        ]
+      },
+      "external_run_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "workspace_path": {
+        "type": "string",
+        "minLength": 1
+      },
+      "branch_name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "summary": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "execution__dispatch_request_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/execution/dispatch.request.schema.json",
+    "title": "SiloForgeExecutionDispatchRequest",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "execution_run_id",
+      "silo_slug",
+      "role_slug",
+      "workspace_root",
+      "callback_url",
+      "issue",
+      "adapter_mode"
+    ],
+    "properties": {
+      "execution_run_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "silo_slug": {
+        "type": "string",
+        "minLength": 1
+      },
+      "role_slug": {
+        "type": "string",
+        "minLength": 1
+      },
+      "workspace_root": {
+        "type": "string",
+        "minLength": 1
+      },
+      "callback_url": {
+        "type": "string",
+        "format": "uri"
+      },
+      "prompt_override": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "adapter_mode": {
+        "type": "string",
+        "enum": [
+          "http",
+          "stub"
+        ]
+      },
+      "issue": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "identifier",
+          "title",
+          "description",
+          "priority",
+          "state",
+          "branch_name",
+          "url",
+          "labels",
+          "blocked_by",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "identifier": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "priority": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "minLength": 1
+          },
+          "branch_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blocked_by": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "identifier",
+                "state"
+              ],
+              "properties": {
+                "id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "identifier": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  },
+  "queue__agent_lifecycle_reconcile_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/queue/agent-lifecycle-reconcile.payload.schema.json",
+    "title": "SiloForgeAgentLifecycleReconcileQueuePayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "agent_id",
+      "gateway_id",
+      "generation",
+      "checkin_deadline_at"
+    ],
+    "properties": {
+      "agent_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "gateway_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "board_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "generation": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "checkin_deadline_at": {
+        "type": "string",
+        "format": "date-time"
+      }
+    }
+  },
+  "queue__task_envelope_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/queue/task-envelope.schema.json",
+    "title": "SiloForgeQueuedTaskEnvelope",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "task_type",
+      "payload",
+      "created_at"
+    ],
+    "properties": {
+      "task_type": {
+        "type": "string",
+        "minLength": 1
+      },
+      "payload": {
+        "type": "object"
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "attempts": {
+        "type": "integer",
+        "minimum": 0
+      }
+    }
+  },
+  "queue__task_execution_dispatch_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/queue/task-execution-dispatch.payload.schema.json",
+    "title": "SiloForgeTaskExecutionDispatchQueuePayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "organization_id",
+      "board_id",
+      "task_id",
+      "run_id"
+    ],
+    "properties": {
+      "organization_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "board_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "task_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "run_id": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "queue__webhook_delivery_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/queue/webhook-delivery.payload.schema.json",
+    "title": "SiloForgeWebhookDeliveryQueuePayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "board_id",
+      "webhook_id",
+      "payload_id",
+      "received_at"
+    ],
+    "properties": {
+      "board_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "webhook_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "payload_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "received_at": {
+        "type": "string",
+        "format": "date-time"
+      }
+    }
+  }
 }
+    """
+)
+
 
 ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__approval_payload_schema_json"]
 ACTIVITY__BOARD_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__board_payload_schema_json"]
@@ -315,16 +993,40 @@ ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__task_payload_schema_json
 EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON = SCHEMAS["execution__callback_payload_schema_json"]
 EXECUTION__DISPATCH_ACCEPTANCE_SCHEMA_JSON = SCHEMAS["execution__dispatch_acceptance_schema_json"]
 EXECUTION__DISPATCH_REQUEST_SCHEMA_JSON = SCHEMAS["execution__dispatch_request_schema_json"]
-QUEUE__AGENT_LIFECYCLE_RECONCILE_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__agent_lifecycle_reconcile_payload_schema_json"]
+QUEUE__AGENT_LIFECYCLE_RECONCILE_PAYLOAD_SCHEMA_JSON = SCHEMAS[
+    "queue__agent_lifecycle_reconcile_payload_schema_json"
+]
 QUEUE__TASK_ENVELOPE_SCHEMA_JSON = SCHEMAS["queue__task_envelope_schema_json"]
-QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__task_execution_dispatch_payload_schema_json"]
+QUEUE__TASK_EXECUTION_DISPATCH_PAYLOAD_SCHEMA_JSON = SCHEMAS[
+    "queue__task_execution_dispatch_payload_schema_json"
+]
 QUEUE__WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_JSON = SCHEMAS["queue__webhook_delivery_payload_schema_json"]
 
-ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS_VALUES = ('queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked')
-ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS: TypeAlias = Literal['queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked']
-ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND_VALUES = ('symphony',)
-ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND: TypeAlias = Literal['symphony']
-EXECUTION_CALLBACK_PAYLOAD_STATUS_VALUES = ('queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked')
-EXECUTION_CALLBACK_PAYLOAD_STATUS: TypeAlias = Literal['queued', 'dispatching', 'running', 'succeeded', 'failed', 'cancelled', 'blocked']
-EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE_VALUES = ('http', 'stub')
-EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE: TypeAlias = Literal['http', 'stub']
+ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS_VALUES = (
+    "queued",
+    "dispatching",
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "blocked",
+)
+ACTIVITY_EXECUTION_RUN_PAYLOAD_STATUS: TypeAlias = Literal[
+    "queued", "dispatching", "running", "succeeded", "failed", "cancelled", "blocked"
+]
+ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND_VALUES = ("symphony",)
+ACTIVITY_EXECUTION_RUN_PAYLOAD_EXECUTOR_KIND: TypeAlias = Literal["symphony"]
+EXECUTION_CALLBACK_PAYLOAD_STATUS_VALUES = (
+    "queued",
+    "dispatching",
+    "running",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "blocked",
+)
+EXECUTION_CALLBACK_PAYLOAD_STATUS: TypeAlias = Literal[
+    "queued", "dispatching", "running", "succeeded", "failed", "cancelled", "blocked"
+]
+EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE_VALUES = ("http", "stub")
+EXECUTION_DISPATCH_ACCEPTANCE_ADAPTER_MODE: TypeAlias = Literal["http", "stub"]

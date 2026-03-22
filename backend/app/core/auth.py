@@ -251,7 +251,7 @@ async def _fetch_clerk_profile(clerk_user_id: str) -> tuple[str | None, str | No
         return email, name
     except ClerkErrors as exc:
         logger.warning(
-            "auth.clerk.profile.fetch_failed clerk_user_id=%s reason=clerk_errors " "error_type=%s",
+            "auth.clerk.profile.fetch_failed clerk_user_id=%s reason=clerk_errors error_type=%s",
             clerk_user_id_log,
             exc.__class__.__name__,
         )
@@ -301,7 +301,7 @@ async def delete_clerk_user(clerk_user_id: str) -> None:
         logger.info("auth.clerk.user.delete clerk_user_id=%s", clerk_user_id_log)
     except ClerkErrors as exc:
         logger.warning(
-            "auth.clerk.user.delete_failed clerk_user_id=%s reason=clerk_errors " "error_type=%s",
+            "auth.clerk.user.delete_failed clerk_user_id=%s reason=clerk_errors error_type=%s",
             clerk_user_id_log,
             exc.__class__.__name__,
         )

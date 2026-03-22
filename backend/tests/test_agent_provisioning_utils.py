@@ -78,7 +78,9 @@ def test_record_heartbeat_includes_structured_payload(monkeypatch):
         captured.update(kwargs)
         return None
 
-    monkeypatch.setattr("app.services.openclaw.provisioning_db.record_activity", _fake_record_activity)
+    monkeypatch.setattr(
+        "app.services.openclaw.provisioning_db.record_activity", _fake_record_activity
+    )
     agent = SimpleNamespace(
         id=uuid4(),
         name="Fox",
@@ -106,7 +108,9 @@ def test_record_instruction_failure_includes_structured_payload(monkeypatch):
         captured.update(kwargs)
         return None
 
-    monkeypatch.setattr("app.services.openclaw.provisioning_db.record_activity", _fake_record_activity)
+    monkeypatch.setattr(
+        "app.services.openclaw.provisioning_db.record_activity", _fake_record_activity
+    )
     agent = SimpleNamespace(
         id=uuid4(),
         name="Bunny",

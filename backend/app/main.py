@@ -25,11 +25,11 @@ from app.api.gateway import router as gateway_router
 from app.api.gateways import router as gateways_router
 from app.api.metrics import router as metrics_router
 from app.api.organizations import router as organizations_router
-from app.api.skills_marketplace import router as skills_marketplace_router
 from app.api.silo_blueprints import router as silo_blueprints_router
 from app.api.silo_provision_plans import router as silo_provision_plans_router
 from app.api.silo_runtime import router as silo_runtime_router
 from app.api.silos import router as silos_router
+from app.api.skills_marketplace import router as skills_marketplace_router
 from app.api.souls_directory import router as souls_directory_router
 from app.api.tags import router as tags_router
 from app.api.task_custom_fields import router as task_custom_fields_router
@@ -164,8 +164,7 @@ OPENAPI_TAGS = [
     {
         "name": "agent-lead",
         "description": (
-            "Lead workflows: delegation, review orchestration, approvals, and "
-            "coordination actions."
+            "Lead workflows: delegation, review orchestration, approvals, and coordination actions."
         ),
     },
     {

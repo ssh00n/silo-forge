@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass
-from uuid import UUID
 
 import httpx
 
@@ -76,7 +75,9 @@ class SymphonyDispatchAdapter:
             if bridge_base_url is not None
             else settings.symphony_bridge_base_url
         )
-        self._bridge_token = bridge_token.strip() if bridge_token is not None else settings.symphony_bridge_token
+        self._bridge_token = (
+            bridge_token.strip() if bridge_token is not None else settings.symphony_bridge_token
+        )
 
     def build_request(
         self,
@@ -111,7 +112,9 @@ class SymphonyDispatchAdapter:
         prompt_override = None
         if run.dispatch_payload and isinstance(run.dispatch_payload, dict):
             raw_prompt = run.dispatch_payload.get("prompt_override")
-            prompt_override = raw_prompt if isinstance(raw_prompt, str) and raw_prompt.strip() else None
+            prompt_override = (
+                raw_prompt if isinstance(raw_prompt, str) and raw_prompt.strip() else None
+            )
         return SymphonyDispatchRequest(
             execution_run_id=str(run.id),
             silo_slug=silo.slug,
@@ -146,12 +149,16 @@ class SymphonyDispatchAdapter:
             return SymphonyDispatchAcceptance(
                 accepted=bool(body.get("accepted", True)),
                 adapter_mode="http",
-                external_run_id=str(body.get("external_run_id") or f"mc-{request.execution_run_id}"),
+                external_run_id=str(
+                    body.get("external_run_id") or f"mc-{request.execution_run_id}"
+                ),
                 workspace_path=str(
                     body.get("workspace_path")
                     or f"{request.workspace_root.rstrip('/')}/mission-control/{request.issue.identifier}"
                 ),
-                branch_name=str(body.get("branch_name") or request.issue.branch_name or "task/dispatch"),
+                branch_name=str(
+                    body.get("branch_name") or request.issue.branch_name or "task/dispatch"
+                ),
                 summary=str(
                     body.get("summary")
                     or "Mission Control dispatched execution to the Symphony bridge."

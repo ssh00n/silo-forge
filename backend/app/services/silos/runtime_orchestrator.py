@@ -16,7 +16,6 @@ from app.models.silo_runtime_operations import (
 )
 from app.models.silos import Silo
 from app.schemas.silos import (
-    SiloRead,
     SiloRuntimeOperationRead,
     SiloRuntimeOperationResponseRead,
 )
@@ -85,7 +84,9 @@ class SiloRuntimeOrchestrator:
                 )
                 continue
 
-            role_state = next((role for role in plan.preview.roles if role.slug == target.role_slug), None)
+            role_state = next(
+                (role for role in plan.preview.roles if role.slug == target.role_slug), None
+            )
             if role_state is None or not role_state.gateway_id:
                 target_warnings.append("No gateway assignment is stored for this role.")
                 results.append(
@@ -121,9 +122,7 @@ class SiloRuntimeOrchestrator:
                     )
                     target_warnings.extend(validated.warnings)
                 except httpx.HTTPError as exc:
-                    warning = (
-                        f"Runtime validate failed for gateway {gateway.name}: {exc!s}"
-                    )
+                    warning = f"Runtime validate failed for gateway {gateway.name}: {exc!s}"
                     target_warnings.append(warning)
                     warnings.append(warning)
                     results.append(

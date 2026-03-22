@@ -19,9 +19,7 @@ class SiloRole(QueryModel, table=True):
     """One resolved role assignment within a persisted silo."""
 
     __tablename__ = "silo_roles"  # pyright: ignore[reportAssignmentType]
-    __table_args__ = (
-        UniqueConstraint("silo_id", "slug", name="uq_silo_roles_silo_slug"),
-    )
+    __table_args__ = (UniqueConstraint("silo_id", "slug", name="uq_silo_roles_silo_slug"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     silo_id: UUID = Field(foreign_key="silos.id", index=True)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import require_org_admin
 from app.db.session import get_session
@@ -18,7 +19,7 @@ ORG_ADMIN_DEP = Depends(require_org_admin)
 @router.post("/{slug}/runtime/validate", response_model=SiloRuntimeOperationResponseRead)
 async def validate_silo_runtime(
     slug: str,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> SiloRuntimeOperationResponseRead:
     """Validate all supported runtime targets for one persisted silo."""
@@ -42,7 +43,7 @@ async def validate_silo_runtime(
 @router.post("/{slug}/runtime/apply", response_model=SiloRuntimeOperationResponseRead)
 async def apply_silo_runtime(
     slug: str,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> SiloRuntimeOperationResponseRead:
     """Apply all supported runtime targets for one persisted silo."""

@@ -9,6 +9,7 @@ from app.services.silos import SiloService
 
 router = APIRouter(prefix="/silo-blueprints", tags=["silo-blueprints"])
 
+
 @router.get("", response_model=list[SiloBlueprintRead])
 async def list_silo_blueprints() -> list[SiloBlueprintRead]:
     """Return built-in silo blueprints available for MVP provisioning."""

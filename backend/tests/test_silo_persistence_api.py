@@ -16,8 +16,8 @@ from app.api.deps import require_org_admin
 from app.api.silos import router as silos_router
 from app.db.session import get_session
 from app.models.gateways import Gateway
-from app.models.organizations import Organization
 from app.models.organization_members import OrganizationMember
+from app.models.organizations import Organization
 from app.models.users import User
 from app.services.organizations import OrganizationContext
 

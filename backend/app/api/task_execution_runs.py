@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import require_org_admin
 from app.db.session import get_session
@@ -69,7 +70,7 @@ async def _enqueue_or_dispatch_immediately(
 
 async def _get_board_and_task(
     *,
-    session,
+    session: AsyncSession,
     ctx: OrganizationContext,
     board_id: UUID,
     task_id: UUID,
@@ -87,7 +88,7 @@ async def _get_board_and_task(
 async def list_task_execution_runs(
     board_id: UUID,
     task_id: UUID,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> list[TaskExecutionRunRead]:
     """List execution runs for one task."""
@@ -109,7 +110,7 @@ async def create_task_execution_run(
     board_id: UUID,
     task_id: UUID,
     payload: TaskExecutionRunCreate,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> TaskExecutionRunRead:
     """Create a new queued execution run for one task."""
@@ -140,7 +141,7 @@ async def create_and_dispatch_task_execution_run(
     board_id: UUID,
     task_id: UUID,
     payload: TaskExecutionRunCreate,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> TaskExecutionRunRead:
     """Create a new execution run and immediately queue it for Symphony dispatch."""
@@ -178,7 +179,7 @@ async def get_task_execution_run(
     board_id: UUID,
     task_id: UUID,
     run_id: UUID,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> TaskExecutionRunRead:
     """Return one execution run for one task."""
@@ -205,7 +206,7 @@ async def update_task_execution_run(
     task_id: UUID,
     run_id: UUID,
     payload: TaskExecutionRunUpdate,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> TaskExecutionRunRead:
     """Update one execution run for one task."""
@@ -238,7 +239,7 @@ async def dispatch_task_execution_run(
     board_id: UUID,
     task_id: UUID,
     run_id: UUID,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> TaskExecutionRunRead:
     """Queue one execution run for background Symphony dispatch."""
@@ -266,12 +267,14 @@ async def dispatch_task_execution_run(
     )
 
 
-@router.post("/{run_id}/retry", response_model=TaskExecutionRunRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{run_id}/retry", response_model=TaskExecutionRunRead, status_code=status.HTTP_201_CREATED
+)
 async def retry_task_execution_run(
     board_id: UUID,
     task_id: UUID,
     run_id: UUID,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> TaskExecutionRunRead:
     """Retry a terminal execution run by cloning it into a new queued run."""
@@ -308,7 +311,7 @@ async def retry_and_dispatch_task_execution_run(
     board_id: UUID,
     task_id: UUID,
     run_id: UUID,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> TaskExecutionRunRead:
     """Retry a terminal run and immediately queue the replacement for dispatch."""

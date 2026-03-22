@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import ValidationError
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.contracts.execution import parse_execution_callback_contract
 from app.contracts.json_schema import ContractValidationError
@@ -35,7 +36,9 @@ def _require_symphony_callback_auth(
         if value.lower().startswith("bearer "):
             token = value.split(" ", 1)[1].strip()
     if token != expected:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Symphony token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Symphony token"
+        )
 
 
 CALLBACK_AUTH_DEP = Depends(_require_symphony_callback_auth)
@@ -45,16 +48,20 @@ CALLBACK_AUTH_DEP = Depends(_require_symphony_callback_auth)
 async def receive_symphony_execution_callback(
     run_id: UUID,
     request: Request,
-    _auth=CALLBACK_AUTH_DEP,
-    session=SESSION_DEP,
+    _auth: None = CALLBACK_AUTH_DEP,
+    session: AsyncSession = SESSION_DEP,
 ) -> TaskExecutionRunRead:
     """Receive execution status updates from a Symphony bridge."""
     try:
         raw_payload = await request.json()
         contract = parse_execution_callback_contract(raw_payload)
         payload = TaskExecutionRunCallback.model_validate(contract.model_dump(exclude_none=True))
-        return await TaskExecutionRunService(session).update_run_by_id(run_id=run_id, payload=payload)
+        return await TaskExecutionRunService(session).update_run_by_id(
+            run_id=run_id, payload=payload
+        )
     except (ContractValidationError, ValidationError) as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

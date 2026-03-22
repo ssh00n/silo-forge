@@ -23,8 +23,8 @@ from app.api.deps import (
     require_user_auth,
     require_user_or_agent,
 )
-from app.core.time import utcnow
 from app.contracts.activity import finalize_task_activity_payload
+from app.core.time import utcnow
 from app.db import crud
 from app.db.pagination import paginate
 from app.db.session import async_session_maker, get_session
@@ -523,7 +523,7 @@ async def _reconcile_dependents_for_dependency_toggle(
                     event_type="task.status_changed",
                     task_id=dependent.id,
                     message=(
-                        "Task returned to inbox: dependency reopened " f"({dependency_task.title})."
+                        f"Task returned to inbox: dependency reopened ({dependency_task.title})."
                     ),
                     payload=_task_activity_payload(
                         dependent,
@@ -644,7 +644,7 @@ def _assignment_notification_message(*, board: Board, task: Task, agent: Agent) 
     return (
         "TASK ASSIGNED\n"
         + "\n".join(details)
-        + ("\n\nTake action: open the task and begin work. " "Post updates as task comments.")
+        + ("\n\nTake action: open the task and begin work. Post updates as task comments.")
     )
 
 
@@ -1452,12 +1452,15 @@ async def _task_event_generator(
 
         async with async_session_maker() as session:
             rows = await _fetch_task_events(session, board_id, last_seen)
-            deps_map, dep_status, tag_state_by_task_id, custom_field_values_by_task_id = (
-                await _stream_task_state(
-                    session,
-                    board_id=board_id,
-                    rows=rows,
-                )
+            (
+                deps_map,
+                dep_status,
+                tag_state_by_task_id,
+                custom_field_values_by_task_id,
+            ) = await _stream_task_state(
+                session,
+                board_id=board_id,
+                rows=rows,
             )
 
         for event, task in rows:
@@ -2273,7 +2276,7 @@ def _task_notification_payload(
     agent: Agent,
     kind: str,
     notification_status: str,
-    error: str | None = None,
+    error: object | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "task_id": str(task.id),
@@ -2286,7 +2289,7 @@ def _task_notification_payload(
         "notification_status": notification_status,
     }
     if error:
-        payload["error"] = error
+        payload["error"] = str(error)
     return finalize_task_activity_payload(payload)
 
 

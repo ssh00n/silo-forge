@@ -16,12 +16,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.api.deps import require_org_admin
 from app.api.silo_runtime import router as silo_runtime_router
 from app.api.silos import router as silos_router
-from app.models.activity_events import ActivityEvent
 from app.db.session import get_session
+from app.models.activity_events import ActivityEvent
 from app.models.boards import Board
 from app.models.gateways import Gateway
-from app.models.organizations import Organization
 from app.models.organization_members import OrganizationMember
+from app.models.organizations import Organization
 from app.models.users import User
 from app.services.organizations import OrganizationContext
 
@@ -117,7 +117,9 @@ async def test_validate_silo_runtime_calls_picoclaw_validate_for_assigned_target
     )
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             create_response = await client.post(
                 "/api/v1/silos",
                 json={
@@ -141,7 +143,9 @@ async def test_validate_silo_runtime_calls_picoclaw_validate_for_assigned_target
         async with session_maker() as session:
             activity = (
                 await session.exec(
-                    select(ActivityEvent).where(ActivityEvent.event_type == "silo.runtime.validate"),
+                    select(ActivityEvent).where(
+                        ActivityEvent.event_type == "silo.runtime.validate"
+                    ),
                 )
             ).one()
         assert activity.payload is not None
@@ -181,7 +185,9 @@ async def test_apply_silo_runtime_calls_picoclaw_apply(monkeypatch: pytest.Monke
     )
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             create_response = await client.post(
                 "/api/v1/silos",
                 json={
@@ -221,7 +227,9 @@ async def test_validate_silo_runtime_returns_404_for_unknown_silo() -> None:
     app = _build_test_app(session_maker, ctx)
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             response = await client.post("/api/v1/silos/missing/runtime/validate")
 
         assert response.status_code == 404
@@ -255,7 +263,9 @@ async def test_validate_silo_runtime_returns_warnings_when_gateway_is_unreachabl
 
     def _mock_async_client(**kwargs: object) -> httpx.AsyncClient:
         transport = httpx.MockTransport(
-            lambda request: (_ for _ in ()).throw(httpx.ConnectError("All connection attempts failed", request=request)),
+            lambda request: (_ for _ in ()).throw(
+                httpx.ConnectError("All connection attempts failed", request=request)
+            ),
         )
         return original_async_client(transport=transport)
 
@@ -265,7 +275,9 @@ async def test_validate_silo_runtime_returns_warnings_when_gateway_is_unreachabl
     )
 
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
             create_response = await client.post(
                 "/api/v1/silos",
                 json={
@@ -283,12 +295,19 @@ async def test_validate_silo_runtime_returns_warnings_when_gateway_is_unreachabl
         fox = next(item for item in body["results"] if item["role_slug"] == "fox")
         assert fox["supports_picoclaw_bundle_apply"] is True
         assert fox["validated"] is None
-        assert any("Runtime validate failed for gateway Fox Host" in warning for warning in fox["warnings"])
-        assert any("Runtime validate failed for gateway Fox Host" in warning for warning in body["warnings"])
+        assert any(
+            "Runtime validate failed for gateway Fox Host" in warning for warning in fox["warnings"]
+        )
+        assert any(
+            "Runtime validate failed for gateway Fox Host" in warning
+            for warning in body["warnings"]
+        )
         async with session_maker() as session:
             activity = (
                 await session.exec(
-                    select(ActivityEvent).where(ActivityEvent.event_type == "silo.runtime.validate"),
+                    select(ActivityEvent).where(
+                        ActivityEvent.event_type == "silo.runtime.validate"
+                    ),
                 )
             ).one()
         assert activity.board_id == board.id

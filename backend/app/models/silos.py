@@ -19,9 +19,7 @@ class Silo(QueryModel, table=True):
     """Top-level silo record tracked by the control plane."""
 
     __tablename__ = "silos"  # pyright: ignore[reportAssignmentType]
-    __table_args__ = (
-        UniqueConstraint("organization_id", "slug", name="uq_silos_org_slug"),
-    )
+    __table_args__ = (UniqueConstraint("organization_id", "slug", name="uq_silos_org_slug"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     organization_id: UUID = Field(foreign_key="organizations.id", index=True)

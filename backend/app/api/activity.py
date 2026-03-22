@@ -486,9 +486,7 @@ async def stream_activity(
                 if len(seen_queue) > SSE_SEEN_MAX:
                     oldest = seen_queue.popleft()
                     seen_ids.discard(oldest)
-                created_at = _parse_since(event.created_at)
-                if created_at is not None:
-                    last_seen = max(created_at, last_seen)
+                last_seen = max(event.created_at, last_seen)
                 yield {
                     "event": "activity",
                     "data": json.dumps(

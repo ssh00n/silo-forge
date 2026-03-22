@@ -34,9 +34,9 @@ frontend-sync: frontend-tooling ## npm install frontend deps
 format: backend-format frontend-format ## Format backend + frontend
 
 .PHONY: backend-format
-backend-format: ## Format backend (isort + black)
-	cd $(BACKEND_DIR) && uv run isort .
-	cd $(BACKEND_DIR) && uv run black .
+backend-format: ## Format backend (ruff import sort + ruff format)
+	cd $(BACKEND_DIR) && uv run ruff check . --select I --fix
+	cd $(BACKEND_DIR) && uv run ruff format .
 
 .PHONY: frontend-format
 frontend-format: frontend-tooling ## Format frontend (prettier)
@@ -46,9 +46,9 @@ frontend-format: frontend-tooling ## Format frontend (prettier)
 format-check: backend-format-check frontend-format-check ## Check formatting (no changes)
 
 .PHONY: backend-format-check
-backend-format-check: ## Check backend formatting (isort + black)
-	cd $(BACKEND_DIR) && uv run isort . --check-only --diff
-	cd $(BACKEND_DIR) && uv run black . --check --diff
+backend-format-check: ## Check backend formatting (ruff import sort + ruff format)
+	cd $(BACKEND_DIR) && uv run ruff check . --select I
+	cd $(BACKEND_DIR) && uv run ruff format . --check
 
 .PHONY: frontend-format-check
 frontend-format-check: frontend-tooling ## Check frontend formatting (prettier)
@@ -58,7 +58,7 @@ frontend-format-check: frontend-tooling ## Check frontend formatting (prettier)
 lint: contracts-check backend-lint frontend-lint docs-lint ## Lint backend + frontend + docs
 
 .PHONY: backend-lint
-backend-lint: backend-format-check backend-typecheck ## Lint backend (isort/black checks + flake8 + mypy)
+backend-lint: backend-format-check backend-typecheck ## Lint backend (ruff format checks + flake8 + mypy)
 	cd $(BACKEND_DIR) && uv run flake8 --config .flake8
 
 .PHONY: frontend-lint
@@ -148,6 +148,7 @@ api-gen: frontend-tooling ## Regenerate TS API client (requires backend running 
 .PHONY: contracts-gen
 contracts-gen: ## Regenerate shared contract artifacts for backend/frontend/(optional) sibling symphony
 	python3 scripts/generate_contract_artifacts.py
+	cd $(BACKEND_DIR) && uv run ruff format app/contracts/generated_schemas.py
 
 .PHONY: contracts-check
 contracts-check: ## Fail if generated contract artifacts are stale

@@ -175,4 +175,3 @@ def build_default_four_agent_blueprint() -> SiloBlueprintRead:
         supports_symphony=True,
         supports_telemetry=True,
     )
-

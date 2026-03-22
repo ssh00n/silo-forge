@@ -14,6 +14,6 @@ def test_heartbeat_templates_fit_in_injected_context_limit() -> None:
     targets = ("BOARD_HEARTBEAT.md.j2",)
     for name in targets:
         size = (TEMPLATES_DIR / name).stat().st_size
-        assert (
-            size <= HEARTBEAT_CONTEXT_LIMIT
-        ), f"{name} is {size} chars (limit {HEARTBEAT_CONTEXT_LIMIT})"
+        assert size <= HEARTBEAT_CONTEXT_LIMIT, (
+            f"{name} is {size} chars (limit {HEARTBEAT_CONTEXT_LIMIT})"
+        )

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import pprint
 from pathlib import Path
 from typing import Any
 
@@ -181,6 +180,7 @@ def render_frontend(schemas: list[tuple[str, dict[str, object]]]) -> str:
 
 
 def render_backend(schemas: list[tuple[str, dict[str, object]]]) -> str:
+    schema_map = {key: schema for key, schema in schemas}
     lines = [
         '"""Generated contract schema snapshots."""',
         "",
@@ -189,16 +189,16 @@ def render_backend(schemas: list[tuple[str, dict[str, object]]]) -> str:
         "",
         "from __future__ import annotations",
         "",
+        "import json",
         "from typing import Literal, TypeAlias",
         "",
-        "SCHEMAS = {",
+        "SCHEMAS = json.loads(",
+        '    r"""',
+        json.dumps(schema_map, indent=2, sort_keys=False),
+        '    """',
+        ")",
+        "",
     ]
-    for key, schema in schemas:
-        rendered = pprint.pformat(schema, width=100, sort_dicts=False)
-        indented = "\n".join(f"    {line}" for line in rendered.splitlines())
-        lines.append(f'    "{key}":')
-        lines.append(indented + ",")
-    lines.append("}")
     lines.append("")
     for key, _schema in schemas:
         lines.append(f'{_py_name(key)} = SCHEMAS["{key}"]')
@@ -225,9 +225,8 @@ def render_backend(schemas: list[tuple[str, dict[str, object]]]) -> str:
             "adapter_mode",
         ),
     ]
-    schema_lookup = {key: schema for key, schema in schemas}
     for alias_name, schema_key, property_name in enum_specs:
-        properties = schema_lookup[schema_key].get("properties", {})
+        properties = schema_map[schema_key].get("properties", {})
         if not isinstance(properties, dict):
             continue
         property_schema = properties.get(property_name)

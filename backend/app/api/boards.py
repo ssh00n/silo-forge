@@ -19,6 +19,7 @@ from app.api.deps import (
     require_org_admin,
     require_org_member,
 )
+from app.contracts.activity import finalize_board_activity_payload
 from app.core.logging import get_logger
 from app.core.time import utcnow
 from app.db import crud
@@ -36,7 +37,6 @@ from app.services.activity_log import record_activity
 from app.services.board_group_snapshot import build_board_group_snapshot
 from app.services.board_lifecycle import delete_board as delete_board_service
 from app.services.board_snapshot import build_board_snapshot
-from app.contracts.activity import finalize_board_activity_payload
 from app.services.openclaw.gateway_dispatch import GatewayDispatchService
 from app.services.openclaw.gateway_rpc import GatewayConfig as GatewayClientConfig
 from app.services.openclaw.gateway_rpc import OpenClawGatewayError
@@ -67,7 +67,7 @@ def _board_notification_payload(
     board: Board,
     target_agent: Agent,
     notification_status: str,
-    error: str | None = None,
+    error: object | None = None,
     source_board: Board | None = None,
     group: BoardGroup | None = None,
     changed_fields: list[str] | None = None,
@@ -89,8 +89,10 @@ def _board_notification_payload(
     if changed_fields:
         payload["changed_fields"] = changed_fields
     if error:
-        payload["error"] = error
+        payload["error"] = str(error)
     return finalize_board_activity_payload(payload)
+
+
 PER_BOARD_TASK_LIMIT_QUERY = Query(default=5, ge=0, le=100)
 AGENT_BOARD_ROLE_TAGS = cast("list[str | Enum]", ["agent-lead", "agent-worker"])
 _ERR_GATEWAY_MAIN_AGENT_REQUIRED = (

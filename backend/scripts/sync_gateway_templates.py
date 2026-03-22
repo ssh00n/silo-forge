@@ -43,14 +43,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--reset-sessions",
         action="store_true",
-        help=("Reset agent sessions after syncing files " "(forces agents to re-read workspace)"),
+        help=("Reset agent sessions after syncing files (forces agents to re-read workspace)"),
     )
     parser.add_argument(
         "--rotate-tokens",
         action="store_true",
-        help=(
-            "Rotate agent tokens when TOOLS.md is missing/unreadable " "or token drift is detected"
-        ),
+        help=("Rotate agent tokens when TOOLS.md is missing/unreadable or token drift is detected"),
     )
     parser.add_argument(
         "--force-bootstrap",
@@ -105,7 +103,7 @@ async def _run() -> int:
 
     sys.stdout.write(f"gateway_id={result.gateway_id}\n")
     sys.stdout.write(
-        f"include_main={result.include_main} " f"reset_sessions={result.reset_sessions}\n",
+        f"include_main={result.include_main} reset_sessions={result.reset_sessions}\n",
     )
     sys.stdout.write(
         f"agents_updated={result.agents_updated} "

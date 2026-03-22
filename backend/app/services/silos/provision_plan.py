@@ -15,8 +15,8 @@ from app.schemas.silos import (
     SiloPreviewRead,
     SiloProvisionPlanRead,
     SiloProvisionPlanTargetRead,
-    SiloSecretBinding,
     SiloRoleDesiredState,
+    SiloSecretBinding,
 )
 from app.services.silos.service import SiloService
 
@@ -41,7 +41,9 @@ class ProvisionPlanService:
         """Build a provision plan from one persisted silo."""
         session = self._silo_service._session
         if session is None:
-            raise RuntimeError("ProvisionPlanService.build_plan_for_silo requires a database session")
+            raise RuntimeError(
+                "ProvisionPlanService.build_plan_for_silo requires a database session"
+            )
 
         silo = await crud.get_one_by(
             session,
@@ -194,7 +196,5 @@ class ProvisionPlanService:
             "# TEAM.md\n\n"
             f"Silo: {preview.name}\n"
             f"Blueprint: {preview.blueprint_slug}@{preview.blueprint_version}\n\n"
-            "Roles:\n"
-            + "\n".join(role_lines)
-            + "\n"
+            "Roles:\n" + "\n".join(role_lines) + "\n"
         )

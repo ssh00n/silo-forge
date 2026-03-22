@@ -78,7 +78,9 @@ async def test_runtime_execution_metrics_maps_recent_runs_and_usage() -> None:
     )
     range_spec = metrics_api._resolve_range("7d")
 
-    snapshot = await metrics_api._runtime_execution_metrics(session, range_spec, [board_id], limit=8)
+    snapshot = await metrics_api._runtime_execution_metrics(
+        session, range_spec, [board_id], limit=8
+    )
 
     assert snapshot.queued_runs == 2
     assert snapshot.active_runs == 1

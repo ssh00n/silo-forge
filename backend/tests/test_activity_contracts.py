@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from app.api.boards import _board_notification_payload
 from app.contracts.activity import (
     parse_board_activity_payload,
     parse_gateway_activity_payload,
 )
-from app.api.boards import _board_notification_payload
 from app.models.agents import Agent
 from app.models.board_groups import BoardGroup
 from app.models.boards import Board

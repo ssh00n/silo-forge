@@ -205,12 +205,12 @@ class TaskExecutionRunService:
         if payload.status is not None:
             record_activity(
                 self._session,
-            event_type="task.execution_run.updated",
-            message=self._build_updated_message(run=run, silo_slug=silo.slug),
-            payload=self._build_run_payload(run=run, silo_slug=silo.slug),
-            task_id=task.id,
-            board_id=board.id,
-        )
+                event_type="task.execution_run.updated",
+                message=self._build_updated_message(run=run, silo_slug=silo.slug),
+                payload=self._build_run_payload(run=run, silo_slug=silo.slug),
+                task_id=task.id,
+                board_id=board.id,
+            )
 
         await self._apply_callback_task_effects(
             board=board,
@@ -308,13 +308,14 @@ class TaskExecutionRunService:
     ) -> TaskExecutionRunRead:
         """Build and persist a Symphony dispatch contract for one queued run."""
         row = await self._session.exec(
-            select(TaskExecutionRun, Task, Board, Silo, SiloRole)
+            select(TaskExecutionRun, Task, Board, Silo, SiloRole)  # type: ignore[call-overload]
             .join(Task, col(Task.id) == col(TaskExecutionRun.task_id))
             .join(Board, col(Board.id) == col(TaskExecutionRun.board_id))
             .join(Silo, col(Silo.id) == col(TaskExecutionRun.silo_id))
             .join(
                 SiloRole,
-                (col(SiloRole.silo_id) == col(Silo.id)) & (col(SiloRole.slug) == col(TaskExecutionRun.role_slug)),
+                (col(SiloRole.silo_id) == col(Silo.id))
+                & (col(SiloRole.slug) == col(TaskExecutionRun.role_slug)),
             )
             .where(col(TaskExecutionRun.organization_id) == organization_id)
             .where(col(TaskExecutionRun.board_id) == board_id)
@@ -465,7 +466,9 @@ class TaskExecutionRunService:
         now = utcnow()
 
         if status == "running":
-            if await self._can_auto_transition_task(board=board, task=task, target_status="in_progress"):
+            if await self._can_auto_transition_task(
+                board=board, task=task, target_status="in_progress"
+            ):
                 previous_status = task.status
                 task.status = "in_progress"
                 task.in_progress_at = task.in_progress_at or now
@@ -587,18 +590,14 @@ class TaskExecutionRunService:
         ]
         if payload.summary:
             lines.append(payload.summary)
-        pull_request = TaskExecutionRunService._extract_pull_request_number(
-            payload.result_payload
-        )
+        pull_request = TaskExecutionRunService._extract_pull_request_number(payload.result_payload)
         if pull_request is not None:
             lines.append(f"PR #{pull_request}")
         if payload.pr_url:
             lines.append(f"PR: {payload.pr_url}")
         elif payload.branch_name:
             lines.append(f"Branch: {payload.branch_name}")
-        total_tokens = TaskExecutionRunService._extract_total_tokens(
-            payload.result_payload
-        )
+        total_tokens = TaskExecutionRunService._extract_total_tokens(payload.result_payload)
         if total_tokens is not None:
             lines.append(f"Tokens: {total_tokens}")
         if payload.error_message:
@@ -730,18 +729,14 @@ class TaskExecutionRunService:
         ]
         if run.summary:
             parts.append(run.summary)
-        pull_request = TaskExecutionRunService._extract_pull_request_number(
-            run.result_payload
-        )
+        pull_request = TaskExecutionRunService._extract_pull_request_number(run.result_payload)
         if pull_request is not None:
             parts.append(f"PR #{pull_request}.")
         if run.pr_url:
             parts.append(f"PR: {run.pr_url}")
         elif run.branch_name:
             parts.append(f"Branch: {run.branch_name}.")
-        total_tokens = TaskExecutionRunService._extract_total_tokens(
-            run.result_payload
-        )
+        total_tokens = TaskExecutionRunService._extract_total_tokens(run.result_payload)
         if total_tokens is not None:
             parts.append(f"Tokens: {total_tokens}.")
         if run.error_message:
@@ -966,13 +961,13 @@ class TaskExecutionRunService:
             "duration_ms",
         )
         for key in text_keys:
-            value = TaskExecutionRunService._extract_result_text(result_payload, key)
-            if value is not None:
-                result[key] = value
+            text_value = TaskExecutionRunService._extract_result_text(result_payload, key)
+            if text_value is not None:
+                result[key] = text_value
         for key in int_keys:
-            value = TaskExecutionRunService._extract_result_int(result_payload, key)
-            if value is not None:
-                result[key] = value
+            int_value = TaskExecutionRunService._extract_result_int(result_payload, key)
+            if int_value is not None:
+                result[key] = int_value
 
     @staticmethod
     def _to_read(run: TaskExecutionRun, *, silo_slug: str) -> TaskExecutionRunRead:

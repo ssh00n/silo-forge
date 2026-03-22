@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps import require_org_admin
 from app.db.session import get_session
@@ -13,8 +14,8 @@ from app.schemas.silos import (
     SiloRead,
     SiloUpdate,
 )
-from app.services.silos import SiloService
 from app.services.organizations import OrganizationContext
+from app.services.silos import SiloService
 
 router = APIRouter(prefix="/silos", tags=["silos"])
 SESSION_DEP = Depends(get_session)
@@ -23,7 +24,7 @@ ORG_ADMIN_DEP = Depends(require_org_admin)
 
 @router.get("", response_model=list[SiloRead])
 async def list_silos(
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> list[SiloRead]:
     """List persisted silos for the caller's organization."""
@@ -34,7 +35,7 @@ async def list_silos(
 @router.get("/{slug}", response_model=SiloRead)
 async def get_silo(
     slug: str,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> SiloRead:
     """Return one persisted silo by slug for the caller's organization."""
@@ -48,7 +49,7 @@ async def get_silo(
 @router.get("/{slug}/detail", response_model=SiloDetailRead)
 async def get_silo_detail(
     slug: str,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> SiloDetailRead:
     """Return one persisted silo with detail data for operator views."""
@@ -62,7 +63,7 @@ async def get_silo_detail(
 @router.post("", response_model=SiloRead, status_code=status.HTTP_201_CREATED)
 async def create_silo(
     payload: SiloCreate,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> SiloRead:
     """Persist a new silo and its resolved role assignments."""
@@ -83,7 +84,7 @@ async def create_silo(
 async def update_silo(
     slug: str,
     payload: SiloUpdate,
-    session=SESSION_DEP,
+    session: AsyncSession = SESSION_DEP,
     ctx: OrganizationContext = ORG_ADMIN_DEP,
 ) -> SiloDetailRead:
     """Patch one persisted silo and return the refreshed detail payload."""
