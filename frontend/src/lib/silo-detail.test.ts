@@ -9,6 +9,7 @@ import {
   getLatestRuntimeAttemptedCount,
   getLatestRuntimeBlockedCount,
   getReadyProvisionTargetCount,
+  getSiloHealthSummary,
   getSiloWorkloadGuidance,
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
@@ -219,5 +220,53 @@ describe("silo-detail helpers", () => {
     ).toBe(
       "Blocked runs need operator attention before this silo can be trusted with more work.",
     );
+  });
+
+  it("reflects workload pressure in health summary when runtime is otherwise ready", () => {
+    const summary = getSiloHealthSummary(
+      buildDetail({
+        silo: {
+          ...buildDetail().silo,
+          status: "active",
+          active_run_count: 2,
+        },
+        desired_state: { ...buildDetail().desired_state, warnings: [] },
+        provision_plan: {
+          ...buildDetail().provision_plan!,
+          warnings: [],
+          targets: [
+            {
+              role_slug: "fox",
+              runtime_kind: "gateway",
+              gateway_name: "Fox Gateway",
+              workspace_root: "/workspace/fox",
+              supports_picoclaw_bundle_apply: true,
+              warnings: [],
+            },
+          ],
+        },
+        latest_runtime_operation: {
+          mode: "apply",
+          created_at: "2026-03-20T00:00:00Z",
+          warnings: [],
+          results: [
+            {
+              role_slug: "fox",
+              runtime_kind: "gateway",
+              gateway_name: "Fox Gateway",
+              supports_picoclaw_bundle_apply: true,
+              warnings: [],
+            },
+          ],
+        },
+        workload_summary: {
+          ...buildDetail().workload_summary!,
+          active_run_count: 2,
+          running_run_count: 2,
+        },
+      }),
+    );
+
+    expect(summary.label).toBe("Available but busy");
   });
 });

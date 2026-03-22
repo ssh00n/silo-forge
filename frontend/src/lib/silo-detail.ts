@@ -1,4 +1,5 @@
 import type { SiloDetail } from "@/lib/silos";
+import { buildSiloOverviewPosture } from "@/lib/silo-dispatch";
 
 export const UNASSIGNED_GATEWAY = "__unassigned__";
 
@@ -116,6 +117,7 @@ export function getSiloHealthSummary(detail: SiloDetail): {
   tone: "success" | "warning" | "danger" | "neutral";
   guidance: string;
 } {
+  const overviewPosture = buildSiloOverviewPosture(detail.silo);
   const warningCount = collectSiloWarnings(detail).length;
   const blockedTargets = getBlockedProvisionTargetCount(detail);
   const gatewayRoleCount = getGatewayRuntimeRoleCount(detail);
@@ -140,17 +142,24 @@ export function getSiloHealthSummary(detail: SiloDetail): {
 
   if (latestRuntime?.mode === "apply" && getLatestRuntimeBlockedCount(detail) === 0) {
     return {
-      label: "Ready",
-      tone: "success",
-      guidance: "The latest runtime apply completed without blocked targets.",
+      label: overviewPosture.readinessLabel,
+      tone: overviewPosture.tone,
+      guidance:
+        overviewPosture.tone === "success"
+          ? "The latest runtime apply completed without blocked targets."
+          : overviewPosture.guidance,
     };
   }
 
   if (getReadyProvisionTargetCount(detail) > 0) {
     return {
-      label: "Ready to apply",
-      tone: "neutral",
-      guidance: "The silo is configured enough to validate or apply runtime.",
+      label:
+        overviewPosture.tone === "danger" ? overviewPosture.readinessLabel : "Ready to apply",
+      tone: overviewPosture.tone === "danger" ? "danger" : "neutral",
+      guidance:
+        overviewPosture.tone === "danger"
+          ? overviewPosture.guidance
+          : "The silo is configured enough to validate or apply runtime.",
     };
   }
 
