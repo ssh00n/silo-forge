@@ -218,6 +218,12 @@ type SiloDispatchCandidate = {
   score: number;
 };
 
+type TaskDemandProfile = {
+  label: string;
+  tone: "success" | "warning" | "danger" | "neutral";
+  guidance: string;
+};
+
 const siloRequestPriorityClass = (priority: string): string => {
   if (priority === "urgent") return "bg-rose-50 text-rose-700 border border-rose-200";
   if (priority === "high") return "bg-amber-50 text-amber-700 border border-amber-200";
@@ -273,6 +279,43 @@ const buildSiloDispatchCandidate = (
     tone: "success",
     guidance: "Healthy, idle, and ready to accept a new runtime run.",
     score: 0,
+  };
+};
+
+const buildTaskDemandProfile = (task: Task | null): TaskDemandProfile | null => {
+  if (!task) return null;
+  if (task.approvals_pending_count > 0) {
+    return {
+      label: "Approval pressure",
+      tone: "warning",
+      guidance: "This task is waiting on an approval decision. Prefer a healthy silo that can resume quickly once the gate clears.",
+    };
+  }
+  if (task.is_blocked) {
+    return {
+      label: "Blocked dependencies",
+      tone: "warning",
+      guidance: "The task has unresolved dependencies. Avoid assigning a busy or degraded silo until the block is cleared.",
+    };
+  }
+  if (task.priority === "high") {
+    return {
+      label: "High-priority workload",
+      tone: "danger",
+      guidance: "Use the healthiest, least-busy silo available so the task can move immediately.",
+    };
+  }
+  if (task.status === "in_progress" || task.status === "review") {
+    return {
+      label: "Active follow-up",
+      tone: "neutral",
+      guidance: "This task is already in motion. Favor a ready silo that can continue work without more setup.",
+    };
+  }
+  return {
+    label: "Standard demand",
+    tone: "success",
+    guidance: "Any ready silo can take this work. Prefer an idle silo if one is available.",
   };
 };
 
@@ -1576,6 +1619,10 @@ export default function BoardDetailPage() {
         (candidate) => candidate.silo.slug === newExecutionRunSiloSlug,
       ) ?? symphonyDispatchCandidates[0] ?? null,
     [newExecutionRunSiloSlug, symphonyDispatchCandidates],
+  );
+  const selectedTaskDemandProfile = useMemo(
+    () => buildTaskDemandProfile(selectedTask),
+    [selectedTask],
   );
   const selectedTaskExecutionRunsQuery = useQuery<
     TaskExecutionRunSnapshot[],
@@ -5323,6 +5370,43 @@ export default function BoardDetailPage() {
                 </div>
               ) : (
                 <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  {selectedTaskDemandProfile ? (
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            Task demand
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-900">
+                            {selectedTaskDemandProfile.label}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+                          {selectedTask?.priority ? (
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                              Priority {selectedTask.priority}
+                            </span>
+                          ) : null}
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1">
+                            Status {selectedTask?.status ?? DASH}
+                          </span>
+                          {selectedTask?.approvals_pending_count ? (
+                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-700">
+                              {selectedTask.approvals_pending_count} approvals pending
+                            </span>
+                          ) : null}
+                          {selectedTask?.is_blocked ? (
+                            <span className="rounded-full bg-rose-100 px-2.5 py-1 text-rose-700">
+                              Dependency blocked
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-600">
+                        {selectedTaskDemandProfile.guidance}
+                      </p>
+                    </div>
+                  ) : null}
                   {selectedDispatchCandidate ? (
                     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
