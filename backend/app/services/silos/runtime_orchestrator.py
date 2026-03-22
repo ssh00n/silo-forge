@@ -19,6 +19,7 @@ from app.schemas.silos import (
     SiloRuntimeOperationRead,
     SiloRuntimeOperationResponseRead,
 )
+from app.contracts.activity import finalize_silo_runtime_activity_payload
 from app.services.activity_log import record_activity
 from app.services.silos.provision_plan import ProvisionPlanService
 from app.services.silos.runtime_apply import RuntimeApplyService
@@ -267,20 +268,22 @@ class SiloRuntimeOrchestrator:
                 f"{'Validated' if response.mode == 'validate' else 'Applied'} runtime bundle plan for "
                 f"{response.silo.name}."
             ),
-            payload={
-                "silo_id": str(silo_id),
-                "silo_slug": response.silo.slug,
-                "silo_name": response.silo.name,
-                "board_id": str(board_id) if board_id is not None else None,
-                "mode": response.mode,
-                "operation_id": str(operation.id),
-                "result_count": str(len(response.results)),
-                "warning_count": str(len(response.warnings)),
-                "restart_required": "yes" if restart_required else "no",
-                "gateway_names": ", ".join(gateway_names),
-                "gateway_ids": ", ".join(gateway_ids),
-                "roles": ", ".join(result.role_slug for result in response.results),
-            },
+            payload=finalize_silo_runtime_activity_payload(
+                {
+                    "silo_id": str(silo_id),
+                    "silo_slug": response.silo.slug,
+                    "silo_name": response.silo.name,
+                    "board_id": str(board_id) if board_id is not None else None,
+                    "mode": response.mode,
+                    "operation_id": str(operation.id),
+                    "result_count": str(len(response.results)),
+                    "warning_count": str(len(response.warnings)),
+                    "restart_required": "yes" if restart_required else "no",
+                    "gateway_names": ", ".join(gateway_names),
+                    "gateway_ids": ", ".join(gateway_ids),
+                    "roles": ", ".join(result.role_slug for result in response.results),
+                }
+            ),
             board_id=board_id,
         )
         await session.commit()

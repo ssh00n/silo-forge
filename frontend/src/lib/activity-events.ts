@@ -5,6 +5,7 @@ import type {
   ApprovalActivityPayload,
   BoardActivityPayload,
   GatewayActivityPayload,
+  SiloRuntimeActivityPayload,
   TaskActivityPayload,
 } from "@/contracts/generated/schemas";
 import {
@@ -103,6 +104,21 @@ const parseGatewayActivityPayload = (
     return null;
   }
   return record as Partial<GatewayActivityPayload>;
+};
+
+const parseSiloRuntimeActivityPayload = (
+  payload: unknown,
+): Partial<SiloRuntimeActivityPayload> | null => {
+  const record = toRecord(payload);
+  if (!record) return null;
+  if (
+    !hasString(record, "silo_name") &&
+    !hasString(record, "mode") &&
+    !hasString(record, "operation_id")
+  ) {
+    return null;
+  }
+  return record as Partial<SiloRuntimeActivityPayload>;
 };
 
 const resolveBoardActivityContent = (
@@ -342,14 +358,21 @@ export const resolveActivityFeedContent = (
   }
 
   if (eventType.startsWith("silo.runtime.")) {
-    const siloName = readString(normalizedPayload, ["silo_name"]);
-    const mode = readString(normalizedPayload, ["mode"]);
-    const operationId = readString(normalizedPayload, ["operation_id"]);
-    const resultCount = readString(normalizedPayload, ["result_count"]);
-    const warningCount = readString(normalizedPayload, ["warning_count"]);
-    const restartRequired = readString(normalizedPayload, ["restart_required"]);
-    const gatewayNames = readString(normalizedPayload, ["gateway_names"]);
-    const roles = readString(normalizedPayload, ["roles"]);
+    const runtimePayload = parseSiloRuntimeActivityPayload(normalizedPayload);
+    const siloName = runtimePayload?.silo_name?.trim() || readString(normalizedPayload, ["silo_name"]);
+    const mode = runtimePayload?.mode?.trim() || readString(normalizedPayload, ["mode"]);
+    const operationId =
+      runtimePayload?.operation_id?.trim() || readString(normalizedPayload, ["operation_id"]);
+    const resultCount =
+      runtimePayload?.result_count?.trim() || readString(normalizedPayload, ["result_count"]);
+    const warningCount =
+      runtimePayload?.warning_count?.trim() || readString(normalizedPayload, ["warning_count"]);
+    const restartRequired =
+      runtimePayload?.restart_required?.trim() ||
+      readString(normalizedPayload, ["restart_required"]);
+    const gatewayNames =
+      runtimePayload?.gateway_names?.trim() || readString(normalizedPayload, ["gateway_names"]);
+    const roles = runtimePayload?.roles?.trim() || readString(normalizedPayload, ["roles"]);
 
     const details: ActivityDetailRow[] = [];
     if (siloName) details.push({ label: "Silo", value: siloName });

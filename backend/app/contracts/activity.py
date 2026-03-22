@@ -11,6 +11,7 @@ from app.contracts.generated_schemas import (
     ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON,
     ACTIVITY__BOARD_PAYLOAD_SCHEMA_JSON,
     ACTIVITY__GATEWAY_PAYLOAD_SCHEMA_JSON,
+    ACTIVITY__SILO_RUNTIME_PAYLOAD_SCHEMA_JSON,
     ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON,
 )
 from app.contracts.json_schema import validate_contract_payload
@@ -104,6 +105,23 @@ class GatewayActivityPayloadContract(BaseModel):
     workspace_path: str | None = None
     session_key: str | None = None
     error: str | None = None
+
+
+class SiloRuntimeActivityPayloadContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    silo_id: str
+    silo_slug: str
+    silo_name: str
+    board_id: str | None = None
+    mode: str
+    operation_id: str
+    result_count: str
+    warning_count: str
+    restart_required: str
+    gateway_names: str
+    gateway_ids: str
+    roles: str
 
 
 def _parse_activity_payload(
@@ -204,4 +222,22 @@ def finalize_gateway_activity_payload(payload: dict[str, Any]) -> dict[str, Any]
         schema=ACTIVITY__GATEWAY_PAYLOAD_SCHEMA_JSON,
         payload=payload,
         model=GatewayActivityPayloadContract,
+    )
+
+
+def parse_silo_runtime_activity_payload(
+    payload: dict[str, Any],
+) -> SiloRuntimeActivityPayloadContract:
+    return _parse_activity_payload(
+        schema=ACTIVITY__SILO_RUNTIME_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=SiloRuntimeActivityPayloadContract,
+    )
+
+
+def finalize_silo_runtime_activity_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return _finalize_activity_payload(
+        schema=ACTIVITY__SILO_RUNTIME_PAYLOAD_SCHEMA_JSON,
+        payload=payload,
+        model=SiloRuntimeActivityPayloadContract,
     )

@@ -452,6 +452,81 @@ SCHEMAS = json.loads(
       }
     }
   },
+  "activity__silo_runtime_payload_schema_json": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://schemas.silo-forge.dev/activity/silo-runtime.payload.schema.json",
+    "title": "SiloForgeSiloRuntimeActivityPayload",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "silo_id",
+      "silo_slug",
+      "silo_name",
+      "mode",
+      "operation_id",
+      "result_count",
+      "warning_count",
+      "restart_required",
+      "gateway_ids",
+      "gateway_names",
+      "roles"
+    ],
+    "properties": {
+      "silo_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "silo_slug": {
+        "type": "string",
+        "minLength": 1
+      },
+      "silo_name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "board_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "validate",
+          "apply"
+        ]
+      },
+      "operation_id": {
+        "type": "string",
+        "minLength": 1
+      },
+      "result_count": {
+        "type": "string",
+        "minLength": 1
+      },
+      "warning_count": {
+        "type": "string",
+        "minLength": 1
+      },
+      "restart_required": {
+        "type": "string",
+        "enum": [
+          "yes",
+          "no"
+        ]
+      },
+      "gateway_names": {
+        "type": "string"
+      },
+      "gateway_ids": {
+        "type": "string"
+      },
+      "roles": {
+        "type": "string"
+      }
+    }
+  },
   "activity__task_payload_schema_json": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://schemas.silo-forge.dev/activity/task.payload.schema.json",
@@ -1218,6 +1293,7 @@ ACTIVITY__APPROVAL_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__approval_payload_sch
 ACTIVITY__BOARD_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__board_payload_schema_json"]
 ACTIVITY__EXECUTION_RUN_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__execution_run_payload_schema_json"]
 ACTIVITY__GATEWAY_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__gateway_payload_schema_json"]
+ACTIVITY__SILO_RUNTIME_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__silo_runtime_payload_schema_json"]
 ACTIVITY__TASK_PAYLOAD_SCHEMA_JSON = SCHEMAS["activity__task_payload_schema_json"]
 EXECUTION__CALLBACK_PAYLOAD_SCHEMA_JSON = SCHEMAS["execution__callback_payload_schema_json"]
 EXECUTION__DISPATCH_ACCEPTANCE_SCHEMA_JSON = SCHEMAS["execution__dispatch_acceptance_schema_json"]
