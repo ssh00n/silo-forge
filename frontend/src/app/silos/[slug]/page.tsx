@@ -37,8 +37,7 @@ import {
   hasActionableProvisionTargets,
   hasSiloConfigChanges,
 } from "@/lib/silo-detail";
-import { buildSiloDetailOpsViewModel } from "@/lib/silo-dispatch";
-import { siloToneBadgeVariant } from "@/lib/silo-dispatch";
+import { buildSiloDetailOpsViewModel, siloToneBadgeVariant } from "@/lib/silo-ops";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
 import { fetchSiloDetail, runSiloRuntime, updateSilo } from "@/lib/silos";
 

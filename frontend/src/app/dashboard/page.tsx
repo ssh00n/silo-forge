@@ -77,7 +77,7 @@ import {
 } from "@/lib/runtime-runs";
 import {
   buildDashboardSiloHealthViewModel,
-} from "@/lib/silo-dispatch";
+} from "@/lib/silo-ops";
 import {
   describeSiloRequestPressure,
   fetchSiloSpawnRequests,

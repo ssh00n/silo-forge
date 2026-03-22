@@ -15,7 +15,7 @@ import {
   buildSiloOverviewSummaryViewModel,
   siloReasonChipClass,
   siloToneBadgeVariant,
-} from "@/lib/silo-dispatch";
+} from "@/lib/silo-ops";
 import { useOrganizationMembership } from "@/lib/use-organization-membership";
 import { fetchSilos } from "@/lib/silos";
 import { Badge } from "@/components/ui/badge";

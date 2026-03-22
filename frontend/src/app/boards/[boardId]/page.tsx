@@ -139,7 +139,7 @@ import {
   buildTaskDispatchViewModel,
   siloReasonChipClass,
   siloToneBadgeVariant,
-} from "@/lib/silo-dispatch";
+} from "@/lib/silo-ops";
 import { Badge } from "@/components/ui/badge";
 import {
   canAcknowledgeRuntimeRun,
