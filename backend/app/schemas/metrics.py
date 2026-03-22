@@ -127,6 +127,39 @@ class DashboardRuntimeExecutionMetrics(SQLModel):
     recent_runs: list[DashboardRuntimeRunRead]
 
 
+class DashboardTelemetryWorkerMetrics(SQLModel):
+    """Queue worker telemetry snapshot used by the dashboard."""
+
+    latest_event_type: str | None = None
+    latest_at: datetime | None = None
+    latest_queue_name: str | None = None
+    latest_task_type: str | None = None
+    latest_attempt: int | None = None
+    success_count_7d: int = 0
+    failure_count_7d: int = 0
+    dequeue_failure_count_7d: int = 0
+
+
+class DashboardTelemetryWebhookMetrics(SQLModel):
+    """Webhook telemetry snapshot used by the dashboard."""
+
+    latest_event_type: str | None = None
+    latest_at: datetime | None = None
+    latest_payload_id: str | None = None
+    latest_attempt: int | None = None
+    success_count_7d: int = 0
+    failure_count_7d: int = 0
+    retried_count_7d: int = 0
+
+
+class DashboardTelemetryOpsMetrics(SQLModel):
+    """Operational telemetry snapshot used by the dashboard."""
+
+    generated_at: datetime
+    worker: DashboardTelemetryWorkerMetrics
+    webhook: DashboardTelemetryWebhookMetrics
+
+
 class DashboardMetrics(SQLModel):
     """Complete dashboard metrics response payload."""
 
